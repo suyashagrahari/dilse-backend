@@ -13,6 +13,9 @@ export interface IBirthdayPage extends Document {
   musicTrack: string;
   theme: "romantic" | "elegant" | "playful";
   password: string;
+  passwordRaw: string;
+  viewCount: number;
+  installCount: number;
   isPublished: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -45,6 +48,9 @@ const birthdayPageSchema = new Schema<IBirthdayPage>(
       default: "romantic",
     },
     password: { type: String, default: "" },
+    passwordRaw: { type: String, default: "", select: false },
+    viewCount: { type: Number, default: 0 },
+    installCount: { type: Number, default: 0 },
     isPublished: { type: Boolean, default: false },
   },
   { timestamps: true }
@@ -55,6 +61,7 @@ birthdayPageSchema.pre("save", async function (next) {
     this.shareId = crypto.randomBytes(5).toString("base64url").slice(0, 8);
   }
   if (this.isModified("password") && this.password) {
+    this.passwordRaw = this.password;
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }

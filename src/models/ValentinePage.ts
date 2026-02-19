@@ -10,6 +10,8 @@ export interface IValentinePage extends Document {
   promises: string[];
   photos: string[];
   theme: "romantic" | "elegant" | "playful";
+  viewCount: number;
+  installCount: number;
   isPublished: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -39,6 +41,8 @@ const valentinePageSchema = new Schema<IValentinePage>(
       enum: ["romantic", "elegant", "playful"],
       default: "romantic",
     },
+    viewCount: { type: Number, default: 0 },
+    installCount: { type: Number, default: 0 },
     isPublished: { type: Boolean, default: false },
   },
   { timestamps: true }

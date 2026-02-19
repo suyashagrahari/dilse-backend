@@ -110,7 +110,7 @@ export const getSharedBirthdayPage = async (req: Request, res: Response): Promis
       return;
     }
     const pageObj = page.toObject();
-    const { password: _pw, ...safeData } = pageObj;
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "birthday" });
   } catch (error) {
     console.error("Get shared page error:", error);
