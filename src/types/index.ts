@@ -16,6 +16,9 @@ export interface GenerateResponse {
   senderName: string;
   // Festival (Holi) specific fields
   hindiTitle?: string;
+  // Eid specific fields
+  urduTitle?: string;
+  // Shared festival fields
   englishSubtitle?: string;
   homeWishMessage?: string;
   congratsMessage?: string;

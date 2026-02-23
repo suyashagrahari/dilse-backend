@@ -7,6 +7,7 @@ import userContentRoutes from "./userContent.routes";
 import birthdayPageRoutes from "./birthdayPage.routes";
 import valentinePageRoutes from "./valentinePage.routes";
 import holiPageRoutes from "./holiPage.routes";
+import eidPageRoutes from "./eidPage.routes";
 import shareRoutes from "./share.routes";
 import { protect } from "../middleware/auth";
 
@@ -20,6 +21,7 @@ router.use("/content", protect, userContentRoutes);
 router.use("/birthday-pages", birthdayPageRoutes);
 router.use("/valentine-pages", valentinePageRoutes);
 router.use("/holi-pages", holiPageRoutes);
+router.use("/eid-pages", eidPageRoutes);
 router.use("/share", shareRoutes);
 
 router.get("/health", (_req, res) => {

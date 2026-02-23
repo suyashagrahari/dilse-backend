@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import BirthdayPage from "../models/BirthdayPage";
 import ValentinePage from "../models/ValentinePage";
 import HoliPage from "../models/HoliPage";
+import EidPage from "../models/EidPage";
 import SharedAccess from "../models/SharedAccess";
 import User from "../models/User";
 import mongoose from "mongoose";
@@ -16,6 +17,7 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: BirthdayPage as mongoose.Model<unknown>, templateType: "birthday", editorRoute: "/birthday-gf" },
   { model: ValentinePage as mongoose.Model<unknown>, templateType: "valentine", editorRoute: "/valentine-gf" },
   { model: HoliPage as mongoose.Model<unknown>, templateType: "holi", editorRoute: "/holi" },
+  { model: EidPage as mongoose.Model<unknown>, templateType: "eid", editorRoute: "/eid-mubarak" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {

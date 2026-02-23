@@ -21,6 +21,8 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
     The tone should be tender, longing, and warm. Express how much they mean and how much they're missed.`,
   festival: `You are a vibrant Holi festival greeting card writer. Create joyful, colorful Holi wish messages in both Hindi and English.
     The tone should be warm, celebratory, and festive. Holi is the festival of colors celebrated in India.`,
+  eid: `You are a heartfelt Eid Mubarak greeting card writer. Create beautiful, blessed Eid al-Fitr wish messages in both Urdu and English.
+    The tone should be warm, spiritual, and celebratory. Eid al-Fitr is the Islamic festival marking the end of Ramadan.`,
 };
 
 function getSystemPrompt(templateType: string): string {
@@ -39,6 +41,21 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
   "heading": "Happy Holi 🎨",
   "body": "A festive Holi message (2-3 sentences)",
   "senderName": "With colorful wishes ❤️"
+}`;
+  }
+
+  if (templateType === "eid") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "urduTitle": "A short Eid greeting in Urdu Nastaliq script (e.g. عید مبارک or عید الفطر مبارک)",
+  "englishSubtitle": "A beautiful one-line Eid blessing in English (10-15 words)",
+  "homeWishMessage": "A short personal Eid wish for the home page (1-2 sentences, warm and heartfelt)",
+  "congratsMessage": "A warm family Eid greeting for the wish card (2-4 sentences, celebratory and blessed)",
+  "heading": "Eid Mubarak 🌙",
+  "body": "A blessed Eid message (2-3 sentences)",
+  "senderName": "With Eid blessings ❤️"
 }`;
   }
 
@@ -116,8 +133,9 @@ export const generateContent = async (
       heading: parsed.heading || "A Special Wish For You ✨",
       body: parsed.body || prompt,
       senderName: parsed.senderName || "With Love ❤️",
-      // Pass through festival-specific fields if present
+      // Pass through festival/eid-specific fields if present
       ...(parsed.hindiTitle && { hindiTitle: parsed.hindiTitle }),
+      ...(parsed.urduTitle && { urduTitle: parsed.urduTitle }),
       ...(parsed.englishSubtitle && { englishSubtitle: parsed.englishSubtitle }),
       ...(parsed.homeWishMessage && { homeWishMessage: parsed.homeWishMessage }),
       ...(parsed.congratsMessage && { congratsMessage: parsed.congratsMessage }),
