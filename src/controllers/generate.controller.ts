@@ -19,12 +19,29 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
     The tone should be genuine, humble, and hopeful for forgiveness. Show true remorse and care.`,
   missyou: `You are an emotional greeting card writer. Create a touching "I miss you" message.
     The tone should be tender, longing, and warm. Express how much they mean and how much they're missed.`,
+  festival: `You are a vibrant Holi festival greeting card writer. Create joyful, colorful Holi wish messages in both Hindi and English.
+    The tone should be warm, celebratory, and festive. Holi is the festival of colors celebrated in India.`,
 };
 
 function getSystemPrompt(templateType: string): string {
-  const base = TEMPLATE_PROMPTS[templateType] || 
+  const base = TEMPLATE_PROMPTS[templateType] ||
     "You are a heartfelt greeting card writer. Create a warm, emotional message.";
-  
+
+  if (templateType === "festival") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "hindiTitle": "A short festive Holi title in Hindi Devanagari script (e.g. होली है! or होली मुबारक!)",
+  "englishSubtitle": "A beautiful one-line Holi blessing in English (10-15 words)",
+  "homeWishMessage": "A short personal Holi wish for the home page (1-2 sentences, warm and festive)",
+  "congratsMessage": "A warm family Holi greeting for the wish card (2-4 sentences, celebratory and heartfelt)",
+  "heading": "Happy Holi 🎨",
+  "body": "A festive Holi message (2-3 sentences)",
+  "senderName": "With colorful wishes ❤️"
+}`;
+  }
+
   return `${base}
 
 IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
@@ -99,6 +116,11 @@ export const generateContent = async (
       heading: parsed.heading || "A Special Wish For You ✨",
       body: parsed.body || prompt,
       senderName: parsed.senderName || "With Love ❤️",
+      // Pass through festival-specific fields if present
+      ...(parsed.hindiTitle && { hindiTitle: parsed.hindiTitle }),
+      ...(parsed.englishSubtitle && { englishSubtitle: parsed.englishSubtitle }),
+      ...(parsed.homeWishMessage && { homeWishMessage: parsed.homeWishMessage }),
+      ...(parsed.congratsMessage && { congratsMessage: parsed.congratsMessage }),
     };
 
     await GeneratedContent.create({

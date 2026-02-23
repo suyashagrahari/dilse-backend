@@ -14,6 +14,11 @@ export interface GenerateResponse {
   heading: string;
   body: string;
   senderName: string;
+  // Festival (Holi) specific fields
+  hindiTitle?: string;
+  englishSubtitle?: string;
+  homeWishMessage?: string;
+  congratsMessage?: string;
 }
 
 export interface TemplateInput {
