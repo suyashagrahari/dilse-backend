@@ -25,6 +25,8 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
     The tone should be warm, spiritual, and celebratory. Eid al-Fitr is the Islamic festival marking the end of Ramadan.`,
   wedding: `You are a poetic Indian wedding invitation writer. Create beautiful, heartfelt wedding invitation content in Hindi and English.
     The tone should be warm, celebratory, traditional yet modern. Include Sanskrit blessings and family values.`,
+  reception: `You are an elegant Indian wedding reception invitation writer. Create beautiful, sophisticated reception invitation content.
+    The tone should be warm, celebratory, and gracious. Focus on the joy of welcoming guests to celebrate the couple.`,
 };
 
 function getSystemPrompt(templateType: string): string {
@@ -72,6 +74,21 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
   "heading": "A beautiful wedding invitation heading (5-8 words with one relevant emoji)",
   "body": "A heartfelt wedding invitation message (2-3 sentences, warm and celebratory)",
   "senderName": "With love and blessings ❤️"
+}`;
+  }
+
+  if (templateType === "reception") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "tagline": "An elegant reception tagline (e.g. 'Request the pleasure of your company' or similar 5-10 words)",
+  "brideDescription": "A poetic 1-2 sentence description of the bride (graceful, beautiful, warm)",
+  "groomDescription": "A poetic 1-2 sentence description of the groom (charming, dignified, warm)",
+  "venueTimings": "Suggested reception timing like '7:00 PM — 11:30 PM'",
+  "heading": "A beautiful reception invitation heading (5-8 words with one relevant emoji)",
+  "body": "A heartfelt reception invitation message (2-3 sentences, warm and celebratory)",
+  "senderName": "With love and joy ❤️"
 }`;
   }
 
@@ -159,6 +176,9 @@ export const generateContent = async (
       ...(parsed.blessing && { blessing: parsed.blessing }),
       ...(parsed.brideDescription && { brideDescription: parsed.brideDescription }),
       ...(parsed.groomDescription && { groomDescription: parsed.groomDescription }),
+      // Reception-specific
+      ...(parsed.tagline && { tagline: parsed.tagline }),
+      ...(parsed.venueTimings && { venueTimings: parsed.venueTimings }),
     };
 
     await GeneratedContent.create({
