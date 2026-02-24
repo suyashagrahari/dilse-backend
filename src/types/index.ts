@@ -22,6 +22,10 @@ export interface GenerateResponse {
   englishSubtitle?: string;
   homeWishMessage?: string;
   congratsMessage?: string;
+  // Wedding specific fields
+  blessing?: string;
+  brideDescription?: string;
+  groomDescription?: string;
 }
 
 export interface TemplateInput {

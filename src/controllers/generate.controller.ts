@@ -23,6 +23,8 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
     The tone should be warm, celebratory, and festive. Holi is the festival of colors celebrated in India.`,
   eid: `You are a heartfelt Eid Mubarak greeting card writer. Create beautiful, blessed Eid al-Fitr wish messages in both Urdu and English.
     The tone should be warm, spiritual, and celebratory. Eid al-Fitr is the Islamic festival marking the end of Ramadan.`,
+  wedding: `You are a poetic Indian wedding invitation writer. Create beautiful, heartfelt wedding invitation content in Hindi and English.
+    The tone should be warm, celebratory, traditional yet modern. Include Sanskrit blessings and family values.`,
 };
 
 function getSystemPrompt(templateType: string): string {
@@ -56,6 +58,20 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
   "heading": "Eid Mubarak 🌙",
   "body": "A blessed Eid message (2-3 sentences)",
   "senderName": "With Eid blessings ❤️"
+}`;
+  }
+
+  if (templateType === "wedding") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "blessing": "A Sanskrit or Hindi wedding blessing (e.g. ॐ शुभ विवाह or आशीर्वाद)",
+  "brideDescription": "A poetic 1-2 sentence description of the bride (warm, beautiful, traditional)",
+  "groomDescription": "A poetic 1-2 sentence description of the groom (warm, dignified, traditional)",
+  "heading": "A beautiful wedding invitation heading (5-8 words with one relevant emoji)",
+  "body": "A heartfelt wedding invitation message (2-3 sentences, warm and celebratory)",
+  "senderName": "With love and blessings ❤️"
 }`;
   }
 
@@ -133,12 +149,16 @@ export const generateContent = async (
       heading: parsed.heading || "A Special Wish For You ✨",
       body: parsed.body || prompt,
       senderName: parsed.senderName || "With Love ❤️",
-      // Pass through festival/eid-specific fields if present
+      // Pass through template-specific fields if present
       ...(parsed.hindiTitle && { hindiTitle: parsed.hindiTitle }),
       ...(parsed.urduTitle && { urduTitle: parsed.urduTitle }),
       ...(parsed.englishSubtitle && { englishSubtitle: parsed.englishSubtitle }),
       ...(parsed.homeWishMessage && { homeWishMessage: parsed.homeWishMessage }),
       ...(parsed.congratsMessage && { congratsMessage: parsed.congratsMessage }),
+      // Wedding-specific
+      ...(parsed.blessing && { blessing: parsed.blessing }),
+      ...(parsed.brideDescription && { brideDescription: parsed.brideDescription }),
+      ...(parsed.groomDescription && { groomDescription: parsed.groomDescription }),
     };
 
     await GeneratedContent.create({
