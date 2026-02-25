@@ -11,7 +11,21 @@ const app = express();
 
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      // Allow any ngrok tunnel or Vercel preview in development
+      if (env.NODE_ENV === "development" && (origin.includes("ngrok") || origin.includes("vercel.app"))) {
+        return callback(null, true);
+      }
+
+      if (env.CLIENT_URLS.includes(origin)) {
+        return callback(null, true);
+      }
+
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
