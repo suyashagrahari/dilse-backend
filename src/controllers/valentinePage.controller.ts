@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import ValentinePage from "../models/ValentinePage";
+import { env } from "../config/env";
 
 export const createValentinePage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -73,7 +74,7 @@ export const publishValentinePage = async (req: Request, res: Response): Promise
       success: true,
       data: {
         shareId: page.shareId,
-        shareUrl: `${process.env.CLIENT_URL || "http://localhost:3000"}/${page.shareId}`,
+        shareUrl: `${env.APP_URL}/${page.shareId}`,
       },
     });
   } catch (error) {

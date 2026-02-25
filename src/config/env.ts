@@ -9,6 +9,8 @@ export const env = {
   NODE_ENV: process.env.NODE_ENV || "development",
   CLIENT_URL: rawClientUrls,
   CLIENT_URLS: rawClientUrls.split(",").map((u) => u.trim()),
+  // Public-facing URL used for shareable links (set to your deployed frontend)
+  APP_URL: process.env.APP_URL || rawClientUrls.split(",")[0].trim(),
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
   JWT_SECRET: process.env.JWT_SECRET || "default_jwt_secret_change_me",
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || "default_refresh_secret_change_me",

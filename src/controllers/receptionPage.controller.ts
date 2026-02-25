@@ -99,7 +99,7 @@ export const publishReceptionPage = async (req: Request, res: Response): Promise
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${process.env.CLIENT_URL || "http://localhost:3000"}/${page.shareId}`;
+    const shareUrl = `${env.APP_URL}/${page.shareId}`;
     res.json({ success: true, data: { shareId: page.shareId, shareUrl } });
   } catch (error) {
     console.error("Publish reception page error:", error);

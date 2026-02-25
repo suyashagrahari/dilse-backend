@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import BirthdayPage from "../models/BirthdayPage";
+import { env } from "../config/env";
 
 export const createBirthdayPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -93,7 +94,7 @@ export const publishBirthdayPage = async (req: Request, res: Response): Promise<
       success: true,
       data: {
         shareId: page.shareId,
-        shareUrl: `${process.env.CLIENT_URL || "http://localhost:3000"}/${page.shareId}`,
+        shareUrl: `${env.APP_URL}/${page.shareId}`,
       },
     });
   } catch (error) {

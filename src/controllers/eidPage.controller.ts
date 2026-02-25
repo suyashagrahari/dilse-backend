@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import EidPage from "../models/EidPage";
+import { env } from "../config/env";
 
 export const createEidPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -102,7 +103,7 @@ export const publishEidPage = async (req: Request, res: Response): Promise<void>
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${process.env.CLIENT_URL || "http://localhost:3000"}/${page.shareId}`;
+    const shareUrl = `${env.APP_URL}/${page.shareId}`;
     res.json({
       success: true,
       data: { shareId: page.shareId, shareUrl },

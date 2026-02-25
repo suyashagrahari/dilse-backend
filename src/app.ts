@@ -9,26 +9,25 @@ import { notFound, errorHandler } from "./middleware/errorHandler";
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
 
-      // Allow any ngrok tunnel or Vercel preview in development
-      if (env.NODE_ENV === "development" && (origin.includes("ngrok") || origin.includes("vercel.app"))) {
-        return callback(null, true);
-      }
+      // In development allow everything
+      if (env.NODE_ENV === "development") return callback(null, true);
 
-      if (env.CLIENT_URLS.includes(origin)) {
-        return callback(null, true);
-      }
+      // In production allow only listed origins
+      if (env.CLIENT_URLS.includes(origin)) return callback(null, true);
 
-      callback(new Error(`CORS: origin '${origin}' not allowed`));
+      callback(null, false);
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
   })
 );
 
