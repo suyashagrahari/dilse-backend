@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import OpenAI from "openai";
 import WeddingPage from "../models/WeddingPage";
 import { env } from "../config/env";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -23,26 +24,33 @@ export const createWeddingPage = async (req: Request, res: Response): Promise<vo
       events, galleryImages, password,
     } = req.body;
 
+    const payload = await transformMediaPayload(
+      {
+        brideName: brideName || "",
+        groomName: groomName || "",
+        weddingDate: weddingDate || "2026-03-15T11:00:00+05:30",
+        venue: venue || "India",
+        blessing: blessing || "ॐ शुभ विवाह",
+        bridePhoto: bridePhoto || "",
+        brideDescription: brideDescription || "",
+        brideTags: brideTags || [],
+        brideFamilyParents: brideFamilyParents || "",
+        brideFamilyGrandparents: brideFamilyGrandparents || "",
+        groomPhoto: groomPhoto || "",
+        groomDescription: groomDescription || "",
+        groomTags: groomTags || [],
+        groomFamilyParents: groomFamilyParents || "",
+        groomFamilyGrandparents: groomFamilyGrandparents || "",
+        events: events || DEFAULT_EVENTS,
+        galleryImages: galleryImages || [],
+        password: password || "",
+      },
+      { template: "wedding", userId: req.userId }
+    );
+
     const page = await WeddingPage.create({
       userId: req.userId,
-      brideName: brideName || "",
-      groomName: groomName || "",
-      weddingDate: weddingDate || "2026-03-15T11:00:00+05:30",
-      venue: venue || "India",
-      blessing: blessing || "ॐ शुभ विवाह",
-      bridePhoto: bridePhoto || "",
-      brideDescription: brideDescription || "",
-      brideTags: brideTags || [],
-      brideFamilyParents: brideFamilyParents || "",
-      brideFamilyGrandparents: brideFamilyGrandparents || "",
-      groomPhoto: groomPhoto || "",
-      groomDescription: groomDescription || "",
-      groomTags: groomTags || [],
-      groomFamilyParents: groomFamilyParents || "",
-      groomFamilyGrandparents: groomFamilyGrandparents || "",
-      events: events || DEFAULT_EVENTS,
-      galleryImages: galleryImages || [],
-      password: password || "",
+      ...payload,
     });
 
     res.status(201).json({ success: true, data: page });
@@ -91,9 +99,14 @@ export const updateWeddingPage = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    const updates = await transformMediaPayload(req.body as Record<string, unknown>, {
+      template: "wedding",
+      userId: req.userId,
+    });
+
     for (const field of fields) {
-      if (req.body[field] !== undefined) {
-        (page as unknown as Record<string, unknown>)[field] = req.body[field];
+      if (updates[field] !== undefined) {
+        (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
     }
 
@@ -116,7 +129,7 @@ export const publishWeddingPage = async (req: Request, res: Response): Promise<v
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${env.APP_URL}/${page.shareId}`;
+    const shareUrl = `${env.SHARE_BASE_URL}/${page.shareId}`;
     res.json({ success: true, data: { shareId: page.shareId, shareUrl } });
   } catch (error) {
     console.error("Publish wedding page error:", error);
@@ -224,7 +237,7 @@ export const getSharedWeddingPage = async (req: Request, res: Response): Promise
     await page.save();
 
     const pageObj = page.toObject();
-    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as Record<string, unknown>;
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "wedding" });
   } catch (error) {
     console.error("Get shared wedding page error:", error);

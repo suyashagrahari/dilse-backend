@@ -26,6 +26,9 @@ export interface GenerateResponse {
   blessing?: string;
   brideDescription?: string;
   groomDescription?: string;
+  // Reception specific fields
+  tagline?: string;
+  venueTimings?: string;
 }
 
 export interface TemplateInput {

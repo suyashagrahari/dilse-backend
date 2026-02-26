@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import crypto from "crypto";
+import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
 export interface IBirthdayPage extends Document {
@@ -58,7 +58,7 @@ const birthdayPageSchema = new Schema<IBirthdayPage>(
 
 birthdayPageSchema.pre("save", async function (next) {
   if (!this.shareId) {
-    this.shareId = crypto.randomBytes(5).toString("base64url").slice(0, 8);
+    this.shareId = randomUUID();
   }
   if (this.isModified("password") && this.password) {
     this.passwordRaw = this.password;

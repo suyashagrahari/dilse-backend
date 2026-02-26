@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import crypto from "crypto";
+import { randomUUID } from "crypto";
 
 export interface IValentinePage extends Document {
   userId: mongoose.Types.ObjectId;
@@ -50,7 +50,7 @@ const valentinePageSchema = new Schema<IValentinePage>(
 
 valentinePageSchema.pre("save", function (next) {
   if (!this.shareId) {
-    this.shareId = crypto.randomBytes(5).toString("base64url").slice(0, 8);
+    this.shareId = randomUUID();
   }
   next();
 });

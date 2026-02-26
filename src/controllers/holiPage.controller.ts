@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import HoliPage from "../models/HoliPage";
 import { env } from "../config/env";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 export const createHoliPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -10,20 +11,27 @@ export const createHoliPage = async (req: Request, res: Response): Promise<void>
       hindiTitle, hindiSubtitle, englishSubtitle, holiDate, password,
     } = req.body;
 
+    const payload = await transformMediaPayload(
+      {
+        senderName: senderName || "",
+        senderFamily: senderFamily || "Family",
+        senderMembers: senderMembers || [],
+        senderPhoto: senderPhoto || "",
+        recipientName: recipientName || "",
+        homeWishMessage: homeWishMessage || "",
+        congratsMessage: congratsMessage || "",
+        hindiTitle: hindiTitle || "होली है!",
+        hindiSubtitle: hindiSubtitle || "आपको और आपके परिवार को होली की हार्दिक शुभकामनाएं",
+        englishSubtitle: englishSubtitle || "Wishing you joy, colors, and countless blessings this Holi",
+        holiDate: holiDate || "2026-03-14T00:00:00",
+        password: password || "",
+      },
+      { template: "holi", userId: req.userId }
+    );
+
     const page = await HoliPage.create({
       userId: req.userId,
-      senderName: senderName || "",
-      senderFamily: senderFamily || "Family",
-      senderMembers: senderMembers || [],
-      senderPhoto: senderPhoto || "",
-      recipientName: recipientName || "",
-      homeWishMessage: homeWishMessage || "",
-      congratsMessage: congratsMessage || "",
-      hindiTitle: hindiTitle || "होली है!",
-      hindiSubtitle: hindiSubtitle || "आपको और आपके परिवार को होली की हार्दिक शुभकामनाएं",
-      englishSubtitle: englishSubtitle || "Wishing you joy, colors, and countless blessings this Holi",
-      holiDate: holiDate || "2026-03-14T00:00:00",
-      password: password || "",
+      ...payload,
     });
 
     res.status(201).json({ success: true, data: page });
@@ -71,18 +79,36 @@ export const updateHoliPage = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    if (senderName !== undefined) page.senderName = senderName;
-    if (senderFamily !== undefined) page.senderFamily = senderFamily;
-    if (senderMembers !== undefined) page.senderMembers = senderMembers;
-    if (senderPhoto !== undefined) page.senderPhoto = senderPhoto;
-    if (recipientName !== undefined) page.recipientName = recipientName;
-    if (homeWishMessage !== undefined) page.homeWishMessage = homeWishMessage;
-    if (congratsMessage !== undefined) page.congratsMessage = congratsMessage;
-    if (hindiTitle !== undefined) page.hindiTitle = hindiTitle;
-    if (hindiSubtitle !== undefined) page.hindiSubtitle = hindiSubtitle;
-    if (englishSubtitle !== undefined) page.englishSubtitle = englishSubtitle;
-    if (holiDate !== undefined) page.holiDate = holiDate;
-    if (password !== undefined) page.password = password;
+    const updates = await transformMediaPayload(
+      {
+        senderName,
+        senderFamily,
+        senderMembers,
+        senderPhoto,
+        recipientName,
+        homeWishMessage,
+        congratsMessage,
+        hindiTitle,
+        hindiSubtitle,
+        englishSubtitle,
+        holiDate,
+        password,
+      },
+      { template: "holi", userId: req.userId }
+    );
+
+    if (updates.senderName !== undefined) page.senderName = updates.senderName;
+    if (updates.senderFamily !== undefined) page.senderFamily = updates.senderFamily;
+    if (updates.senderMembers !== undefined) page.senderMembers = updates.senderMembers;
+    if (updates.senderPhoto !== undefined) page.senderPhoto = updates.senderPhoto;
+    if (updates.recipientName !== undefined) page.recipientName = updates.recipientName;
+    if (updates.homeWishMessage !== undefined) page.homeWishMessage = updates.homeWishMessage;
+    if (updates.congratsMessage !== undefined) page.congratsMessage = updates.congratsMessage;
+    if (updates.hindiTitle !== undefined) page.hindiTitle = updates.hindiTitle;
+    if (updates.hindiSubtitle !== undefined) page.hindiSubtitle = updates.hindiSubtitle;
+    if (updates.englishSubtitle !== undefined) page.englishSubtitle = updates.englishSubtitle;
+    if (updates.holiDate !== undefined) page.holiDate = updates.holiDate;
+    if (updates.password !== undefined) page.password = updates.password;
 
     await page.save();
     res.json({ success: true, data: page });
@@ -103,7 +129,7 @@ export const publishHoliPage = async (req: Request, res: Response): Promise<void
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${env.APP_URL}/${page.shareId}`;
+    const shareUrl = `${env.SHARE_BASE_URL}/${page.shareId}`;
     res.json({
       success: true,
       data: { shareId: page.shareId, shareUrl },
@@ -126,7 +152,7 @@ export const getSharedHoliPage = async (req: Request, res: Response): Promise<vo
     await page.save();
 
     const pageObj = page.toObject();
-    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as Record<string, unknown>;
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "holi" });
   } catch (error) {
     console.error("Get shared holi page error:", error);

@@ -84,8 +84,8 @@ app.use(
 
 // ── Body parsers ───────────────────────────────────────────────────────────
 app.use(cookieParser());
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 // ── HTTP request logging ───────────────────────────────────────────────────
 if (!env.IS_PROD) {

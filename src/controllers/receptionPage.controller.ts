@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import OpenAI from "openai";
 import ReceptionPage from "../models/ReceptionPage";
 import { env } from "../config/env";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -12,22 +13,29 @@ export const createReceptionPage = async (req: Request, res: Response): Promise<
       tagline, heroImage, bride, groom, families, galleryImages, password,
     } = req.body;
 
+    const payload = await transformMediaPayload(
+      {
+        brideName: brideName || "",
+        groomName: groomName || "",
+        receptionDate: receptionDate || "2026-03-15T19:00:00+05:30",
+        venue: venue || "",
+        venueAddress: venueAddress || "",
+        venueMapQuery: venueMapQuery || "",
+        venueTimings: venueTimings || "7:00 PM — 11:30 PM",
+        tagline: tagline || "Request the pleasure of your company",
+        heroImage: heroImage || "/assets/Reception/reception.png",
+        bride: bride || { name: "", role: "The Bride", description: "", photo: "", tags: [] },
+        groom: groom || { name: "", role: "The Groom", description: "", photo: "", tags: [] },
+        families: families || { bride: "", groom: "" },
+        galleryImages: galleryImages || [],
+        password: password || "",
+      },
+      { template: "reception", userId: req.userId }
+    );
+
     const page = await ReceptionPage.create({
       userId: req.userId,
-      brideName: brideName || "",
-      groomName: groomName || "",
-      receptionDate: receptionDate || "2026-03-15T19:00:00+05:30",
-      venue: venue || "",
-      venueAddress: venueAddress || "",
-      venueMapQuery: venueMapQuery || "",
-      venueTimings: venueTimings || "7:00 PM — 11:30 PM",
-      tagline: tagline || "Request the pleasure of your company",
-      heroImage: heroImage || "/assets/Reception/reception.png",
-      bride: bride || { name: "", role: "The Bride", description: "", photo: "", tags: [] },
-      groom: groom || { name: "", role: "The Groom", description: "", photo: "", tags: [] },
-      families: families || { bride: "", groom: "" },
-      galleryImages: galleryImages || [],
-      password: password || "",
+      ...payload,
     });
 
     res.status(201).json({ success: true, data: page });
@@ -74,9 +82,14 @@ export const updateReceptionPage = async (req: Request, res: Response): Promise<
       return;
     }
 
+    const updates = await transformMediaPayload(req.body as Record<string, unknown>, {
+      template: "reception",
+      userId: req.userId,
+    });
+
     for (const field of fields) {
-      if (req.body[field] !== undefined) {
-        (page as unknown as Record<string, unknown>)[field] = req.body[field];
+      if (updates[field] !== undefined) {
+        (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
     }
 
@@ -99,7 +112,7 @@ export const publishReceptionPage = async (req: Request, res: Response): Promise
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${env.APP_URL}/${page.shareId}`;
+    const shareUrl = `${env.SHARE_BASE_URL}/${page.shareId}`;
     res.json({ success: true, data: { shareId: page.shareId, shareUrl } });
   } catch (error) {
     console.error("Publish reception page error:", error);
@@ -204,7 +217,7 @@ export const getSharedReceptionPage = async (req: Request, res: Response): Promi
     await page.save();
 
     const pageObj = page.toObject();
-    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as Record<string, unknown>;
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "reception" });
   } catch (error) {
     console.error("Get shared reception page error:", error);

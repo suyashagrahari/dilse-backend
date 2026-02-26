@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import EidPage from "../models/EidPage";
 import { env } from "../config/env";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 export const createEidPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -10,20 +11,27 @@ export const createEidPage = async (req: Request, res: Response): Promise<void> 
       englishSubtitle, eidDate, password,
     } = req.body;
 
+    const payload = await transformMediaPayload(
+      {
+        senderName: senderName || "",
+        senderFamily: senderFamily || "Family",
+        senderMembers: senderMembers || [],
+        senderPhoto: senderPhoto || "",
+        recipientName: recipientName || "",
+        homeWishMessage: homeWishMessage || "",
+        congratsMessage: congratsMessage || "",
+        urduTitle: urduTitle || "عید مبارک",
+        urduSubtitle: urduSubtitle || "آپ کو اور آپ کے خاندان کو عید الفطر مبارک ہو",
+        englishSubtitle: englishSubtitle || "Wishing you joy, peace, and countless blessings this Eid",
+        eidDate: eidDate || "2026-03-20T00:00:00",
+        password: password || "",
+      },
+      { template: "eid", userId: req.userId }
+    );
+
     const page = await EidPage.create({
       userId: req.userId,
-      senderName: senderName || "",
-      senderFamily: senderFamily || "Family",
-      senderMembers: senderMembers || [],
-      senderPhoto: senderPhoto || "",
-      recipientName: recipientName || "",
-      homeWishMessage: homeWishMessage || "",
-      congratsMessage: congratsMessage || "",
-      urduTitle: urduTitle || "عید مبارک",
-      urduSubtitle: urduSubtitle || "آپ کو اور آپ کے خاندان کو عید الفطر مبارک ہو",
-      englishSubtitle: englishSubtitle || "Wishing you joy, peace, and countless blessings this Eid",
-      eidDate: eidDate || "2026-03-20T00:00:00",
-      password: password || "",
+      ...payload,
     });
 
     res.status(201).json({ success: true, data: page });
@@ -71,18 +79,36 @@ export const updateEidPage = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (senderName !== undefined) page.senderName = senderName;
-    if (senderFamily !== undefined) page.senderFamily = senderFamily;
-    if (senderMembers !== undefined) page.senderMembers = senderMembers;
-    if (senderPhoto !== undefined) page.senderPhoto = senderPhoto;
-    if (recipientName !== undefined) page.recipientName = recipientName;
-    if (homeWishMessage !== undefined) page.homeWishMessage = homeWishMessage;
-    if (congratsMessage !== undefined) page.congratsMessage = congratsMessage;
-    if (urduTitle !== undefined) page.urduTitle = urduTitle;
-    if (urduSubtitle !== undefined) page.urduSubtitle = urduSubtitle;
-    if (englishSubtitle !== undefined) page.englishSubtitle = englishSubtitle;
-    if (eidDate !== undefined) page.eidDate = eidDate;
-    if (password !== undefined) page.password = password;
+    const updates = await transformMediaPayload(
+      {
+        senderName,
+        senderFamily,
+        senderMembers,
+        senderPhoto,
+        recipientName,
+        homeWishMessage,
+        congratsMessage,
+        urduTitle,
+        urduSubtitle,
+        englishSubtitle,
+        eidDate,
+        password,
+      },
+      { template: "eid", userId: req.userId }
+    );
+
+    if (updates.senderName !== undefined) page.senderName = updates.senderName;
+    if (updates.senderFamily !== undefined) page.senderFamily = updates.senderFamily;
+    if (updates.senderMembers !== undefined) page.senderMembers = updates.senderMembers;
+    if (updates.senderPhoto !== undefined) page.senderPhoto = updates.senderPhoto;
+    if (updates.recipientName !== undefined) page.recipientName = updates.recipientName;
+    if (updates.homeWishMessage !== undefined) page.homeWishMessage = updates.homeWishMessage;
+    if (updates.congratsMessage !== undefined) page.congratsMessage = updates.congratsMessage;
+    if (updates.urduTitle !== undefined) page.urduTitle = updates.urduTitle;
+    if (updates.urduSubtitle !== undefined) page.urduSubtitle = updates.urduSubtitle;
+    if (updates.englishSubtitle !== undefined) page.englishSubtitle = updates.englishSubtitle;
+    if (updates.eidDate !== undefined) page.eidDate = updates.eidDate;
+    if (updates.password !== undefined) page.password = updates.password;
 
     await page.save();
     res.json({ success: true, data: page });
@@ -103,7 +129,7 @@ export const publishEidPage = async (req: Request, res: Response): Promise<void>
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${env.APP_URL}/${page.shareId}`;
+    const shareUrl = `${env.SHARE_BASE_URL}/${page.shareId}`;
     res.json({
       success: true,
       data: { shareId: page.shareId, shareUrl },
@@ -126,7 +152,7 @@ export const getSharedEidPage = async (req: Request, res: Response): Promise<voi
     await page.save();
 
     const pageObj = page.toObject();
-    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as Record<string, unknown>;
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "eid" });
   } catch (error) {
     console.error("Get shared eid page error:", error);

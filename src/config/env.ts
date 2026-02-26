@@ -62,6 +62,14 @@ if (APP_ENV === "production") {
     missing.push("JWT_REFRESH_SECRET (min 32 characters)");
   if (!process.env.GOOGLE_CLIENT_ID)
     missing.push("GOOGLE_CLIENT_ID");
+  if (!process.env.S3_REGION)
+    missing.push("S3_REGION");
+  if (!process.env.S3_BUCKET_NAME)
+    missing.push("S3_BUCKET_NAME");
+  if (!process.env.S3_ACCESS_KEY_ID)
+    missing.push("S3_ACCESS_KEY_ID");
+  if (!process.env.S3_SECRET_ACCESS_KEY)
+    missing.push("S3_SECRET_ACCESS_KEY");
 
   if (missing.length > 0) {
     console.error("❌ Missing/invalid required production environment variables:");
@@ -80,6 +88,7 @@ export const env = {
   CLIENT_URL: resolved.clientUrl,
   CLIENT_URLS: resolved.clientUrl.split(",").map((u) => u.trim()),
   APP_URL: resolved.appUrl,
+  SHARE_BASE_URL: (process.env.SHARE_BASE_URL || resolved.appUrl).replace(/\/+$/, ""),
 
   // Secrets — shared across environments (but MUST be strong in production)
   JWT_SECRET: process.env.JWT_SECRET || "default_jwt_secret_change_me_in_production",
@@ -88,6 +97,12 @@ export const env = {
   // External APIs
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
+  S3_REGION: process.env.S3_REGION || "",
+  S3_BUCKET_NAME: process.env.S3_BUCKET_NAME || "",
+  S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "",
+  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY || "",
+  S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL || "",
+  S3_UPLOAD_PREFIX: process.env.S3_UPLOAD_PREFIX || "gifts-media",
 
   // Helpers
   IS_PROD: APP_ENV === "production",

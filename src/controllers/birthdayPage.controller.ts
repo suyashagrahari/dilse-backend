@@ -94,7 +94,7 @@ export const publishBirthdayPage = async (req: Request, res: Response): Promise<
       success: true,
       data: {
         shareId: page.shareId,
-        shareUrl: `${env.APP_URL}/${page.shareId}`,
+        shareUrl: `${env.SHARE_BASE_URL}/${page.shareId}`,
       },
     });
   } catch (error) {
