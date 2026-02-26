@@ -10,6 +10,7 @@ export interface IWeddingEvent {
   time: string;
   venue: string;
   accent: string;
+  disabled: boolean;
 }
 
 export interface IWeddingBlessing {
@@ -64,6 +65,7 @@ const weddingEventSchema = new Schema<IWeddingEvent>(
     time: { type: String, default: "" },
     venue: { type: String, default: "" },
     accent: { type: String, default: "from-amber-500/20 to-amber-600/5 border-amber-500/30" },
+    disabled: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -109,12 +111,12 @@ const weddingPageSchema = new Schema<IWeddingPage>(
     events: {
       type: [weddingEventSchema],
       default: [
-        { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30" },
-        { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30" },
-        { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30" },
-        { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30" },
-        { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30" },
-        { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30" },
+        { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30", disabled: false },
+        { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
+        { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: false },
+        { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30", disabled: false },
+        { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
+        { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
       ],
     },
     // Gallery

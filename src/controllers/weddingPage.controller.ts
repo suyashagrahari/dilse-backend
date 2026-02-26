@@ -7,13 +7,85 @@ import { transformMediaPayload } from "../services/mediaProcessor.service";
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
 const DEFAULT_EVENTS = [
-  { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30" },
-  { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30" },
-  { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30" },
-  { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30" },
-  { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30" },
-  { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30" },
+  { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30", disabled: false },
+  { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
+  { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: false },
+  { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30", disabled: false },
+  { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
+  { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
 ];
+
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, january: 0,
+  feb: 1, february: 1,
+  mar: 2, march: 2,
+  apr: 3, april: 3,
+  may: 4,
+  jun: 5, june: 5,
+  jul: 6, july: 6,
+  aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8,
+  oct: 9, october: 9,
+  nov: 10, november: 10,
+  dec: 11, december: 11,
+};
+
+const parseTimeToMinutes = (time: string): number => {
+  const cleaned = time.trim().toUpperCase();
+  const match = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const hourRaw = Number(match[1]);
+  const minutes = Number(match[2] || "0");
+  const ampm = match[3];
+  let hour = hourRaw % 12;
+  if (ampm === "PM") hour += 12;
+  return hour * 60 + minutes;
+};
+
+const parseDateAndTimeToEpoch = (date: string, time: string): number => {
+  const trimmedDate = date.trim();
+  if (!trimmedDate) return Number.MAX_SAFE_INTEGER;
+
+  const parts = trimmedDate.split(/\s+/);
+  if (parts.length < 2) return Number.MAX_SAFE_INTEGER;
+  const day = Number(parts[0]);
+  const monthKey = parts[1].toLowerCase();
+  const monthIdx = MONTH_MAP[monthKey];
+  if (!Number.isFinite(day) || monthIdx === undefined) return Number.MAX_SAFE_INTEGER;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const eventDate = new Date(year, monthIdx, day);
+  eventDate.setHours(0, 0, 0, 0);
+  eventDate.setMinutes(parseTimeToMinutes(time));
+  return eventDate.getTime();
+};
+
+const normalizeAndSortEvents = (eventsInput: unknown) => {
+  const incoming = Array.isArray(eventsInput) ? eventsInput : DEFAULT_EVENTS;
+  const normalized = incoming.map((event, idx) => {
+    const fallback = DEFAULT_EVENTS[idx] || DEFAULT_EVENTS[Math.min(idx, DEFAULT_EVENTS.length - 1)];
+    const src = (event || {}) as Record<string, unknown>;
+    return {
+      name: String(src.name || fallback.name),
+      hindi: String(src.hindi || fallback.hindi),
+      icon: String(src.icon || fallback.icon),
+      date: String(src.date || ""),
+      time: String(src.time || fallback.time),
+      venue: String(src.venue || ""),
+      accent: String(src.accent || fallback.accent),
+      disabled: Boolean(src.disabled),
+    };
+  });
+
+  return normalized.sort((a, b) => {
+    if (a.disabled !== b.disabled) return a.disabled ? 1 : -1;
+    const aEpoch = parseDateAndTimeToEpoch(a.date, a.time);
+    const bEpoch = parseDateAndTimeToEpoch(b.date, b.time);
+    if (aEpoch === bEpoch) return a.name.localeCompare(b.name);
+    return aEpoch - bEpoch;
+  });
+};
 
 export const createWeddingPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -41,7 +113,7 @@ export const createWeddingPage = async (req: Request, res: Response): Promise<vo
         groomTags: groomTags || [],
         groomFamilyParents: groomFamilyParents || "",
         groomFamilyGrandparents: groomFamilyGrandparents || "",
-        events: events || DEFAULT_EVENTS,
+        events: normalizeAndSortEvents(events),
         galleryImages: galleryImages || [],
         password: password || "",
       },
@@ -106,6 +178,10 @@ export const updateWeddingPage = async (req: Request, res: Response): Promise<vo
 
     for (const field of fields) {
       if (updates[field] !== undefined) {
+        if (field === "events") {
+          (page as unknown as Record<string, unknown>)[field] = normalizeAndSortEvents(updates[field]);
+          continue;
+        }
         (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
     }
