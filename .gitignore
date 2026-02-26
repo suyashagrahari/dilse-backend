@@ -1,4 +1,11 @@
 node_modules/
 dist/
-.env
 *.log
+
+# Environment files — never commit real secrets
+.env
+.env.local
+.env.development
+.env.production
+# Allow the example/template file (no real secrets)
+!.env.example
