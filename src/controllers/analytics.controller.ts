@@ -33,7 +33,7 @@ const getBaseAnalytics = async () => {
 export const getPlatformOverview = async (_req: Request, res: Response): Promise<void> => {
   try {
     const base = await getBaseAnalytics();
-
+    console.log("base", base);
     const stats = await Promise.all(
       PAGE_MODELS.map(async (model) => {
         const [links, totals] = await Promise.all([
