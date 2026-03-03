@@ -1,4 +1,4 @@
-name: Backend Dev CI/CD
+name: Backend CI/CD (Dev)
 
 on:
   push:
@@ -81,6 +81,7 @@ jobs:
     name: Deploy to EC2 (Dev)
     runs-on: ubuntu-latest
     needs: docker
+    environment: development
 
     steps:
       - name: Deploy via SSH
