@@ -10,6 +10,7 @@ export interface IUser extends Document {
   googleId?: string;
   provider: "local" | "google";
   theme: "light" | "dark" | "system";
+  subdomain?: string;
   refreshToken?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -54,6 +55,14 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ["light", "dark", "system"],
       default: "light",
+    },
+    subdomain: {
+      type: String,
+      sparse: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true,
     },
     refreshToken: {
       type: String,

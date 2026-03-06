@@ -246,6 +246,83 @@ export const getMyCreations = async (req: Request, res: Response): Promise<void>
   }
 };
 
+export const getPublicProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const username = req.params.username as string;
+    const user = await User.findOne({ subdomain: username.toLowerCase() }).select("name avatar subdomain");
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    const pages: Record<string, unknown>[] = [];
+    for (const { model, templateType } of TEMPLATE_LOOKUPS) {
+      const found = await model
+        .find({ userId: user._id, isPublished: true })
+        .sort({ updatedAt: -1 })
+        .select("shareId recipientName viewCount createdAt updatedAt");
+      for (const p of found) {
+        const obj = (p as { toObject: () => Record<string, unknown> }).toObject();
+        pages.push({
+          shareId: obj.shareId,
+          templateType,
+          recipientName: obj.recipientName,
+          viewCount: (obj.viewCount as number) || 0,
+          createdAt: obj.createdAt,
+        });
+      }
+    }
+    pages.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
+    res.json({
+      success: true,
+      owner: { name: user.name, avatar: user.avatar, subdomain: user.subdomain },
+      pages,
+    });
+  } catch (error) {
+    console.error("Get public profile error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch profile" });
+  }
+};
+
+export const getSharedPageByUsername = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const username = req.params.username as string;
+    const shareId = req.params.shareId as string;
+    const user = await User.findOne({ subdomain: username.toLowerCase() });
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
+      const page = await model.findOneAndUpdate(
+        { shareId, isPublished: true, userId: user._id },
+        { $inc: { viewCount: 1 } },
+        { new: true }
+      );
+      if (page) {
+        const pageObj = (page as { toObject: () => Record<string, unknown> }).toObject();
+        const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
+        const hasPassword = !!pageObj.password;
+        res.json({
+          success: true,
+          templateType,
+          editorRoute,
+          hasPassword,
+          installCount: (pageObj.installCount as number) || 0,
+          viewCount: (pageObj.viewCount as number) || 0,
+          senderUserId: String(pageObj.userId),
+          ownerSubdomain: user.subdomain,
+          data: safeData,
+        });
+        return;
+      }
+    }
+    res.status(404).json({ success: false, error: "Page not found" });
+  } catch (error) {
+    console.error("Get shared page by username error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch page" });
+  }
+};
+
 export const getInstallStats = async (_req: Request, res: Response): Promise<void> => {
   try {
     const [bdayResult, valResult] = await Promise.all([

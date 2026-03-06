@@ -104,6 +104,10 @@ export const env = {
   S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL || "",
   S3_UPLOAD_PREFIX: process.env.S3_UPLOAD_PREFIX || "gifts-media",
 
+  // Root domain for wildcard subdomain routing
+  // Dev: klyro.digital  |  Prod: subhsandesh.in
+  ROOT_DOMAIN: process.env.ROOT_DOMAIN || "",
+
   // Helpers
   IS_PROD: APP_ENV === "production",
   IS_NGROK: APP_ENV === "ngrok",
