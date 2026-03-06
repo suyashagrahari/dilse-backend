@@ -137,6 +137,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           avatar: user.avatar,
           provider: user.provider,
           theme: user.theme,
+          subdomain: user.subdomain,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -256,6 +257,7 @@ export const googleAuth = async (
           avatar: user.avatar,
           provider: user.provider,
           theme: user.theme,
+          subdomain: user.subdomain,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -291,6 +293,7 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
         avatar: user.avatar,
         provider: user.provider,
         theme: user.theme,
+        subdomain: user.subdomain,
         createdAt: user.createdAt,
       },
     });
@@ -343,6 +346,7 @@ export const updateProfile = async (
         avatar: user.avatar,
         provider: user.provider,
         theme: user.theme,
+        subdomain: user.subdomain,
         createdAt: user.createdAt,
       },
     });
@@ -440,6 +444,7 @@ export const getDashboard = async (
           avatar: user.avatar,
           provider: user.provider,
           theme: user.theme,
+          subdomain: user.subdomain,
           createdAt: user.createdAt,
         },
         stats: {
@@ -506,6 +511,7 @@ export const refreshToken = async (
           avatar: user.avatar,
           provider: user.provider,
           theme: user.theme,
+          subdomain: user.subdomain,
         },
       },
     });
@@ -515,6 +521,92 @@ export const refreshToken = async (
       success: false,
       error: "Token refresh failed",
     });
+  }
+};
+
+const SUBDOMAIN_RESERVED = new Set([
+  "www", "admin", "api", "mail", "ftp", "support", "help", "docs", "blog", "app",
+  "auth", "login", "signup", "register", "dashboard", "static", "assets", "cdn",
+  "dev", "test", "staging", "prod", "production", "public", "private", "media",
+  "u", "user", "users", "share", "page", "pages", "gift", "gifts", "dilse",
+]);
+
+function validateSubdomain(name: string): string | null {
+  if (!name || typeof name !== "string") return "Subdomain is required";
+  const lower = name.toLowerCase().trim();
+  if (lower.length < 3) return "Subdomain must be at least 3 characters";
+  if (lower.length > 30) return "Subdomain must be 30 characters or fewer";
+  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(lower) && !/^[a-z0-9]{3}$/.test(lower)) {
+    return "Only lowercase letters, numbers, and hyphens allowed (cannot start/end with hyphen)";
+  }
+  if (lower.includes("--")) return "Consecutive hyphens are not allowed";
+  if (SUBDOMAIN_RESERVED.has(lower)) return "This subdomain is reserved, please choose another";
+  return null;
+}
+
+export const checkSubdomainAvailability = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const name = (req.query.name as string || "").toLowerCase().trim();
+    const validationError = validateSubdomain(name);
+    if (validationError) {
+      res.json({ success: true, available: false, reason: validationError });
+      return;
+    }
+    const currentUserId = req.userId;
+    const existing = await User.findOne({ subdomain: name });
+    if (existing && String(existing._id) !== String(currentUserId)) {
+      res.json({ success: true, available: false, reason: "This subdomain is already taken" });
+      return;
+    }
+    res.json({ success: true, available: true });
+  } catch (error) {
+    console.error("Check subdomain error:", error);
+    res.status(500).json({ success: false, error: "Failed to check availability" });
+  }
+};
+
+export const setSubdomain = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const rawName: string = (req.body.subdomain || "").toLowerCase().trim();
+    const validationError = validateSubdomain(rawName);
+    if (validationError) {
+      res.status(400).json({ success: false, error: validationError });
+      return;
+    }
+    const user = await User.findById(req.userId);
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    const existing = await User.findOne({ subdomain: rawName });
+    if (existing && String(existing._id) !== String(user._id)) {
+      res.status(409).json({ success: false, error: "This subdomain is already taken" });
+      return;
+    }
+    user.subdomain = rawName;
+    await user.save();
+    res.json({
+      success: true,
+      data: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar,
+        provider: user.provider,
+        theme: user.theme,
+        subdomain: user.subdomain,
+      },
+      message: "Subdomain set successfully",
+    });
+  } catch (error) {
+    console.error("Set subdomain error:", error);
+    res.status(500).json({ success: false, error: "Failed to set subdomain" });
   }
 };
 

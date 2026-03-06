@@ -73,7 +73,10 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (!env.IS_PROD) return callback(null, true);
+      // Exact match (e.g. https://subhsandesh.in or https://klyro.digital)
       if (env.CLIENT_URLS.includes(origin)) return callback(null, true);
+      // Wildcard subdomain match: any *.subhsandesh.in or *.klyro.digital
+      if (env.ROOT_DOMAIN && origin.endsWith(`.${env.ROOT_DOMAIN}`)) return callback(null, true);
       callback(new Error("Not allowed by CORS"));
     },
     credentials: true,

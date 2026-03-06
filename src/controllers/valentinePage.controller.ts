@@ -70,12 +70,11 @@ export const publishValentinePage = async (req: Request, res: Response): Promise
     page.isPublished = true;
     await page.save();
 
+    const { buildShareUrl } = await import("../utils/shareUrl");
+    const shareUrl = await buildShareUrl(page.shareId, String(req.userId));
     res.json({
       success: true,
-      data: {
-        shareId: page.shareId,
-        shareUrl: `${env.SHARE_BASE_URL}/${page.shareId}`,
-      },
+      data: { shareId: page.shareId, shareUrl },
     });
   } catch (error) {
     console.error("Publish valentine page error:", error);

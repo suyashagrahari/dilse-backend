@@ -129,7 +129,8 @@ export const publishHoliPage = async (req: Request, res: Response): Promise<void
     page.isPublished = true;
     await page.save();
 
-    const shareUrl = `${env.SHARE_BASE_URL}/${page.shareId}`;
+    const { buildShareUrl } = await import("../utils/shareUrl");
+    const shareUrl = await buildShareUrl(page.shareId, String(req.userId));
     res.json({
       success: true,
       data: { shareId: page.shareId, shareUrl },
