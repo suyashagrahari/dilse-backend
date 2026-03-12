@@ -13,6 +13,7 @@ import receptionPageRoutes from "./receptionPage.routes";
 import shareRoutes from "./share.routes";
 import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
+import contactRoutes from "./contact.routes";
 import { protect } from "../middleware/auth";
 
 const router = Router();
@@ -31,6 +32,7 @@ router.use("/reception-pages", receptionPageRoutes);
 router.use("/share", shareRoutes);
 router.use("/media", mediaRoutes);
 router.use("/analytics", analyticsRoutes);
+router.use("/contact", contactRoutes);
 
 router.get("/health", (_req, res) => {
   res.json({
