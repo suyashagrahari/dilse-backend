@@ -1,6 +1,13 @@
 import mongoose, { Schema, Document } from "mongoose";
 import bcrypt from "bcryptjs";
 
+function generateReferralCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
@@ -12,6 +19,10 @@ export interface IUser extends Document {
   theme: "light" | "dark" | "system";
   subdomain?: string;
   refreshToken?: string;
+  points: number;
+  totalPointsEarned: number;
+  referralCode: string;
+  referredBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -68,6 +79,25 @@ const userSchema = new Schema<IUser>(
       type: String,
       select: false,
     },
+    points: {
+      type: Number,
+      default: 0,
+    },
+    totalPointsEarned: {
+      type: Number,
+      default: 0,
+    },
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    referredBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -75,6 +105,16 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.pre("save", async function (next) {
+  // Auto-generate referral code on first save
+  if (!this.referralCode) {
+    let code = generateReferralCode();
+    // ensure uniqueness
+    while (await mongoose.model("User").exists({ referralCode: code })) {
+      code = generateReferralCode();
+    }
+    this.referralCode = code;
+  }
+
   if (!this.isModified("password") || !this.password) return next();
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);

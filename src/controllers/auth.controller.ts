@@ -1,12 +1,65 @@
 import { Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
 import User from "../models/User";
+import ReferralRecord from "../models/ReferralRecord";
+import PointTransaction from "../models/PointTransaction";
 import {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt";
 import { env } from "../config/env";
+
+const REFERRAL_POINTS = 100;
+
+async function applyReferral(newUserId: string, refCode: string): Promise<void> {
+  if (!refCode) return;
+  try {
+    const referrer = await User.findOne({ referralCode: refCode.toUpperCase().trim() });
+    if (!referrer) return;
+    if (String(referrer._id) === newUserId) return; // can't self-refer
+
+    const newUser = await User.findById(newUserId);
+    if (!newUser) return;
+    if (newUser.referredBy) return; // already used a code
+
+    // Mark who referred this user
+    newUser.referredBy = referrer._id;
+
+    // Award referee (new user) +100 pts
+    newUser.points += REFERRAL_POINTS;
+    newUser.totalPointsEarned += REFERRAL_POINTS;
+    await newUser.save();
+
+    // Award referrer +100 pts
+    referrer.points += REFERRAL_POINTS;
+    referrer.totalPointsEarned += REFERRAL_POINTS;
+    await referrer.save();
+
+    // Create referral record
+    await ReferralRecord.create({ referrer: referrer._id, referee: newUserId });
+
+    // Point transaction for referee
+    await PointTransaction.create({
+      user: newUserId,
+      type: "referral_signup",
+      delta: REFERRAL_POINTS,
+      balance: newUser.points,
+      meta: { referrerName: referrer.name },
+    });
+
+    // Point transaction for referrer
+    await PointTransaction.create({
+      user: referrer._id,
+      type: "referral_reward",
+      delta: REFERRAL_POINTS,
+      balance: referrer.points,
+      meta: { refereeName: newUser.name },
+    });
+  } catch (err) {
+    console.error("applyReferral error (non-fatal):", err);
+  }
+}
 
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
@@ -21,7 +74,7 @@ export const register = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, referralCode } = req.body;
 
     if (!email || !password || !name) {
       res.status(400).json({
@@ -55,10 +108,16 @@ export const register = async (
       provider: "local",
     });
 
+    // Apply referral if code was provided
+    if (referralCode) await applyReferral(user._id.toString(), referralCode);
+
+    const freshUser = await User.findById(user._id);
     const tokens = generateTokens(user._id.toString(), user.email);
 
-    user.refreshToken = tokens.refreshToken;
-    await user.save();
+    if (freshUser) {
+      freshUser.refreshToken = tokens.refreshToken;
+      await freshUser.save();
+    }
 
     res.status(201).json({
       success: true,
@@ -70,6 +129,8 @@ export const register = async (
           avatar: user.avatar,
           provider: user.provider,
           theme: user.theme,
+          points: freshUser?.points ?? 0,
+          referralCode: freshUser?.referralCode ?? "",
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -138,6 +199,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           provider: user.provider,
           theme: user.theme,
           subdomain: user.subdomain,
+          points: user.points,
+          referralCode: user.referralCode,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -157,7 +220,7 @@ export const googleAuth = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { credential, profile } = req.body;
+    const { credential, profile, referralCode } = req.body;
 
     if (!credential) {
       res.status(400).json({
@@ -227,6 +290,8 @@ export const googleAuth = async (
       ],
     });
 
+    const isNewUser = !user;
+
     if (user) {
       if (!user.googleId && googleSub) {
         user.googleId = googleSub;
@@ -247,6 +312,13 @@ export const googleAuth = async (
     user.refreshToken = tokens.refreshToken;
     await user.save();
 
+    // Apply referral only for brand-new users
+    if (isNewUser && referralCode) {
+      await applyReferral(user._id.toString(), referralCode);
+    }
+
+    const freshUser = await User.findById(user._id);
+
     res.json({
       success: true,
       data: {
@@ -258,6 +330,8 @@ export const googleAuth = async (
           provider: user.provider,
           theme: user.theme,
           subdomain: user.subdomain,
+          points: freshUser?.points ?? 0,
+          referralCode: freshUser?.referralCode ?? "",
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -295,6 +369,8 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
         theme: user.theme,
         subdomain: user.subdomain,
         createdAt: user.createdAt,
+        points: user.points,
+        referralCode: user.referralCode,
       },
     });
   } catch (error) {
