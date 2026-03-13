@@ -28,6 +28,28 @@ export const getReferralInfo = async (req: Request, res: Response): Promise<void
   }
 };
 
+export const getReferrerByCode = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { code } = req.params;
+    if (!code) {
+      res.status(400).json({ success: false, error: "Code required" });
+      return;
+    }
+    const user = await User.findOne({ referralCode: code.toUpperCase().trim() }).select("name avatar");
+    if (!user) {
+      res.status(404).json({ success: false, error: "Invalid referral code" });
+      return;
+    }
+    res.json({
+      success: true,
+      data: { name: user.name, avatar: user.avatar ?? null },
+    });
+  } catch (error) {
+    console.error("getReferrerByCode error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch referrer" });
+  }
+};
+
 export const getPointsHistory = async (req: Request, res: Response): Promise<void> => {
   try {
     const transactions = await PointTransaction.find({ user: req.userId })
