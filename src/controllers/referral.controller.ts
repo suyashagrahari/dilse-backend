@@ -30,7 +30,7 @@ export const getReferralInfo = async (req: Request, res: Response): Promise<void
 
 export const getReferrerByCode = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { code } = req.params;
+    const code = String(req.params.code || "");
     if (!code) {
       res.status(400).json({ success: false, error: "Code required" });
       return;
