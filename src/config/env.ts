@@ -108,6 +108,9 @@ export const env = {
   // Dev: klyro.digital  |  Prod: subhsandesh.in
   ROOT_DOMAIN: process.env.ROOT_DOMAIN || "",
 
+  // Resend (for OTP emails)
+  RESEND_API_KEY: process.env.RESEND_API_KEY || "",
+
   // Helpers
   IS_PROD: APP_ENV === "production",
   IS_NGROK: APP_ENV === "ngrok",

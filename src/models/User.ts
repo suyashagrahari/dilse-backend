@@ -23,6 +23,10 @@ export interface IUser extends Document {
   totalPointsEarned: number;
   referralCode: string;
   referredBy?: mongoose.Types.ObjectId;
+  isVerified: boolean;
+  otp?: string;
+  otpExpiry?: Date;
+  pendingReferralCode?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -97,6 +101,22 @@ const userSchema = new Schema<IUser>(
       type: Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    otp: {
+      type: String,
+      select: false,
+    },
+    otpExpiry: {
+      type: Date,
+      select: false,
+    },
+    pendingReferralCode: {
+      type: String,
+      select: false,
     },
   },
   {
