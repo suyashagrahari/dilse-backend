@@ -14,9 +14,11 @@ export async function sendOtpEmail(
   }
 
   await resend.emails.send({
-    from: "SubhSandesh <noreply@subhsandesh.in>",
+    from: "SubhSandesh <verify@subhsandesh.in>",
     to,
-    subject: `${otp} is your SubhSandesh verification code`,
+    replyTo: "team@subhsandesh.in",
+    subject: `${otp} — your SubhSandesh sign-up code`,
+    text: `Hi ${name},\n\nYour SubhSandesh verification code is:\n\n${otp}\n\nThis code expires in 15 minutes. If you didn't sign up, you can ignore this email.\n\n— SubhSandesh Team\nteam@subhsandesh.in`,
     html: `
 <!DOCTYPE html>
 <html>
