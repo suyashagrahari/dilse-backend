@@ -15,6 +15,7 @@ import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
 import contactRoutes from "./contact.routes";
 import referralRoutes from "./referral.routes";
+import paymentRoutes from "./payment.routes";
 import { protect } from "../middleware/auth";
 
 const router = Router();
@@ -35,6 +36,7 @@ router.use("/media", mediaRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/contact", contactRoutes);
 router.use("/referral", referralRoutes);
+router.use("/payment", paymentRoutes);
 
 router.get("/health", (_req, res) => {
   res.json({
