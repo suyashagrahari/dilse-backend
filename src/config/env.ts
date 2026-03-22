@@ -108,6 +108,15 @@ export const env = {
   // Dev: klyro.digital  |  Prod: subhsandesh.in
   ROOT_DOMAIN: process.env.ROOT_DOMAIN || "",
 
+  // Resend (for OTP emails)
+  RESEND_API_KEY: process.env.RESEND_API_KEY || "",
+
+  // Razorpay (payment gateway)
+  // RAZORPAY_KEY_ID   — public key, safe to expose to client
+  // RAZORPAY_KEY_SECRET — private key, NEVER send to client
+  RAZORPAY_KEY_ID:     process.env.RAZORPAY_KEY_ID     || "",
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "",
+
   // Helpers
   IS_PROD: APP_ENV === "production",
   IS_NGROK: APP_ENV === "ngrok",

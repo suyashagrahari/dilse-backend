@@ -3,6 +3,8 @@ import {
   register,
   login,
   googleAuth,
+  verifyOtp,
+  resendOtp,
   getMe,
   refreshToken,
   logout,
@@ -19,6 +21,8 @@ const router = Router();
 router.post("/register", register);
 router.post("/login", login);
 router.post("/google", googleAuth);
+router.post("/verify-otp", verifyOtp);
+router.post("/resend-otp", resendOtp);
 router.get("/me", protect, getMe);
 router.put("/profile", protect, updateProfile);
 router.put("/password", protect, changePassword);

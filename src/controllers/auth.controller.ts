@@ -1,12 +1,70 @@
 import { Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
 import User from "../models/User";
+import ReferralRecord from "../models/ReferralRecord";
+import PointTransaction from "../models/PointTransaction";
 import {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt";
 import { env } from "../config/env";
+import { sendOtpEmail } from "../utils/mailer";
+
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+const REFERRAL_POINTS = 100;
+
+async function applyReferral(newUserId: string, refCode: string): Promise<void> {
+  if (!refCode) return;
+  try {
+    const referrer = await User.findOne({ referralCode: refCode.toUpperCase().trim() });
+    if (!referrer) return;
+    if (String(referrer._id) === newUserId) return; // can't self-refer
+
+    const newUser = await User.findById(newUserId);
+    if (!newUser) return;
+    if (newUser.referredBy) return; // already used a code
+
+    // Mark who referred this user
+    newUser.referredBy = referrer._id;
+
+    // Award referee (new user) +100 pts
+    newUser.points += REFERRAL_POINTS;
+    newUser.totalPointsEarned += REFERRAL_POINTS;
+    await newUser.save();
+
+    // Award referrer +100 pts
+    referrer.points += REFERRAL_POINTS;
+    referrer.totalPointsEarned += REFERRAL_POINTS;
+    await referrer.save();
+
+    // Create referral record
+    await ReferralRecord.create({ referrer: referrer._id, referee: newUserId });
+
+    // Point transaction for referee
+    await PointTransaction.create({
+      user: newUserId,
+      type: "referral_signup",
+      delta: REFERRAL_POINTS,
+      balance: newUser.points,
+      meta: { referrerName: referrer.name },
+    });
+
+    // Point transaction for referrer
+    await PointTransaction.create({
+      user: referrer._id,
+      type: "referral_reward",
+      delta: REFERRAL_POINTS,
+      balance: referrer.points,
+      meta: { refereeName: newUser.name },
+    });
+  } catch (err) {
+    console.error("applyReferral error (non-fatal):", err);
+  }
+}
 
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
@@ -21,7 +79,7 @@ export const register = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, referralCode } = req.body;
 
     if (!email || !password || !name) {
       res.status(400).json({
@@ -48,31 +106,32 @@ export const register = async (
       return;
     }
 
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
     const user = await User.create({
       email,
       password,
       name,
       provider: "local",
+      isVerified: false,
+      otp,
+      otpExpiry,
+      pendingReferralCode: referralCode || undefined,
     });
 
-    const tokens = generateTokens(user._id.toString(), user.email);
-
-    user.refreshToken = tokens.refreshToken;
-    await user.save();
+    // Send OTP email (non-blocking — don't fail registration if email fails)
+    try {
+      await sendOtpEmail(email, name, otp);
+    } catch (emailErr) {
+      console.error("OTP email send failed:", emailErr);
+    }
 
     res.status(201).json({
       success: true,
       data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          avatar: user.avatar,
-          provider: user.provider,
-          theme: user.theme,
-        },
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        requiresVerification: true,
+        email,
       },
     });
   } catch (error) {
@@ -122,6 +181,23 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Block login if email not verified
+    if (!user.isVerified) {
+      // Re-send a fresh OTP so they can verify
+      const otp = generateOtp();
+      user.otp = otp;
+      user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      await user.save();
+      try { await sendOtpEmail(user.email, user.name, otp); } catch {}
+      res.status(403).json({
+        success: false,
+        requiresVerification: true,
+        email: user.email,
+        error: "Please verify your email. A new code has been sent.",
+      });
+      return;
+    }
+
     const tokens = generateTokens(user._id.toString(), user.email);
 
     user.refreshToken = tokens.refreshToken;
@@ -138,6 +214,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           provider: user.provider,
           theme: user.theme,
           subdomain: user.subdomain,
+          points: user.points,
+          referralCode: user.referralCode,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -157,7 +235,7 @@ export const googleAuth = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { credential, profile } = req.body;
+    const { credential, profile, referralCode } = req.body;
 
     if (!credential) {
       res.status(400).json({
@@ -227,6 +305,8 @@ export const googleAuth = async (
       ],
     });
 
+    const isNewUser = !user;
+
     if (user) {
       if (!user.googleId && googleSub) {
         user.googleId = googleSub;
@@ -240,12 +320,20 @@ export const googleAuth = async (
         avatar: googlePicture || "",
         googleId: googleSub,
         provider: "google",
+        isVerified: true, // Google already verified the email
       });
     }
 
     const tokens = generateTokens(user._id.toString(), user.email);
     user.refreshToken = tokens.refreshToken;
     await user.save();
+
+    // Apply referral only for brand-new users
+    if (isNewUser && referralCode) {
+      await applyReferral(user._id.toString(), referralCode);
+    }
+
+    const freshUser = await User.findById(user._id);
 
     res.json({
       success: true,
@@ -258,6 +346,8 @@ export const googleAuth = async (
           provider: user.provider,
           theme: user.theme,
           subdomain: user.subdomain,
+          points: freshUser?.points ?? 0,
+          referralCode: freshUser?.referralCode ?? "",
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -269,6 +359,132 @@ export const googleAuth = async (
       success: false,
       error: "Google authentication failed. Please try again.",
     });
+  }
+};
+
+export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      res.status(400).json({ success: false, error: "Email and OTP are required" });
+      return;
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+      .select("+otp +otpExpiry +pendingReferralCode +password");
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "Account not found" });
+      return;
+    }
+
+    if (user.isVerified) {
+      res.status(400).json({ success: false, error: "Email already verified. Please log in." });
+      return;
+    }
+
+    if (!user.otp || !user.otpExpiry) {
+      res.status(400).json({ success: false, error: "No verification code found. Please request a new one." });
+      return;
+    }
+
+    if (new Date() > user.otpExpiry) {
+      res.status(400).json({ success: false, error: "Code has expired. Please request a new one." });
+      return;
+    }
+
+    if (user.otp !== String(otp).trim()) {
+      res.status(400).json({ success: false, error: "Incorrect code. Please try again." });
+      return;
+    }
+
+    // Mark verified, clear OTP fields
+    user.isVerified = true;
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+    const pendingRef = user.pendingReferralCode;
+    user.pendingReferralCode = undefined;
+
+    const tokens = generateTokens(user._id.toString(), user.email);
+    user.refreshToken = tokens.refreshToken;
+    await user.save();
+
+    // Apply referral reward after verification
+    if (pendingRef) await applyReferral(user._id.toString(), pendingRef);
+
+    const freshUser = await User.findById(user._id);
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          avatar: user.avatar,
+          provider: user.provider,
+          theme: user.theme,
+          subdomain: user.subdomain,
+          points: freshUser?.points ?? 0,
+          referralCode: freshUser?.referralCode ?? "",
+        },
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
+    });
+  } catch (error) {
+    console.error("verifyOtp error:", error);
+    res.status(500).json({ success: false, error: "Verification failed. Please try again." });
+  }
+};
+
+export const resendOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ success: false, error: "Email is required" });
+      return;
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+      .select("+otp +otpExpiry");
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "Account not found" });
+      return;
+    }
+
+    if (user.isVerified) {
+      res.status(400).json({ success: false, error: "Email already verified" });
+      return;
+    }
+
+    // Rate limit: must wait 60s between resends
+    if (user.otpExpiry) {
+      const sentAt = new Date(user.otpExpiry.getTime() - 15 * 60 * 1000);
+      const secondsSinceSend = (Date.now() - sentAt.getTime()) / 1000;
+      if (secondsSinceSend < 60) {
+        const wait = Math.ceil(60 - secondsSinceSend);
+        res.status(429).json({ success: false, error: `Please wait ${wait}s before requesting a new code.` });
+        return;
+      }
+    }
+
+    const otp = generateOtp();
+    user.otp = otp;
+    user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    try {
+      await sendOtpEmail(user.email, user.name, otp);
+    } catch (emailErr) {
+      console.error("Resend OTP email failed:", emailErr);
+    }
+
+    res.json({ success: true, message: "New code sent to your email" });
+  } catch (error) {
+    console.error("resendOtp error:", error);
+    res.status(500).json({ success: false, error: "Failed to resend code" });
   }
 };
 
@@ -295,6 +511,8 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
         theme: user.theme,
         subdomain: user.subdomain,
         createdAt: user.createdAt,
+        points: user.points,
+        referralCode: user.referralCode,
       },
     });
   } catch (error) {
