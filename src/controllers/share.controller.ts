@@ -5,6 +5,7 @@ import HoliPage from "../models/HoliPage";
 import EidPage from "../models/EidPage";
 import WeddingPage from "../models/WeddingPage";
 import ReceptionPage from "../models/ReceptionPage";
+import ShaadiCardPage from "../models/ShaadiCardPage";
 import SharedAccess from "../models/SharedAccess";
 import User from "../models/User";
 import mongoose from "mongoose";
@@ -22,6 +23,7 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: EidPage as mongoose.Model<unknown>, templateType: "eid", editorRoute: "/eid-mubarak" },
   { model: WeddingPage as mongoose.Model<unknown>, templateType: "wedding", editorRoute: "/wedding-shaadi" },
   { model: ReceptionPage as mongoose.Model<unknown>, templateType: "reception", editorRoute: "/reception" },
+  { model: ShaadiCardPage as mongoose.Model<unknown>, templateType: "shaadi", editorRoute: "/shaadi-card" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {

@@ -27,7 +27,7 @@ interface ParsedDataUrl {
 }
 
 export interface MediaTransformOptions {
-  template: "eid" | "holi" | "wedding" | "reception";
+  template: "eid" | "holi" | "wedding" | "reception" | "shaadi";
   userId?: string;
 }
 

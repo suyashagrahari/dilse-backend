@@ -25,6 +25,8 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
     The tone should be warm, spiritual, and celebratory. Eid al-Fitr is the Islamic festival marking the end of Ramadan.`,
   wedding: `You are a poetic Indian wedding invitation writer. Create beautiful, heartfelt wedding invitation content in Hindi and English.
     The tone should be warm, celebratory, traditional yet modern. Include Sanskrit blessings and family values.`,
+  shaadi: `You are a poetic Indian wedding invitation writer. Create beautiful, heartfelt wedding invitation content in Hindi and English.
+    The tone should be warm, celebratory, traditional yet modern. Include Sanskrit blessings and family values.`,
   reception: `You are an elegant Indian wedding reception invitation writer. Create beautiful, sophisticated reception invitation content.
     The tone should be warm, celebratory, and gracious. Focus on the joy of welcoming guests to celebrate the couple.`,
 };
@@ -63,7 +65,7 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
 }`;
   }
 
-  if (templateType === "wedding") {
+  if (templateType === "wedding" || templateType === "shaadi") {
     return `${base}
 
 IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
