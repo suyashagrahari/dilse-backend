@@ -94,6 +94,19 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
 }`;
   }
 
+  if (templateType === "love" || templateType === "love-gf") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "personalMessage": "A deeply heartfelt love message (3-5 sentences, poetic, personal, NO emojis in body)",
+  "wishMessage": "A tender wish card message (2-3 sentences, warm and intimate)",
+  "heading": "A romantic heading (5-8 words with one heart emoji)",
+  "body": "The main love message (3-5 sentences, heartfelt)",
+  "senderName": "A warm sign-off (2-4 words with one heart emoji)"
+}`;
+  }
+
   return `${base}
 
 IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
