@@ -18,19 +18,20 @@ function normalizePhoto(p: unknown) {
 export const createLoveGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { recipientName, senderName, personalMessage, wishMessage, loveDate,
-            homePhotos, galleryPhotos, quizQuestions, password } = req.body;
+            homePhotos, galleryPhotos, quizQuestions, truthDareQuestions, password } = req.body;
 
     const payload = await transformMediaPayload(
       {
-        recipientName:   recipientName   || "",
-        senderName:      senderName      || "",
-        personalMessage: personalMessage || "",
-        wishMessage:     wishMessage     || "",
-        loveDate:        loveDate        || "",
-        homePhotos:      homePhotos      || [],
-        galleryPhotos:   (galleryPhotos  || []).map(normalizePhoto),
-        quizQuestions:   quizQuestions   || [],
-        password:        password        || "",
+        recipientName:        recipientName        || "",
+        senderName:           senderName           || "",
+        personalMessage:      personalMessage      || "",
+        wishMessage:          wishMessage          || "",
+        loveDate:             loveDate             || "",
+        homePhotos:           homePhotos           || [],
+        galleryPhotos:        (galleryPhotos       || []).map(normalizePhoto),
+        quizQuestions:        quizQuestions        || [],
+        truthDareQuestions:   truthDareQuestions   || [],
+        password:             password             || "",
       },
       { template: "love-gf", userId: req.userId }
     );
@@ -75,7 +76,7 @@ export const getLoveGfPage = async (req: Request, res: Response): Promise<void> 
 export const updateLoveGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { recipientName, senderName, personalMessage, wishMessage, loveDate,
-            homePhotos, galleryPhotos, quizQuestions, password } = req.body;
+            homePhotos, galleryPhotos, quizQuestions, truthDareQuestions, password } = req.body;
 
     const page = await LoveGfPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
@@ -85,18 +86,20 @@ export const updateLoveGfPage = async (req: Request, res: Response): Promise<voi
         homePhotos: homePhotos || [],
         galleryPhotos: (galleryPhotos || []).map(normalizePhoto),
         quizQuestions: quizQuestions || [],
+        truthDareQuestions: truthDareQuestions || [],
         password },
       { template: "love-gf", userId: req.userId }
     );
 
-    if (payload.recipientName   !== undefined) page.recipientName   = payload.recipientName;
-    if (payload.senderName      !== undefined) page.senderName      = payload.senderName;
-    if (payload.personalMessage !== undefined) page.personalMessage = payload.personalMessage;
-    if (payload.wishMessage     !== undefined) page.wishMessage     = payload.wishMessage;
-    if (payload.loveDate        !== undefined) page.loveDate        = payload.loveDate;
-    if (payload.homePhotos      !== undefined) page.homePhotos      = payload.homePhotos;
-    if (payload.galleryPhotos   !== undefined) page.galleryPhotos   = payload.galleryPhotos;
-    if (payload.quizQuestions   !== undefined) page.quizQuestions   = payload.quizQuestions;
+    if (payload.recipientName        !== undefined) page.recipientName        = payload.recipientName;
+    if (payload.senderName           !== undefined) page.senderName           = payload.senderName;
+    if (payload.personalMessage      !== undefined) page.personalMessage      = payload.personalMessage;
+    if (payload.wishMessage          !== undefined) page.wishMessage          = payload.wishMessage;
+    if (payload.loveDate             !== undefined) page.loveDate             = payload.loveDate;
+    if (payload.homePhotos           !== undefined) page.homePhotos           = payload.homePhotos;
+    if (payload.galleryPhotos        !== undefined) page.galleryPhotos        = payload.galleryPhotos;
+    if (payload.quizQuestions        !== undefined) page.quizQuestions        = payload.quizQuestions;
+    if (payload.truthDareQuestions   !== undefined) page.truthDareQuestions   = payload.truthDareQuestions;
     if (payload.password !== undefined && payload.password !== "") page.password = payload.password;
 
     await page.save();
@@ -146,7 +149,7 @@ export const getSharedLoveGfPage = async (req: Request, res: Response): Promise<
 
     const pageObj = page.toObject();
     const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
-    res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "love-gf" });
+    res.json({ success: true, data: { ...safeData, quizAttempts: page.quizAttempts || [] }, hasPassword: !!page.password, templateType: "love-gf" });
   } catch (error) {
     console.error("Get shared love-gf page error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch page" });
@@ -186,6 +189,24 @@ export const saveGameResponse = async (req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error("Save game response error:", error);
     res.status(500).json({ success: false, error: "Failed to save response" });
+  }
+};
+
+export const saveQuizAttempt = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { score, total } = req.body;
+    if (typeof score !== "number" || typeof total !== "number") {
+      res.status(400).json({ success: false, error: "score and total are required numbers" });
+      return;
+    }
+    const page = await LoveGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    page.quizAttempts.push({ score, total, playedAt: new Date() });
+    await page.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Save quiz attempt error:", error);
+    res.status(500).json({ success: false, error: "Failed to save attempt" });
   }
 };
 

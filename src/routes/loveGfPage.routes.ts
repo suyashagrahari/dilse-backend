@@ -9,6 +9,7 @@ import {
   getSharedLoveGfPage,
   verifyLoveGfPagePassword,
   saveGameResponse,
+  saveQuizAttempt,
   deleteLoveGfPage,
 } from "../controllers/loveGfPage.controller";
 
@@ -17,6 +18,7 @@ const router = Router();
 router.get("/share/:shareId", getSharedLoveGfPage);
 router.post("/share/:shareId/verify", verifyLoveGfPagePassword);
 router.post("/share/:shareId/game-response", saveGameResponse);
+router.post("/share/:shareId/quiz-attempt", saveQuizAttempt);
 
 router.use(protect);
 router.post("/", createLoveGfPage);

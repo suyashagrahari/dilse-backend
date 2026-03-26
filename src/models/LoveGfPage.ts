@@ -33,6 +33,8 @@ export interface ILoveGfPage extends Document {
   homePhotos: string[];
   galleryPhotos: IPhotoItem[];
   quizQuestions: IQuizQuestion[];
+  truthDareQuestions: Array<{ type: "truth" | "dare"; text: string }>;
+  quizAttempts: Array<{ score: number; total: number; playedAt: Date }>;
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -76,6 +78,25 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
           question: { type: String, required: true },
           options:  { type: [String], default: [] },
           correct:  { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
+    truthDareQuestions: {
+      type: [
+        {
+          type: { type: String, enum: ["truth", "dare"], required: true },
+          text: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    quizAttempts: {
+      type: [
+        {
+          score: { type: Number, required: true },
+          total: { type: Number, required: true },
+          playedAt: { type: Date, default: Date.now },
         },
       ],
       default: [],

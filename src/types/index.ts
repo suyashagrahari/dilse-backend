@@ -34,6 +34,8 @@ export interface GenerateResponse {
   wishMessage?: string;
   photoLetters?: string[];
   quizQuestions?: Array<{ question: string; options: string[]; correct: number }>;
+  truthQuestions?: string[];
+  dareQuestions?: string[];
 }
 
 export interface TemplateInput {

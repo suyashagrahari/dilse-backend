@@ -114,6 +114,8 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
     { "question": "A playful question about their inside jokes or habits", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 0 },
     { "question": "A dreamy question about their future together", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 1 }
   ],
+  "truthQuestions": ["A personal truth question based on their story", "Another truth question", "A third truth question"],
+  "dareQuestions": ["A fun dare based on their relationship", "Another romantic dare", "A third dare"],
   "heading": "A romantic heading (5-8 words with one heart emoji)",
   "body": "The main love message (3-5 sentences, heartfelt)",
   "senderName": "A warm sign-off (2-4 words with one heart emoji)"
@@ -165,7 +167,7 @@ export const generateContent = async (
         },
       ],
       temperature: 0.8,
-      max_tokens: (templateType === "love" || templateType === "love-gf") ? 1500 : 500,
+      max_tokens: (templateType === "love" || templateType === "love-gf") ? 2000 : 500,
       response_format: { type: "json_object" },
     });
 
@@ -212,6 +214,8 @@ export const generateContent = async (
       ...(parsed.wishMessage && { wishMessage: parsed.wishMessage }),
       ...(parsed.photoLetters && { photoLetters: parsed.photoLetters }),
       ...(parsed.quizQuestions && { quizQuestions: parsed.quizQuestions }),
+      ...(parsed.truthQuestions && { truthQuestions: parsed.truthQuestions }),
+      ...(parsed.dareQuestions && { dareQuestions: parsed.dareQuestions }),
     };
 
     await GeneratedContent.create({
