@@ -3,19 +3,34 @@ import LoveGfPage from "../models/LoveGfPage";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 
+// Normalize a gallery photo entry — handles both legacy string[] and new PhotoItem format
+function normalizePhoto(p: unknown) {
+  if (typeof p === "string") return { url: p, letter: "", cropX: 50, cropY: 50 };
+  const obj = p as Record<string, unknown>;
+  return {
+    url:    String(obj.url    ?? ""),
+    letter: String(obj.letter ?? ""),
+    cropX:  Number(obj.cropX  ?? 50),
+    cropY:  Number(obj.cropY  ?? 50),
+  };
+}
+
 export const createLoveGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, wishMessage, loveDate, galleryPhotos, password } = req.body;
+    const { recipientName, senderName, personalMessage, wishMessage, loveDate,
+            homePhotos, galleryPhotos, quizQuestions, password } = req.body;
 
     const payload = await transformMediaPayload(
       {
-        recipientName: recipientName || "",
-        senderName: senderName || "",
+        recipientName:   recipientName   || "",
+        senderName:      senderName      || "",
         personalMessage: personalMessage || "",
-        wishMessage: wishMessage || "",
-        loveDate: loveDate || "",
-        galleryPhotos: galleryPhotos || [],
-        password: password || "",
+        wishMessage:     wishMessage     || "",
+        loveDate:        loveDate        || "",
+        homePhotos:      homePhotos      || [],
+        galleryPhotos:   (galleryPhotos  || []).map(normalizePhoto),
+        quizQuestions:   quizQuestions   || [],
+        password:        password        || "",
       },
       { template: "love-gf", userId: req.userId }
     );
@@ -44,7 +59,6 @@ export const getLoveGfPage = async (req: Request, res: Response): Promise<void> 
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
     const pageObj = page.toObject() as unknown as Record<string, unknown>;
 
-    // If the page is already published, include the computed shareUrl for the editor UI.
     if (page.isPublished) {
       const { buildShareUrl } = await import("../utils/shareUrl");
       const shareUrl = await buildShareUrl(page.shareId, String(req.userId));
@@ -60,22 +74,29 @@ export const getLoveGfPage = async (req: Request, res: Response): Promise<void> 
 
 export const updateLoveGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, wishMessage, loveDate, galleryPhotos, password } = req.body;
+    const { recipientName, senderName, personalMessage, wishMessage, loveDate,
+            homePhotos, galleryPhotos, quizQuestions, password } = req.body;
 
     const page = await LoveGfPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
     const payload = await transformMediaPayload(
-      { recipientName, senderName, personalMessage, wishMessage, loveDate, galleryPhotos, password },
+      { recipientName, senderName, personalMessage, wishMessage, loveDate,
+        homePhotos: homePhotos || [],
+        galleryPhotos: (galleryPhotos || []).map(normalizePhoto),
+        quizQuestions: quizQuestions || [],
+        password },
       { template: "love-gf", userId: req.userId }
     );
 
-    if (payload.recipientName !== undefined) page.recipientName = payload.recipientName;
-    if (payload.senderName !== undefined) page.senderName = payload.senderName;
+    if (payload.recipientName   !== undefined) page.recipientName   = payload.recipientName;
+    if (payload.senderName      !== undefined) page.senderName      = payload.senderName;
     if (payload.personalMessage !== undefined) page.personalMessage = payload.personalMessage;
-    if (payload.wishMessage !== undefined) page.wishMessage = payload.wishMessage;
-    if (payload.loveDate !== undefined) page.loveDate = payload.loveDate;
-    if (payload.galleryPhotos !== undefined) page.galleryPhotos = payload.galleryPhotos;
+    if (payload.wishMessage     !== undefined) page.wishMessage     = payload.wishMessage;
+    if (payload.loveDate        !== undefined) page.loveDate        = payload.loveDate;
+    if (payload.homePhotos      !== undefined) page.homePhotos      = payload.homePhotos;
+    if (payload.galleryPhotos   !== undefined) page.galleryPhotos   = payload.galleryPhotos;
+    if (payload.quizQuestions   !== undefined) page.quizQuestions   = payload.quizQuestions;
     if (payload.password !== undefined && payload.password !== "") page.password = payload.password;
 
     await page.save();

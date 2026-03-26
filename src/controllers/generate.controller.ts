@@ -99,8 +99,21 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
 
 IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
 {
-  "personalMessage": "A deeply heartfelt love message (3-5 sentences, poetic, personal, NO emojis in body)",
-  "wishMessage": "A tender wish card message (2-3 sentences, warm and intimate)",
+  "personalMessage": "A deeply heartfelt love letter (4-6 sentences, poetic, personal, NO emojis in body text)",
+  "wishMessage": "A tender wish card message (2-3 sentences, warm and intimate, NO emojis in body)",
+  "photoLetters": [
+    "A romantic 1-2 sentence caption for their first photo together (intimate, present-tense)",
+    "A romantic 1-2 sentence caption for their second photo (nostalgic, tender)",
+    "A romantic 1-2 sentence caption for their third photo (playful yet loving)",
+    "A romantic 1-2 sentence caption for their fourth photo (dreamy, forward-looking)"
+  ],
+  "quizQuestions": [
+    { "question": "A fun couple-specific trivia question about them", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 0 },
+    { "question": "A sweet question about their relationship moments", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 1 },
+    { "question": "A romantic question about their preferences", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 2 },
+    { "question": "A playful question about their inside jokes or habits", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 0 },
+    { "question": "A dreamy question about their future together", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 1 }
+  ],
   "heading": "A romantic heading (5-8 words with one heart emoji)",
   "body": "The main love message (3-5 sentences, heartfelt)",
   "senderName": "A warm sign-off (2-4 words with one heart emoji)"
@@ -152,7 +165,7 @@ export const generateContent = async (
         },
       ],
       temperature: 0.8,
-      max_tokens: 500,
+      max_tokens: (templateType === "love" || templateType === "love-gf") ? 1500 : 500,
       response_format: { type: "json_object" },
     });
 
@@ -194,6 +207,11 @@ export const generateContent = async (
       // Reception-specific
       ...(parsed.tagline && { tagline: parsed.tagline }),
       ...(parsed.venueTimings && { venueTimings: parsed.venueTimings }),
+      // Love-GF specific
+      ...(parsed.personalMessage && { personalMessage: parsed.personalMessage }),
+      ...(parsed.wishMessage && { wishMessage: parsed.wishMessage }),
+      ...(parsed.photoLetters && { photoLetters: parsed.photoLetters }),
+      ...(parsed.quizQuestions && { quizQuestions: parsed.quizQuestions }),
     };
 
     await GeneratedContent.create({

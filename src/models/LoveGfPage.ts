@@ -9,6 +9,19 @@ export interface IGameResponse {
   savedAt: Date;
 }
 
+export interface IPhotoItem {
+  url: string;
+  letter: string;
+  cropX: number;
+  cropY: number;
+}
+
+export interface IQuizQuestion {
+  question: string;
+  options: string[];
+  correct: number;
+}
+
 export interface ILoveGfPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
@@ -17,7 +30,9 @@ export interface ILoveGfPage extends Document {
   personalMessage: string;
   wishMessage: string;
   loveDate: string;
-  galleryPhotos: string[];
+  homePhotos: string[];
+  galleryPhotos: IPhotoItem[];
+  quizQuestions: IQuizQuestion[];
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -33,30 +48,51 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
     recipientName: { type: String, default: "", trim: true },
-    senderName: { type: String, default: "", trim: true },
+    senderName:    { type: String, default: "", trim: true },
     personalMessage: {
       type: String,
-      default:
-        "Every moment with you is a treasure I hold close to my heart. You are my sunshine, my laughter, my home. I love you more than words can ever say.",
+      default: "Every moment with you is a treasure I hold close to my heart. You are my sunshine, my laughter, my home. I love you more than words can ever say.",
     },
     wishMessage: {
       type: String,
-      default:
-        "To the one who holds my heart — thank you for every laugh, every hug, every quiet moment that felt like the whole world. You are my favourite person. Love you to the moon and back ♡",
+      default: "To the one who holds my heart — thank you for every laugh, every hug, every quiet moment that felt like the whole world. You are my favourite person. Love you to the moon and back ♡",
     },
-    loveDate: { type: String, default: "" },
-    galleryPhotos: { type: [String], default: [] },
-    password: { type: String, default: "" },
+    loveDate:   { type: String, default: "" },
+    homePhotos: { type: [String], default: [] },
+    galleryPhotos: {
+      type: [
+        {
+          url:    { type: String, default: "" },
+          letter: { type: String, default: "" },
+          cropX:  { type: Number, default: 50 },
+          cropY:  { type: Number, default: 50 },
+        },
+      ],
+      default: [],
+    },
+    quizQuestions: {
+      type: [
+        {
+          question: { type: String, required: true },
+          options:  { type: [String], default: [] },
+          correct:  { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
+    password:    { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
-    viewCount: { type: Number, default: 0 },
+    viewCount:   { type: Number, default: 0 },
     isPublished: { type: Boolean, default: false },
     gameResponses: {
-      type: [{
-        type: { type: String, enum: ["truth", "dare"], required: true },
-        prompt: { type: String, required: true },
-        answer: { type: String, required: true },
-        savedAt: { type: Date, default: Date.now },
-      }],
+      type: [
+        {
+          type:    { type: String, enum: ["truth", "dare"], required: true },
+          prompt:  { type: String, required: true },
+          answer:  { type: String, required: true },
+          savedAt: { type: Date, default: Date.now },
+        },
+      ],
       default: [],
     },
   },
@@ -64,9 +100,7 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
 );
 
 loveGfPageSchema.pre("save", async function (next) {
-  if (!this.shareId) {
-    this.shareId = randomUUID();
-  }
+  if (!this.shareId) this.shareId = randomUUID();
   if (this.isModified("password") && this.password) {
     this.passwordRaw = this.password;
     const salt = await bcrypt.genSalt(10);
