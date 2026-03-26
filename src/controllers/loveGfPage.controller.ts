@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import LoveGfPage from "../models/LoveGfPage";
-import { transformMediaPayload } from "../services/mediaProcessor.service";
+import LoveGfPage, { IGameResponse } from "../models/LoveGfPage";
+import { transformMediaPayload, uploadAudioDataUrl, uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 
 // Normalize a gallery photo entry — handles both legacy string[] and new PhotoItem format
@@ -176,16 +176,33 @@ export const verifyLoveGfPagePassword = async (req: Request, res: Response): Pro
 
 export const saveGameResponse = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { type, prompt, answer } = req.body;
-    if (!type || !prompt || !answer?.trim()) {
-      res.status(400).json({ success: false, error: "type, prompt, and answer are required" });
+    const { type, prompt, answer, mediaUrl } = req.body;
+    if (!type || !prompt) {
+      res.status(400).json({ success: false, error: "type and prompt are required" });
       return;
     }
     const page = await LoveGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
-    page.gameResponses.push({ type, prompt, answer: answer.trim(), savedAt: new Date() });
+
+    let finalMediaUrl = "";
+    if (mediaUrl && typeof mediaUrl === "string") {
+      try {
+        const folder = `love-gf/responses/${req.params.shareId}`;
+        if (mediaUrl.startsWith("data:audio/")) {
+          const result = await uploadAudioDataUrl(mediaUrl, folder);
+          finalMediaUrl = result.url;
+        } else if (mediaUrl.startsWith("data:image/")) {
+          const result = await uploadImageDataUrl(mediaUrl, folder);
+          finalMediaUrl = result.url;
+        } else if (mediaUrl.startsWith("http")) {
+          finalMediaUrl = mediaUrl;
+        }
+      } catch { /* ignore upload errors */ }
+    }
+
+    page.gameResponses.push({ type, prompt, answer: (answer || "").trim() || "Completed! 🔥", savedAt: new Date(), ...(finalMediaUrl && { mediaUrl: finalMediaUrl }) } as IGameResponse);
     await page.save();
-    res.json({ success: true });
+    res.json({ success: true, data: { mediaUrl: finalMediaUrl } });
   } catch (error) {
     console.error("Save game response error:", error);
     res.status(500).json({ success: false, error: "Failed to save response" });

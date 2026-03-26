@@ -7,6 +7,7 @@ export interface IGameResponse {
   prompt: string;
   answer: string;
   savedAt: Date;
+  mediaUrl?: string;
 }
 
 export interface IPhotoItem {
@@ -33,7 +34,7 @@ export interface ILoveGfPage extends Document {
   homePhotos: string[];
   galleryPhotos: IPhotoItem[];
   quizQuestions: IQuizQuestion[];
-  truthDareQuestions: Array<{ type: "truth" | "dare"; text: string }>;
+  truthDareQuestions: Array<{ type: "truth" | "dare"; text: string; photoUrl?: string; audioUrl?: string }>;
   quizAttempts: Array<{ score: number; total: number; playedAt: Date }>;
   password: string;
   passwordRaw: string;
@@ -87,6 +88,8 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
         {
           type: { type: String, enum: ["truth", "dare"], required: true },
           text: { type: String, required: true },
+          photoUrl: { type: String, default: "" },
+          audioUrl: { type: String, default: "" },
         },
       ],
       default: [],
@@ -108,10 +111,11 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
     gameResponses: {
       type: [
         {
-          type:    { type: String, enum: ["truth", "dare"], required: true },
-          prompt:  { type: String, required: true },
-          answer:  { type: String, required: true },
-          savedAt: { type: Date, default: Date.now },
+          type:     { type: String, enum: ["truth", "dare"], required: true },
+          prompt:   { type: String, required: true },
+          answer:   { type: String, required: true },
+          savedAt:  { type: Date, default: Date.now },
+          mediaUrl: { type: String, default: "" },
         },
       ],
       default: [],
