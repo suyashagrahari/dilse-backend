@@ -19,6 +19,11 @@ const ALLOWED_AUDIO_MIMES = new Set([
   "audio/wav",
   "audio/x-wav",
   "audio/wave",
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/aac",
+  "audio/x-m4a",
 ]);
 
 interface ParsedDataUrl {
@@ -42,8 +47,11 @@ const parseDataUrl = (value: string): ParsedDataUrl | null => {
   return { mimeType, buffer };
 };
 
-const audioExtensionForMime = (mimeType: string): "mp3" | "wav" => {
+const audioExtensionForMime = (mimeType: string): string => {
   if (mimeType === "audio/mpeg" || mimeType === "audio/mp3") return "mp3";
+  if (mimeType === "audio/webm") return "webm";
+  if (mimeType === "audio/ogg") return "ogg";
+  if (mimeType === "audio/mp4" || mimeType === "audio/aac" || mimeType === "audio/x-m4a") return "mp4";
   return "wav";
 };
 
