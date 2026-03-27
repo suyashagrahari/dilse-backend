@@ -94,7 +94,7 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
 }`;
   }
 
-  if (templateType === "love" || templateType === "love-gf") {
+  if (templateType === "love" || templateType === "love-gf" || templateType === "darling") {
     return `${base}
 
 IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
@@ -167,7 +167,7 @@ export const generateContent = async (
         },
       ],
       temperature: 0.8,
-      max_tokens: (templateType === "love" || templateType === "love-gf") ? 2000 : 500,
+      max_tokens: (templateType === "love" || templateType === "love-gf" || templateType === "darling") ? 2000 : 500,
       response_format: { type: "json_object" },
     });
 
