@@ -7,6 +7,7 @@ import WeddingPage from "../models/WeddingPage";
 import ReceptionPage from "../models/ReceptionPage";
 import ShaadiCardPage from "../models/ShaadiCardPage";
 import LoveGfPage from "../models/LoveGfPage";
+import DarlingPage from "../models/DarlingPage";
 import SharedAccess from "../models/SharedAccess";
 import User from "../models/User";
 import mongoose from "mongoose";
@@ -26,6 +27,7 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: ReceptionPage as mongoose.Model<unknown>, templateType: "reception", editorRoute: "/reception" },
   { model: ShaadiCardPage as mongoose.Model<unknown>, templateType: "shaadi", editorRoute: "/shaadi-card" },
   { model: LoveGfPage as mongoose.Model<unknown>, templateType: "love-gf", editorRoute: "/love-gf" },
+  { model: DarlingPage as mongoose.Model<unknown>, templateType: "darling", editorRoute: "/darling" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
