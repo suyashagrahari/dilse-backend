@@ -23,6 +23,15 @@ export interface IQuizQuestion {
   correct: number;
 }
 
+export interface INote {
+  from: string;
+  message: string;
+  mood: string;
+  mediaUrl?: string;
+  mediaType?: "audio" | "image";
+  savedAt: Date;
+}
+
 export interface ILoveGfPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
@@ -41,6 +50,7 @@ export interface ILoveGfPage extends Document {
   viewCount: number;
   isPublished: boolean;
   gameResponses: IGameResponse[];
+  notes: INote[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -116,6 +126,19 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
           answer:   { type: String, required: true },
           savedAt:  { type: Date, default: Date.now },
           mediaUrl: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
+    notes: {
+      type: [
+        {
+          from:      { type: String, default: "Anonymous" },
+          message:   { type: String, required: true },
+          mood:      { type: String, default: "💕" },
+          mediaUrl:  { type: String, default: "" },
+          mediaType: { type: String, enum: ["audio", "image", ""], default: "" },
+          savedAt:   { type: Date, default: Date.now },
         },
       ],
       default: [],

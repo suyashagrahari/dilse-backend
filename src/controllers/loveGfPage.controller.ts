@@ -227,6 +227,51 @@ export const saveQuizAttempt = async (req: Request, res: Response): Promise<void
   }
 };
 
+export const saveNote = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { from, message, mood, mediaUrl, mediaType } = req.body;
+    if (!message?.trim()) {
+      res.status(400).json({ success: false, error: "message is required" });
+      return;
+    }
+    const page = await LoveGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    let finalMediaUrl = "";
+    let finalMediaType = "";
+    if (mediaUrl && typeof mediaUrl === "string") {
+      try {
+        const folder = `love-gf/notes/${req.params.shareId}`;
+        if (mediaUrl.startsWith("data:audio/")) {
+          const result = await uploadAudioDataUrl(mediaUrl, folder);
+          finalMediaUrl = result.url;
+          finalMediaType = "audio";
+        } else if (mediaUrl.startsWith("data:image/")) {
+          const result = await uploadImageDataUrl(mediaUrl, folder);
+          finalMediaUrl = result.url;
+          finalMediaType = "image";
+        } else if (mediaUrl.startsWith("http")) {
+          finalMediaUrl = mediaUrl;
+          finalMediaType = mediaType || "";
+        }
+      } catch { /* ignore upload errors, note still saves */ }
+    }
+
+    page.notes.push({
+      from: (from || "Anonymous").trim(),
+      message: message.trim(),
+      mood: mood || "💕",
+      savedAt: new Date(),
+      ...(finalMediaUrl && { mediaUrl: finalMediaUrl, mediaType: finalMediaType as "audio" | "image" }),
+    } as import("../models/LoveGfPage").INote);
+    await page.save();
+    res.json({ success: true, data: { mediaUrl: finalMediaUrl } });
+  } catch (error) {
+    console.error("Save note error:", error);
+    res.status(500).json({ success: false, error: "Failed to save note" });
+  }
+};
+
 export const deleteLoveGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = await LoveGfPage.findOneAndDelete({ _id: req.params.id, userId: req.userId });

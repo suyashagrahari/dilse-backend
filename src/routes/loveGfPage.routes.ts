@@ -10,6 +10,7 @@ import {
   verifyLoveGfPagePassword,
   saveGameResponse,
   saveQuizAttempt,
+  saveNote,
   deleteLoveGfPage,
 } from "../controllers/loveGfPage.controller";
 
@@ -19,6 +20,7 @@ router.get("/share/:shareId", getSharedLoveGfPage);
 router.post("/share/:shareId/verify", verifyLoveGfPagePassword);
 router.post("/share/:shareId/game-response", saveGameResponse);
 router.post("/share/:shareId/quiz-attempt", saveQuizAttempt);
+router.post("/share/:shareId/note", saveNote);
 
 router.use(protect);
 router.post("/", createLoveGfPage);
