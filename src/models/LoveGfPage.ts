@@ -17,6 +17,13 @@ export interface IPhotoItem {
   cropY: number;
 }
 
+export interface IHomeCoverPhoto {
+  url: string;
+  cropX: number;
+  cropY: number;
+  scale: number;
+}
+
 export interface IQuizQuestion {
   question: string;
   options: string[];
@@ -40,6 +47,7 @@ export interface ILoveGfPage extends Document {
   personalMessage: string;
   wishMessage: string;
   loveDate: string;
+  homeCoverPhoto: IHomeCoverPhoto;
   homePhotos: string[];
   galleryPhotos: IPhotoItem[];
   quizQuestions: IQuizQuestion[];
@@ -71,6 +79,12 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
       default: "To the one who holds my heart — thank you for every laugh, every hug, every quiet moment that felt like the whole world. You are my favourite person. Love you to the moon and back ♡",
     },
     loveDate:   { type: String, default: "" },
+    homeCoverPhoto: {
+      url:   { type: String, default: "" },
+      cropX: { type: Number, default: 50 },
+      cropY: { type: Number, default: 50 },
+      scale: { type: Number, default: 100 },
+    },
     homePhotos: { type: [String], default: [] },
     galleryPhotos: {
       type: [

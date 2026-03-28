@@ -15,10 +15,26 @@ function normalizePhoto(p: unknown) {
   };
 }
 
+function normalizeHomeCover(raw: unknown) {
+  if (!raw || typeof raw !== "object") {
+    return { url: "", cropX: 50, cropY: 50, scale: 100 };
+  }
+  const o = raw as Record<string, unknown>;
+  const cropX = Number(o.cropX);
+  const cropY = Number(o.cropY);
+  const scale = Number(o.scale);
+  return {
+    url: String(o.url ?? ""),
+    cropX: Number.isFinite(cropX) ? Math.min(100, Math.max(0, cropX)) : 50,
+    cropY: Number.isFinite(cropY) ? Math.min(100, Math.max(0, cropY)) : 50,
+    scale: Number.isFinite(scale) ? Math.min(200, Math.max(100, scale)) : 100,
+  };
+}
+
 export const createDarlingPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { recipientName, senderName, personalMessage, wishMessage, loveDate,
-            homePhotos, galleryPhotos, quizQuestions, truthDareQuestions, password } = req.body;
+            homePhotos, homeCoverPhoto, galleryPhotos, quizQuestions, truthDareQuestions, password } = req.body;
 
     const payload = await transformMediaPayload(
       {
@@ -27,6 +43,7 @@ export const createDarlingPage = async (req: Request, res: Response): Promise<vo
         personalMessage:      personalMessage      || "",
         wishMessage:          wishMessage          || "",
         loveDate:             loveDate             || "",
+        homeCoverPhoto:       normalizeHomeCover(homeCoverPhoto),
         homePhotos:           homePhotos           || [],
         galleryPhotos:        (galleryPhotos       || []).map(normalizePhoto),
         quizQuestions:        quizQuestions        || [],
@@ -73,21 +90,42 @@ export const getDarlingPage = async (req: Request, res: Response): Promise<void>
   }
 };
 
+type DarlingUpdateBody = {
+  recipientName?: string;
+  senderName?: string;
+  personalMessage?: string;
+  wishMessage?: string;
+  loveDate?: string;
+  homePhotos?: string[];
+  homeCoverPhoto?: unknown;
+  galleryPhotos?: unknown[];
+  quizQuestions?: import("../models/DarlingPage").IQuizQuestion[];
+  truthDareQuestions?: import("../models/DarlingPage").IDarlingPage["truthDareQuestions"];
+  password?: string;
+};
+
 export const updateDarlingPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, wishMessage, loveDate,
-            homePhotos, galleryPhotos, quizQuestions, truthDareQuestions, password } = req.body;
+    const b = req.body as DarlingUpdateBody;
 
     const page = await DarlingPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
+    const galleryList = Array.isArray(b.galleryPhotos) ? b.galleryPhotos : [];
     const payload = await transformMediaPayload(
-      { recipientName, senderName, personalMessage, wishMessage, loveDate,
-        homePhotos: homePhotos || [],
-        galleryPhotos: (galleryPhotos || []).map(normalizePhoto),
-        quizQuestions: quizQuestions || [],
-        truthDareQuestions: truthDareQuestions || [],
-        password },
+      {
+        recipientName: b.recipientName,
+        senderName: b.senderName,
+        personalMessage: b.personalMessage,
+        wishMessage: b.wishMessage,
+        loveDate: b.loveDate,
+        homePhotos: Array.isArray(b.homePhotos) ? b.homePhotos : [],
+        galleryPhotos: galleryList.map(normalizePhoto),
+        quizQuestions: Array.isArray(b.quizQuestions) ? b.quizQuestions : [],
+        truthDareQuestions: Array.isArray(b.truthDareQuestions) ? b.truthDareQuestions : [],
+        password: b.password,
+        ...("homeCoverPhoto" in b ? { homeCoverPhoto: normalizeHomeCover(b.homeCoverPhoto) } : {}),
+      },
       { template: "darling", userId: req.userId }
     );
 
@@ -96,6 +134,7 @@ export const updateDarlingPage = async (req: Request, res: Response): Promise<vo
     if (payload.personalMessage      !== undefined) page.personalMessage      = payload.personalMessage;
     if (payload.wishMessage          !== undefined) page.wishMessage          = payload.wishMessage;
     if (payload.loveDate             !== undefined) page.loveDate             = payload.loveDate;
+    if ("homeCoverPhoto" in b && payload.homeCoverPhoto !== undefined) page.homeCoverPhoto = payload.homeCoverPhoto;
     if (payload.homePhotos           !== undefined) page.homePhotos           = payload.homePhotos;
     if (payload.galleryPhotos        !== undefined) page.galleryPhotos        = payload.galleryPhotos;
     if (payload.quizQuestions        !== undefined) page.quizQuestions        = payload.quizQuestions;
