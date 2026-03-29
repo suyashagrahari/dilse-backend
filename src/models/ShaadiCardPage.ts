@@ -9,6 +9,8 @@ export interface IShaadiCardEvent {
   date: string;
   time: string;
   venue: string;
+  /** Longer copy shown in event detail modal */
+  details: string;
   accent: string;
   disabled: boolean;
 }
@@ -16,6 +18,8 @@ export interface IShaadiCardEvent {
 export interface IShaadiCardBlessing {
   name: string;
   message: string;
+  /** Optional S3 URL for a guest voice note */
+  voiceUrl?: string;
   createdAt: Date;
 }
 
@@ -64,6 +68,7 @@ const shaadiCardEventSchema = new Schema<IShaadiCardEvent>(
     date: { type: String, default: "" },
     time: { type: String, default: "" },
     venue: { type: String, default: "" },
+    details: { type: String, default: "", trim: true },
     accent: { type: String, default: "from-amber-500/20 to-amber-600/5 border-amber-500/30" },
     disabled: { type: Boolean, default: false },
   },
@@ -74,6 +79,7 @@ const shaadiCardBlessingSchema = new Schema<IShaadiCardBlessing>(
   {
     name: { type: String, default: "Guest", trim: true },
     message: { type: String, default: "", trim: true },
+    voiceUrl: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false }
@@ -111,12 +117,12 @@ const shaadiCardPageSchema = new Schema<IShaadiCardPage>(
     events: {
       type: [shaadiCardEventSchema],
       default: [
-        { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30", disabled: false },
-        { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
-        { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: false },
-        { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30", disabled: false },
-        { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
-        { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
+        { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", details: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30", disabled: false },
+        { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", details: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
+        { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", details: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: false },
+        { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", details: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30", disabled: false },
+        { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", details: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
+        { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", details: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
       ],
     },
     // Gallery

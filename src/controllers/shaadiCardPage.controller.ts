@@ -2,17 +2,17 @@ import { Request, Response } from "express";
 import OpenAI from "openai";
 import ShaadiCardPage from "../models/ShaadiCardPage";
 import { env } from "../config/env";
-import { transformMediaPayload } from "../services/mediaProcessor.service";
+import { transformMediaPayload, uploadAudioDataUrl } from "../services/mediaProcessor.service";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
 const DEFAULT_EVENTS = [
-  { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30", disabled: false },
-  { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
-  { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: false },
-  { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30", disabled: false },
-  { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
-  { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
+  { name: "Haldi", hindi: "हल्दी", icon: "🌿", date: "", time: "10 AM", venue: "", details: "", accent: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30", disabled: false },
+  { name: "Mehendi", hindi: "मेहंदी", icon: "🌸", date: "", time: "6 PM", venue: "", details: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
+  { name: "Sangeet", hindi: "संगीत", icon: "🎶", date: "", time: "7 PM", venue: "", details: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: false },
+  { name: "Baraat", hindi: "बारात", icon: "🐴", date: "", time: "9 AM", venue: "", details: "", accent: "from-rose-500/20 to-rose-500/5 border-rose-500/30", disabled: false },
+  { name: "Wedding", hindi: "विवाह", icon: "🔥", date: "", time: "11 AM", venue: "", details: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
+  { name: "Reception", hindi: "स्वागत", icon: "💃", date: "", time: "7 PM", venue: "", details: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
 ];
 
 const MONTH_MAP: Record<string, number> = {
@@ -73,6 +73,7 @@ const normalizeAndSortEvents = (eventsInput: unknown) => {
       date: String(src.date || ""),
       time: String(src.time || fallback.time),
       venue: String(src.venue || ""),
+      details: String(src.details || ""),
       accent: String(src.accent || fallback.accent),
       disabled: Boolean(src.disabled),
     };
@@ -267,7 +268,7 @@ RESPONSE FORMAT (return only this JSON, no extra text):
   "groomFamilyParents": "groom's parents' names if found, else empty string",
   "groomFamilyGrandparents": "groom's grandparents' names if found, else empty string",
   "events": [
-    { "name": "event name", "hindi": "Hindi name", "date": "date string", "time": "time", "venue": "venue" }
+    { "name": "event name", "hindi": "Hindi name", "date": "date string", "time": "time", "venue": "venue", "details": "optional longer notes for guests if on card, else empty string" }
   ]
 }`;
 
@@ -349,9 +350,36 @@ export const verifyShaadiCardPagePassword = async (req: Request, res: Response):
 // ── Public: Blessings wall ─────────────────────────────────────────────────────
 export const addBlessing = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, message } = req.body;
-    if (!name?.trim() || !message?.trim()) {
-      res.status(400).json({ success: false, error: "Name and message are required" });
+    const { name, message, voiceDataUrl } = req.body as {
+      name?: string;
+      message?: string;
+      voiceDataUrl?: string;
+    };
+
+    if (!name?.trim()) {
+      res.status(400).json({ success: false, error: "Name is required" });
+      return;
+    }
+
+    const msg = typeof message === "string" ? message.trim() : "";
+    let voiceUrl = "";
+
+    if (voiceDataUrl && typeof voiceDataUrl === "string" && voiceDataUrl.startsWith("data:audio/")) {
+      try {
+        const uploaded = await uploadAudioDataUrl(
+          voiceDataUrl,
+          `shaadi/blessings/${req.params.shareId}/${Date.now()}`
+        );
+        voiceUrl = uploaded.url;
+      } catch (e) {
+        console.error("Blessing voice upload:", e);
+        res.status(400).json({ success: false, error: "Could not upload voice note. Try a smaller file or MP3." });
+        return;
+      }
+    }
+
+    if (!msg && !voiceUrl) {
+      res.status(400).json({ success: false, error: "Add a written message or upload / record a voice note" });
       return;
     }
 
@@ -361,7 +389,12 @@ export const addBlessing = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    page.blessings.push({ name: name.trim(), message: message.trim(), createdAt: new Date() });
+    page.blessings.push({
+      name: name.trim(),
+      message: msg,
+      ...(voiceUrl ? { voiceUrl } : {}),
+      createdAt: new Date(),
+    });
     if (page.blessings.length > 100) page.blessings = page.blessings.slice(-100);
     await page.save();
 
