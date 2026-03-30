@@ -6,6 +6,7 @@ import EidPage from "../models/EidPage";
 import WeddingPage from "../models/WeddingPage";
 import ReceptionPage from "../models/ReceptionPage";
 import ShaadiCardPage from "../models/ShaadiCardPage";
+import ChristianWeddingPage from "../models/ChristianWeddingPage";
 import LoveGfPage from "../models/LoveGfPage";
 import DarlingPage from "../models/DarlingPage";
 import SharedAccess from "../models/SharedAccess";
@@ -26,6 +27,7 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: WeddingPage as mongoose.Model<unknown>, templateType: "wedding", editorRoute: "/wedding-shaadi" },
   { model: ReceptionPage as mongoose.Model<unknown>, templateType: "reception", editorRoute: "/reception" },
   { model: ShaadiCardPage as mongoose.Model<unknown>, templateType: "shaadi", editorRoute: "/shaadi-card" },
+  { model: ChristianWeddingPage as mongoose.Model<unknown>, templateType: "christian-wedding", editorRoute: "/christian-wedding" },
   { model: LoveGfPage as mongoose.Model<unknown>, templateType: "love-gf", editorRoute: "/love-gf" },
   { model: DarlingPage as mongoose.Model<unknown>, templateType: "darling", editorRoute: "/darling" },
 ];
