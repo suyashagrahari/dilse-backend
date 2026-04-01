@@ -1,0 +1,293 @@
+import { Request, Response } from "express";
+import BirthdayGfPage, { IGameResponse } from "../models/BirthdayGfPage";
+import { transformMediaPayload, uploadAudioDataUrl, uploadImageDataUrl } from "../services/mediaProcessor.service";
+import { checkPublishAccess } from "../services/publishGate.service";
+
+// Normalize a gallery photo entry — handles both legacy string[] and new PhotoItem format
+function normalizePhoto(p: unknown) {
+  if (typeof p === "string") return { url: p, letter: "", cropX: 50, cropY: 50 };
+  const obj = p as Record<string, unknown>;
+  return {
+    url:    String(obj.url    ?? ""),
+    letter: String(obj.letter ?? ""),
+    cropX:  Number(obj.cropX  ?? 50),
+    cropY:  Number(obj.cropY  ?? 50),
+  };
+}
+
+function normalizeHomeCover(raw: unknown) {
+  if (!raw || typeof raw !== "object") {
+    return { url: "", cropX: 50, cropY: 50, scale: 100 };
+  }
+  const o = raw as Record<string, unknown>;
+  const cropX = Number(o.cropX);
+  const cropY = Number(o.cropY);
+  const scale = Number(o.scale);
+  return {
+    url: String(o.url ?? ""),
+    cropX: Number.isFinite(cropX) ? Math.min(100, Math.max(0, cropX)) : 50,
+    cropY: Number.isFinite(cropY) ? Math.min(100, Math.max(0, cropY)) : 50,
+    scale: Number.isFinite(scale) ? Math.min(200, Math.max(100, scale)) : 100,
+  };
+}
+
+export const createBirthdayGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { recipientName, senderName, personalMessage, birthdayWish, birthdayDate,
+            homePhoto1, homePhoto2, homeCoverPhoto, galleryPhotos, quizQuestions,
+            truthDareQuestions, musicTracks, surprisePhoto, surpriseAudioUrl, password } = req.body;
+
+    const payload = await transformMediaPayload(
+      {
+        recipientName:        recipientName        || "",
+        senderName:           senderName           || "",
+        personalMessage:      personalMessage      || "",
+        birthdayWish:         birthdayWish         || "",
+        birthdayDate:         birthdayDate         || "",
+        homeCoverPhoto:       normalizeHomeCover(homeCoverPhoto),
+        homePhoto1:           homePhoto1           || "",
+        homePhoto2:           homePhoto2           || "",
+        galleryPhotos:        (galleryPhotos       || []).map(normalizePhoto),
+        quizQuestions:        quizQuestions        || [],
+        truthDareQuestions:   truthDareQuestions   || [],
+        musicTracks:          musicTracks          || [],
+        surprisePhoto:        surprisePhoto        || "",
+        surpriseAudioUrl:     surpriseAudioUrl     || "",
+        password:             password             || "",
+      },
+      { template: "birthday-gf", userId: req.userId }
+    );
+
+    const page = await BirthdayGfPage.create({ userId: req.userId, ...payload });
+    res.status(201).json({ success: true, data: page });
+  } catch (error) {
+    console.error("Create birthday-gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to create page" });
+  }
+};
+
+export const getMyBirthdayGfPages = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const pages = await BirthdayGfPage.find({ userId: req.userId }).sort({ updatedAt: -1 });
+    res.json({ success: true, data: pages });
+  } catch (error) {
+    console.error("Get my birthday-gf pages error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch pages" });
+  }
+};
+
+export const getBirthdayGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = await BirthdayGfPage.findOne({ _id: req.params.id, userId: req.userId });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    const pageObj = page.toObject() as unknown as Record<string, unknown>;
+
+    if (page.isPublished) {
+      const { buildShareUrl } = await import("../utils/shareUrl");
+      const shareUrl = await buildShareUrl(page.shareId, String(req.userId));
+      pageObj.shareUrl = shareUrl;
+    }
+
+    res.json({ success: true, data: pageObj });
+  } catch (error) {
+    console.error("Get birthday-gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch page" });
+  }
+};
+
+type BirthdayGfUpdateBody = {
+  recipientName?: string;
+  senderName?: string;
+  personalMessage?: string;
+  birthdayWish?: string;
+  birthdayDate?: string;
+  homePhoto1?: string;
+  homePhoto2?: string;
+  homeCoverPhoto?: unknown;
+  galleryPhotos?: unknown[];
+  quizQuestions?: import("../models/BirthdayGfPage").IQuizQuestion[];
+  truthDareQuestions?: import("../models/BirthdayGfPage").IBirthdayGfPage["truthDareQuestions"];
+  musicTracks?: Array<{ title: string; artist: string; src: string }>;
+  password?: string;
+};
+
+export const updateBirthdayGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const b = req.body as BirthdayGfUpdateBody;
+
+    const page = await BirthdayGfPage.findOne({ _id: req.params.id, userId: req.userId });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    const galleryList = Array.isArray(b.galleryPhotos) ? b.galleryPhotos : [];
+    const payload = await transformMediaPayload(
+      {
+        recipientName: b.recipientName,
+        senderName: b.senderName,
+        personalMessage: b.personalMessage,
+        birthdayWish: b.birthdayWish,
+        birthdayDate: b.birthdayDate,
+        homePhoto1: b.homePhoto1 !== undefined ? b.homePhoto1 : "",
+        homePhoto2: b.homePhoto2 !== undefined ? b.homePhoto2 : "",
+        galleryPhotos: galleryList.map(normalizePhoto),
+        quizQuestions: Array.isArray(b.quizQuestions) ? b.quizQuestions : [],
+        truthDareQuestions: Array.isArray(b.truthDareQuestions) ? b.truthDareQuestions : [],
+        musicTracks: Array.isArray(b.musicTracks) ? b.musicTracks : [],
+        surprisePhoto: (b as Record<string, unknown>).surprisePhoto !== undefined ? (b as Record<string, unknown>).surprisePhoto : "",
+        surpriseAudioUrl: (b as Record<string, unknown>).surpriseAudioUrl !== undefined ? (b as Record<string, unknown>).surpriseAudioUrl : "",
+        password: b.password,
+        ...("homeCoverPhoto" in b ? { homeCoverPhoto: normalizeHomeCover(b.homeCoverPhoto) } : {}),
+      },
+      { template: "birthday-gf", userId: req.userId }
+    );
+
+    if (payload.recipientName        !== undefined) page.recipientName        = payload.recipientName;
+    if (payload.senderName           !== undefined) page.senderName           = payload.senderName;
+    if (payload.personalMessage      !== undefined) page.personalMessage      = payload.personalMessage;
+    if (payload.birthdayWish         !== undefined) page.birthdayWish         = payload.birthdayWish;
+    if (payload.birthdayDate         !== undefined) page.birthdayDate         = payload.birthdayDate;
+    if ("homeCoverPhoto" in b && payload.homeCoverPhoto !== undefined) page.homeCoverPhoto = payload.homeCoverPhoto;
+    if (payload.homePhoto1           !== undefined) page.homePhoto1           = payload.homePhoto1;
+    if (payload.homePhoto2           !== undefined) page.homePhoto2           = payload.homePhoto2;
+    if (payload.galleryPhotos        !== undefined) page.galleryPhotos        = payload.galleryPhotos;
+    if (payload.quizQuestions        !== undefined) page.quizQuestions        = payload.quizQuestions;
+    if (payload.truthDareQuestions   !== undefined) page.truthDareQuestions   = payload.truthDareQuestions;
+    if (payload.musicTracks          !== undefined) page.musicTracks          = payload.musicTracks;
+    if (payload.surprisePhoto        !== undefined) page.surprisePhoto        = payload.surprisePhoto;
+    if (payload.surpriseAudioUrl     !== undefined) page.surpriseAudioUrl     = payload.surpriseAudioUrl;
+    if (payload.password !== undefined && payload.password !== "") page.password = payload.password;
+
+    await page.save();
+    res.json({ success: true, data: page });
+  } catch (error) {
+    console.error("Update birthday-gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to update page" });
+  }
+};
+
+export const publishBirthdayGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = await BirthdayGfPage.findOne({ _id: req.params.id, userId: req.userId });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    const gate = await checkPublishAccess({
+      userId: String(req.userId),
+      templateType: "birthday-gf",
+      pageId: String(page._id),
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    if (!gate.allowed) {
+      res.status(gate.httpStatus).json({ success: false, error: gate.error, pricing: gate.pricing });
+      return;
+    }
+
+    page.isPublished = true;
+    await page.save();
+
+    const { buildShareUrl } = await import("../utils/shareUrl");
+    const shareUrl = await buildShareUrl(page.shareId, String(req.userId));
+    res.json({ success: true, data: { shareId: page.shareId, shareUrl } });
+  } catch (error) {
+    console.error("Publish birthday-gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to publish page" });
+  }
+};
+
+export const getSharedBirthdayGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = await BirthdayGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    page.viewCount = (page.viewCount || 0) + 1;
+    await page.save();
+
+    const pageObj = page.toObject();
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
+    res.json({ success: true, data: { ...safeData, quizAttempts: page.quizAttempts || [] }, hasPassword: !!page.password, templateType: "birthday-gf" });
+  } catch (error) {
+    console.error("Get shared birthday-gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch page" });
+  }
+};
+
+export const verifyBirthdayGfPagePassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { password } = req.body;
+    const page = await BirthdayGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    if (!page.password) { res.json({ success: true, verified: true }); return; }
+    const match = await page.comparePassword(password || "");
+    if (match) {
+      res.json({ success: true, verified: true });
+    } else {
+      res.status(401).json({ success: false, verified: false, error: "Wrong password" });
+    }
+  } catch (error) {
+    console.error("Verify birthday-gf page password error:", error);
+    res.status(500).json({ success: false, error: "Verification failed" });
+  }
+};
+
+export const saveGameResponse = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { type, prompt, answer, mediaUrl } = req.body;
+    if (!type || !prompt) {
+      res.status(400).json({ success: false, error: "type and prompt are required" });
+      return;
+    }
+    const page = await BirthdayGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    let finalMediaUrl = "";
+    if (mediaUrl && typeof mediaUrl === "string") {
+      try {
+        const folder = `birthday-gf/responses/${req.params.shareId}`;
+        if (mediaUrl.startsWith("data:audio/")) {
+          const result = await uploadAudioDataUrl(mediaUrl, folder);
+          finalMediaUrl = result.url;
+        } else if (mediaUrl.startsWith("data:image/")) {
+          const result = await uploadImageDataUrl(mediaUrl, folder);
+          finalMediaUrl = result.url;
+        } else if (mediaUrl.startsWith("http")) {
+          finalMediaUrl = mediaUrl;
+        }
+      } catch { /* ignore upload errors */ }
+    }
+
+    page.gameResponses.push({ type, prompt, answer: (answer || "").trim() || "Completed! 🔥", savedAt: new Date(), ...(finalMediaUrl && { mediaUrl: finalMediaUrl }) } as IGameResponse);
+    await page.save();
+    res.json({ success: true, data: { mediaUrl: finalMediaUrl } });
+  } catch (error) {
+    console.error("Save game response error:", error);
+    res.status(500).json({ success: false, error: "Failed to save response" });
+  }
+};
+
+export const saveQuizAttempt = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { score, total } = req.body;
+    if (typeof score !== "number" || typeof total !== "number") {
+      res.status(400).json({ success: false, error: "score and total are required numbers" });
+      return;
+    }
+    const page = await BirthdayGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    page.quizAttempts.push({ score, total, playedAt: new Date() });
+    await page.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Save quiz attempt error:", error);
+    res.status(500).json({ success: false, error: "Failed to save attempt" });
+  }
+};
+
+export const deleteBirthdayGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = await BirthdayGfPage.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    res.json({ success: true, message: "Page deleted successfully" });
+  } catch (error) {
+    console.error("Delete birthday-gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to delete page" });
+  }
+};

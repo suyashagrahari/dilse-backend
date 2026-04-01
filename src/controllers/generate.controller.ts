@@ -94,6 +94,28 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
 }`;
   }
 
+  if (templateType === "birthday-gf") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "personalMessage": "A warm, heartfelt personal birthday message (2-3 sentences, celebratory and loving)",
+  "birthdayWish": "A beautiful birthday wish (1-2 sentences, warm and celebratory)",
+  "quizQuestions": [
+    {
+      "question": "A fun birthday-themed question about the birthday person",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct": 0
+    }
+  ],
+  "truthQuestions": ["A fun truth question for the birthday person", "Another truth question"],
+  "dareQuestions": ["A birthday dare challenge", "Another birthday dare"],
+  "heading": "Happy Birthday! 🎂",
+  "body": "A heartfelt birthday message (2-3 sentences)",
+  "senderName": "With birthday love ❤️"
+}`;
+  }
+
   if (templateType === "love" || templateType === "love-gf" || templateType === "darling") {
     return `${base}
 
@@ -167,7 +189,7 @@ export const generateContent = async (
         },
       ],
       temperature: 0.8,
-      max_tokens: (templateType === "love" || templateType === "love-gf" || templateType === "darling") ? 2000 : 500,
+      max_tokens: (templateType === "love" || templateType === "love-gf" || templateType === "darling" || templateType === "birthday-gf") ? 2000 : 500,
       response_format: { type: "json_object" },
     });
 
@@ -209,8 +231,9 @@ export const generateContent = async (
       // Reception-specific
       ...(parsed.tagline && { tagline: parsed.tagline }),
       ...(parsed.venueTimings && { venueTimings: parsed.venueTimings }),
-      // Love-GF specific
+      // Love-GF / Birthday-GF specific
       ...(parsed.personalMessage && { personalMessage: parsed.personalMessage }),
+      ...(parsed.birthdayWish && { birthdayWish: parsed.birthdayWish }),
       ...(parsed.wishMessage && { wishMessage: parsed.wishMessage }),
       ...(parsed.photoLetters && { photoLetters: parsed.photoLetters }),
       ...(parsed.quizQuestions && { quizQuestions: parsed.quizQuestions }),
