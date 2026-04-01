@@ -152,8 +152,8 @@ export const updateBirthdayGfPage = async (req: Request, res: Response): Promise
     if (payload.quizQuestions        !== undefined) page.quizQuestions        = payload.quizQuestions;
     if (payload.truthDareQuestions   !== undefined) page.truthDareQuestions   = payload.truthDareQuestions;
     if (payload.musicTracks          !== undefined) page.musicTracks          = payload.musicTracks;
-    if (payload.surprisePhoto        !== undefined) page.surprisePhoto        = payload.surprisePhoto;
-    if (payload.surpriseAudioUrl     !== undefined) page.surpriseAudioUrl     = payload.surpriseAudioUrl;
+    if (payload.surprisePhoto        !== undefined) page.surprisePhoto        = String(payload.surprisePhoto ?? "");
+    if (payload.surpriseAudioUrl     !== undefined) page.surpriseAudioUrl     = String(payload.surpriseAudioUrl ?? "");
     if (payload.password !== undefined && payload.password !== "") page.password = payload.password;
 
     await page.save();

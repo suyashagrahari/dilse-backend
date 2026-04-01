@@ -29,8 +29,9 @@ export interface GenerateResponse {
   // Reception specific fields
   tagline?: string;
   venueTimings?: string;
-  // Love-GF specific fields
+  // Love-GF / Birthday-GF specific fields
   personalMessage?: string;
+  birthdayWish?: string;
   wishMessage?: string;
   photoLetters?: string[];
   quizQuestions?: Array<{ question: string; options: string[]; correct: number }>;
