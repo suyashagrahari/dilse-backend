@@ -203,7 +203,7 @@ export const getSharedBirthdayGfPage = async (req: Request, res: Response): Prom
 
     const pageObj = page.toObject();
     const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
-    res.json({ success: true, data: { ...safeData, quizAttempts: page.quizAttempts || [] }, hasPassword: !!page.password, templateType: "birthday-gf" });
+    res.json({ success: true, data: { ...safeData, quizAttempts: page.quizAttempts || [], quizAnswers: page.quizAnswers || [] }, hasPassword: !!page.password, templateType: "birthday-gf" });
   } catch (error) {
     console.error("Get shared birthday-gf page error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch page" });
@@ -278,6 +278,24 @@ export const saveQuizAttempt = async (req: Request, res: Response): Promise<void
   } catch (error) {
     console.error("Save quiz attempt error:", error);
     res.status(500).json({ success: false, error: "Failed to save attempt" });
+  }
+};
+
+export const saveQuizAnswer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { question, options, selected, correct, isCorrect } = req.body;
+    if (!question || !Array.isArray(options) || typeof selected !== "number" || typeof correct !== "number" || typeof isCorrect !== "boolean") {
+      res.status(400).json({ success: false, error: "Invalid quiz answer data" });
+      return;
+    }
+    const page = await BirthdayGfPage.findOne({ shareId: req.params.shareId, isPublished: true });
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    page.quizAnswers.push({ question, options, selected, correct, isCorrect, answeredAt: new Date() });
+    await page.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Save quiz answer error:", error);
+    res.status(500).json({ success: false, error: "Failed to save quiz answer" });
   }
 };
 

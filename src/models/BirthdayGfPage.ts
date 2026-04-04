@@ -10,6 +10,15 @@ export interface IGameResponse {
   mediaUrl?: string;
 }
 
+export interface IQuizAnswer {
+  question: string;
+  options: string[];
+  selected: number;
+  correct: number;
+  isCorrect: boolean;
+  answeredAt: Date;
+}
+
 export interface IPhotoItem {
   url: string;
   letter: string;
@@ -45,6 +54,7 @@ export interface IBirthdayGfPage extends Document {
   quizQuestions: IQuizQuestion[];
   truthDareQuestions: Array<{ type: "truth" | "dare"; text: string; photoUrl?: string; audioUrl?: string }>;
   quizAttempts: Array<{ score: number; total: number; playedAt: Date }>;
+  quizAnswers: IQuizAnswer[];
   musicTracks: Array<{ title: string; artist: string; src: string }>;
   surprisePhoto: string;
   surpriseAudioUrl: string;
@@ -119,6 +129,19 @@ const birthdayGfPageSchema = new Schema<IBirthdayGfPage>(
           score: { type: Number, required: true },
           total: { type: Number, required: true },
           playedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
+    quizAnswers: {
+      type: [
+        {
+          question:   { type: String, required: true },
+          options:    { type: [String], default: [] },
+          selected:   { type: Number, required: true },
+          correct:    { type: Number, required: true },
+          isCorrect:  { type: Boolean, required: true },
+          answeredAt: { type: Date, default: Date.now },
         },
       ],
       default: [],

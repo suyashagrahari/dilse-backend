@@ -10,6 +10,7 @@ import {
   verifyBirthdayGfPagePassword,
   saveGameResponse,
   saveQuizAttempt,
+  saveQuizAnswer,
   deleteBirthdayGfPage,
 } from "../controllers/birthdayGfPage.controller";
 
@@ -19,6 +20,7 @@ router.get("/share/:shareId", getSharedBirthdayGfPage);
 router.post("/share/:shareId/verify-password", verifyBirthdayGfPagePassword);
 router.post("/share/:shareId/game-response", saveGameResponse);
 router.post("/share/:shareId/quiz-attempt", saveQuizAttempt);
+router.post("/share/:shareId/quiz-answer", saveQuizAnswer);
 
 router.use(protect);
 router.post("/", createBirthdayGfPage);
