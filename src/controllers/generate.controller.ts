@@ -25,6 +25,8 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
     The tone should be warm, spiritual, and celebratory. Eid al-Fitr is the Islamic festival marking the end of Ramadan.`,
   wedding: `You are a poetic Indian wedding invitation writer. Create beautiful, heartfelt wedding invitation content in Hindi and English.
     The tone should be warm, celebratory, traditional yet modern. Include Sanskrit blessings and family values.`,
+  shaadi: `You are a poetic Indian wedding invitation writer. Create beautiful, heartfelt wedding invitation content in Hindi and English.
+    The tone should be warm, celebratory, traditional yet modern. Include Sanskrit blessings and family values.`,
   reception: `You are an elegant Indian wedding reception invitation writer. Create beautiful, sophisticated reception invitation content.
     The tone should be warm, celebratory, and gracious. Focus on the joy of welcoming guests to celebrate the couple.`,
 };
@@ -63,7 +65,7 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
 }`;
   }
 
-  if (templateType === "wedding") {
+  if (templateType === "wedding" || templateType === "shaadi") {
     return `${base}
 
 IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
@@ -89,6 +91,56 @@ IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text
   "heading": "A beautiful reception invitation heading (5-8 words with one relevant emoji)",
   "body": "A heartfelt reception invitation message (2-3 sentences, warm and celebratory)",
   "senderName": "With love and joy ❤️"
+}`;
+  }
+
+  if (templateType === "birthday-gf") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "personalMessage": "A warm, heartfelt personal birthday message (2-3 sentences, celebratory and loving)",
+  "birthdayWish": "A beautiful birthday wish (1-2 sentences, warm and celebratory)",
+  "quizQuestions": [
+    {
+      "question": "A fun birthday-themed question about the birthday person",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct": 0
+    }
+  ],
+  "truthQuestions": ["A fun truth question for the birthday person", "Another truth question"],
+  "dareQuestions": ["A birthday dare challenge", "Another birthday dare"],
+  "heading": "Happy Birthday! 🎂",
+  "body": "A heartfelt birthday message (2-3 sentences)",
+  "senderName": "With birthday love ❤️"
+}`;
+  }
+
+  if (templateType === "love" || templateType === "love-gf" || templateType === "darling") {
+    return `${base}
+
+IMPORTANT RESPONSE FORMAT - You MUST respond with ONLY valid JSON, no extra text:
+{
+  "personalMessage": "A deeply heartfelt love letter (4-6 sentences, poetic, personal, NO emojis in body text)",
+  "wishMessage": "A tender wish card message (2-3 sentences, warm and intimate, NO emojis in body)",
+  "photoLetters": [
+    "A romantic 1-2 sentence caption for their first photo together (intimate, present-tense)",
+    "A romantic 1-2 sentence caption for their second photo (nostalgic, tender)",
+    "A romantic 1-2 sentence caption for their third photo (playful yet loving)",
+    "A romantic 1-2 sentence caption for their fourth photo (dreamy, forward-looking)"
+  ],
+  "quizQuestions": [
+    { "question": "A fun couple-specific trivia question about them", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 0 },
+    { "question": "A sweet question about their relationship moments", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 1 },
+    { "question": "A romantic question about their preferences", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 2 },
+    { "question": "A playful question about their inside jokes or habits", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 0 },
+    { "question": "A dreamy question about their future together", "options": ["opt1", "opt2", "opt3", "opt4"], "correct": 1 }
+  ],
+  "truthQuestions": ["A personal truth question based on their story", "Another truth question", "A third truth question"],
+  "dareQuestions": ["A fun dare based on their relationship", "Another romantic dare", "A third dare"],
+  "heading": "A romantic heading (5-8 words with one heart emoji)",
+  "body": "The main love message (3-5 sentences, heartfelt)",
+  "senderName": "A warm sign-off (2-4 words with one heart emoji)"
 }`;
   }
 
@@ -137,7 +189,7 @@ export const generateContent = async (
         },
       ],
       temperature: 0.8,
-      max_tokens: 500,
+      max_tokens: (templateType === "love" || templateType === "love-gf" || templateType === "darling" || templateType === "birthday-gf") ? 2000 : 500,
       response_format: { type: "json_object" },
     });
 
@@ -179,6 +231,14 @@ export const generateContent = async (
       // Reception-specific
       ...(parsed.tagline && { tagline: parsed.tagline }),
       ...(parsed.venueTimings && { venueTimings: parsed.venueTimings }),
+      // Love-GF / Birthday-GF specific
+      ...(parsed.personalMessage && { personalMessage: parsed.personalMessage }),
+      ...(parsed.birthdayWish && { birthdayWish: parsed.birthdayWish }),
+      ...(parsed.wishMessage && { wishMessage: parsed.wishMessage }),
+      ...(parsed.photoLetters && { photoLetters: parsed.photoLetters }),
+      ...(parsed.quizQuestions && { quizQuestions: parsed.quizQuestions }),
+      ...(parsed.truthQuestions && { truthQuestions: parsed.truthQuestions }),
+      ...(parsed.dareQuestions && { dareQuestions: parsed.dareQuestions }),
     };
 
     await GeneratedContent.create({

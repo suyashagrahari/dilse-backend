@@ -634,18 +634,61 @@ export const getDashboard = async (
   try {
     const Favorite = (await import("../models/Favorite")).default;
     const BirthdayPage = (await import("../models/BirthdayPage")).default;
+    const BirthdayGfPage = (await import("../models/BirthdayGfPage")).default;
     const ValentinePage = (await import("../models/ValentinePage")).default;
+    const HoliPage = (await import("../models/HoliPage")).default;
+    const EidPage = (await import("../models/EidPage")).default;
+    const WeddingPage = (await import("../models/WeddingPage")).default;
+    const ReceptionPage = (await import("../models/ReceptionPage")).default;
+    const ShaadiCardPage = (await import("../models/ShaadiCardPage")).default;
+    const LoveGfPage = (await import("../models/LoveGfPage")).default;
+    const DarlingPage = (await import("../models/DarlingPage")).default;
+    const ChristianWeddingPage = (await import("../models/ChristianWeddingPage")).default;
 
     const userId = req.userId!;
 
-    const [favoritesCount, birthdayCount, valentineCount, user] = await Promise.all([
+    const [
+      favoritesCount,
+      birthdayCount,
+      birthdayGfCount,
+      valentineCount,
+      holiCount,
+      eidCount,
+      weddingCount,
+      receptionCount,
+      shaadiCardCount,
+      loveGfCount,
+      darlingCount,
+      christianWeddingCount,
+      user,
+    ] = await Promise.all([
       Favorite.countDocuments({ userId }),
       BirthdayPage.countDocuments({ userId }),
+      BirthdayGfPage.countDocuments({ userId }),
       ValentinePage.countDocuments({ userId }),
+      HoliPage.countDocuments({ userId }),
+      EidPage.countDocuments({ userId }),
+      WeddingPage.countDocuments({ userId }),
+      ReceptionPage.countDocuments({ userId }),
+      ShaadiCardPage.countDocuments({ userId }),
+      LoveGfPage.countDocuments({ userId }),
+      DarlingPage.countDocuments({ userId }),
+      ChristianWeddingPage.countDocuments({ userId }),
       User.findById(userId),
     ]);
 
-    const generatedCount = birthdayCount + valentineCount;
+    const generatedCount =
+      birthdayCount +
+      birthdayGfCount +
+      valentineCount +
+      holiCount +
+      eidCount +
+      weddingCount +
+      receptionCount +
+      shaadiCardCount +
+      loveGfCount +
+      darlingCount +
+      christianWeddingCount;
 
     if (!user) {
       res.status(404).json({ success: false, error: "User not found" });
