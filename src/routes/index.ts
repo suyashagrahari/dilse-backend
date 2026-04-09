@@ -21,7 +21,9 @@ import analyticsRoutes from "./analytics.routes";
 import contactRoutes from "./contact.routes";
 import referralRoutes from "./referral.routes";
 import paymentRoutes from "./payment.routes";
+import adminRoutes from "./admin.routes";
 import { protect } from "../middleware/auth";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -47,6 +49,7 @@ router.use("/analytics", analyticsRoutes);
 router.use("/contact", contactRoutes);
 router.use("/referral", referralRoutes);
 router.use("/payment", paymentRoutes);
+router.use("/admin", protect, requireAdmin, adminRoutes);
 
 router.get("/health", (_req, res) => {
   res.json({

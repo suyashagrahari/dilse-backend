@@ -8,6 +8,8 @@ function generateReferralCode(): string {
   return code;
 }
 
+export type UserRole = "normal" | "member" | "admin";
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
@@ -17,6 +19,7 @@ export interface IUser extends Document {
   googleId?: string;
   provider: "local" | "google";
   theme: "light" | "dark" | "system";
+  role: UserRole;
   subdomain?: string;
   refreshToken?: string;
   points: number;
@@ -65,6 +68,11 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ["local", "google"],
       default: "local",
+    },
+    role: {
+      type: String,
+      enum: ["normal", "member", "admin"],
+      default: "normal",
     },
     theme: {
       type: String,
@@ -124,7 +132,15 @@ const userSchema = new Schema<IUser>(
   }
 );
 
+// Super admin email — always elevated to admin on save
+const SUPER_ADMIN_EMAIL = "suyashagrahari2121@gmail.com";
+
 userSchema.pre("save", async function (next) {
+  // Ensure super admin always has admin role
+  if (this.email === SUPER_ADMIN_EMAIL && this.role !== "admin") {
+    this.role = "admin";
+  }
+
   // Auto-generate referral code on first save
   if (!this.referralCode) {
     let code = generateReferralCode();

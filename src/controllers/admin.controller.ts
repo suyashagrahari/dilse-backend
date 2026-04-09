@@ -1,0 +1,518 @@
+import { Request, Response } from "express";
+import mongoose from "mongoose";
+import User, { UserRole } from "../models/User";
+import PageView from "../models/PageView";
+import ContactInquiry from "../models/ContactInquiry";
+import BirthdayPage from "../models/BirthdayPage";
+import ValentinePage from "../models/ValentinePage";
+import HoliPage from "../models/HoliPage";
+import EidPage from "../models/EidPage";
+import WeddingPage from "../models/WeddingPage";
+import ReceptionPage from "../models/ReceptionPage";
+import ShaadiCardPage from "../models/ShaadiCardPage";
+import ChristianWeddingPage from "../models/ChristianWeddingPage";
+import LoveGfPage from "../models/LoveGfPage";
+import DarlingPage from "../models/DarlingPage";
+import BirthdayGfPage from "../models/BirthdayGfPage";
+
+const ALL_PAGE_MODELS = [
+  { model: BirthdayPage, type: "birthday", label: "Birthday" },
+  { model: ValentinePage, type: "valentine", label: "Valentine" },
+  { model: HoliPage, type: "holi", label: "Holi" },
+  { model: EidPage, type: "eid", label: "Eid" },
+  { model: WeddingPage, type: "wedding", label: "Wedding" },
+  { model: ReceptionPage, type: "reception", label: "Reception" },
+  { model: ShaadiCardPage, type: "shaadi", label: "Shaadi Card" },
+  { model: ChristianWeddingPage, type: "christian-wedding", label: "Christian Wedding" },
+  { model: LoveGfPage, type: "love-gf", label: "Love GF" },
+  { model: DarlingPage, type: "darling", label: "Darling" },
+  { model: BirthdayGfPage, type: "birthday-gf", label: "Birthday GF" },
+];
+
+// ─── ANALYTICS DASHBOARD ────────────────────────────────────────
+
+export const getAnalyticsOverview = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // User stats
+    const [totalUsers, usersToday, usersThisWeek, usersThisMonth] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ createdAt: { $gte: today } }),
+      User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+      User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+    ]);
+
+    // Page view stats
+    const [totalViews, viewsToday, viewsThisWeek, viewsThisMonth] = await Promise.all([
+      PageView.countDocuments(),
+      PageView.countDocuments({ createdAt: { $gte: today } }),
+      PageView.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+      PageView.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+    ]);
+
+    // Total pages created across all templates
+    const templateStats = await Promise.all(
+      ALL_PAGE_MODELS.map(async ({ model, type, label }) => {
+        const [total, published] = await Promise.all([
+          (model as mongoose.Model<unknown>).countDocuments(),
+          (model as mongoose.Model<unknown>).countDocuments({ isPublished: true }),
+        ]);
+        return { type, label, total, published };
+      })
+    );
+
+    const totalPagesCreated = templateStats.reduce((s, t) => s + t.total, 0);
+    const totalPagesPublished = templateStats.reduce((s, t) => s + t.published, 0);
+
+    // User role distribution
+    const roleDistribution = await User.aggregate([
+      { $group: { _id: "$role", count: { $sum: 1 } } },
+    ]);
+
+    // Device breakdown from page views
+    const deviceBreakdown = await PageView.aggregate([
+      { $group: { _id: "$device", count: { $sum: 1 } } },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        users: { total: totalUsers, today: usersToday, thisWeek: usersThisWeek, thisMonth: usersThisMonth },
+        pageViews: { total: totalViews, today: viewsToday, thisWeek: viewsThisWeek, thisMonth: viewsThisMonth },
+        pages: { totalCreated: totalPagesCreated, totalPublished: totalPagesPublished },
+        templateStats,
+        roleDistribution: roleDistribution.map((r) => ({ role: r._id || "normal", count: r.count })),
+        deviceBreakdown: deviceBreakdown.map((d) => ({ device: d._id || "unknown", count: d.count })),
+      },
+    });
+  } catch (error) {
+    console.error("Analytics overview error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch analytics" });
+  }
+};
+
+// ─── CHART DATA: User registrations over time ───────────────────
+
+export const getUserGrowthChart = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    const data = await User.aggregate([
+      { $match: { createdAt: { $gte: startDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill in missing days with 0
+    const result: { date: string; count: number }[] = [];
+    const cursor = new Date(startDate);
+    const dataMap = new Map(data.map((d) => [d._id, d.count]));
+    while (cursor <= new Date()) {
+      const key = cursor.toISOString().split("T")[0];
+      result.push({ date: key, count: dataMap.get(key) || 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("User growth chart error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch chart data" });
+  }
+};
+
+// ─── CHART DATA: Page views over time ───────────────────────────
+
+export const getViewsChart = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    const data = await PageView.aggregate([
+      { $match: { createdAt: { $gte: startDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const result: { date: string; count: number }[] = [];
+    const cursor = new Date(startDate);
+    const dataMap = new Map(data.map((d) => [d._id, d.count]));
+    while (cursor <= new Date()) {
+      const key = cursor.toISOString().split("T")[0];
+      result.push({ date: key, count: dataMap.get(key) || 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("Views chart error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch chart data" });
+  }
+};
+
+// ─── CHART DATA: Template popularity ────────────────────────────
+
+export const getTemplatePopularity = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const data = await PageView.aggregate([
+      { $group: { _id: "$templateType", views: { $sum: 1 } } },
+      { $sort: { views: -1 } },
+    ]);
+
+    res.json({
+      success: true,
+      data: data.map((d) => ({
+        templateType: d._id,
+        label: ALL_PAGE_MODELS.find((m) => m.type === d._id)?.label || d._id,
+        views: d.views,
+      })),
+    });
+  } catch (error) {
+    console.error("Template popularity error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch data" });
+  }
+};
+
+// ─── USER MANAGEMENT ────────────────────────────────────────────
+
+export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const search = (req.query.search as string || "").trim();
+    const roleFilter = req.query.role as string;
+    const sortBy = (req.query.sortBy as string) || "createdAt";
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+    const query: Record<string, unknown> = {};
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+    if (roleFilter && ["normal", "member", "admin"].includes(roleFilter)) {
+      query.role = roleFilter;
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select("name email avatar provider role points isVerified createdAt")
+        .sort({ [sortBy]: sortOrder })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        users,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get all users error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch users" });
+  }
+};
+
+// ─── USER DETAIL ────────────────────────────────────────────────
+
+export const getUserDetail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .select("name email avatar provider role points totalPointsEarned isVerified referralCode subdomain createdAt updatedAt")
+      .lean();
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+
+    // Get all pages created by this user across all templates
+    interface PageDoc {
+      _id: string;
+      shareId?: string;
+      isPublished?: boolean;
+      viewCount?: number;
+      installCount?: number;
+      createdAt?: string;
+      updatedAt?: string;
+      templateType: string;
+      templateLabel: string;
+    }
+
+    const pages = await Promise.all(
+      ALL_PAGE_MODELS.map(async ({ model, type, label }) => {
+        const docs = await (model as mongoose.Model<unknown>)
+          .find({ userId })
+          .select("shareId isPublished viewCount installCount createdAt updatedAt")
+          .sort({ createdAt: -1 })
+          .lean() as Record<string, unknown>[];
+        return docs.map((d): PageDoc => ({
+          _id: String(d._id),
+          shareId: d.shareId as string | undefined,
+          isPublished: d.isPublished as boolean | undefined,
+          viewCount: d.viewCount as number | undefined,
+          installCount: d.installCount as number | undefined,
+          createdAt: d.createdAt as string | undefined,
+          updatedAt: d.updatedAt as string | undefined,
+          templateType: type,
+          templateLabel: label,
+        }));
+      })
+    );
+
+    const allPages = pages.flat().sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    // View stats for this user's pages
+    const viewStats = await PageView.aggregate([
+      { $match: { pageOwnerId: new mongoose.Types.ObjectId(String(userId)) } },
+      {
+        $group: {
+          _id: null,
+          totalViews: { $sum: 1 },
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        user,
+        pages: allPages,
+        stats: {
+          totalPagesCreated: allPages.length,
+          totalPagesPublished: allPages.filter((p) => p.isPublished).length,
+          totalViews: viewStats[0]?.totalViews || 0,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("User detail error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch user details" });
+  }
+};
+
+// ─── CHANGE USER ROLE ───────────────────────────────────────────
+
+const SUPER_ADMIN_EMAIL = "suyashagrahari2121@gmail.com";
+
+export const changeUserRole = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body as { role: UserRole };
+
+    if (!["normal", "member", "admin"].includes(role)) {
+      res.status(400).json({ success: false, error: "Invalid role. Must be normal, member, or admin." });
+      return;
+    }
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+
+    // Prevent demoting the super admin
+    if (targetUser.email === SUPER_ADMIN_EMAIL && role !== "admin") {
+      res.status(403).json({ success: false, error: "Cannot change the super admin's role." });
+      return;
+    }
+
+    targetUser.role = role;
+    await targetUser.save();
+
+    res.json({
+      success: true,
+      data: {
+        id: targetUser._id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+      },
+    });
+  } catch (error) {
+    console.error("Change role error:", error);
+    res.status(500).json({ success: false, error: "Failed to change user role" });
+  }
+};
+
+// ─── RECENT ACTIVITY ────────────────────────────────────────────
+
+export const getRecentActivity = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+    const [recentUsers, recentViews] = await Promise.all([
+      User.find()
+        .select("name email avatar role createdAt")
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+      PageView.find()
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+    ]);
+
+    res.json({
+      success: true,
+      data: { recentUsers, recentViews },
+    });
+  } catch (error) {
+    console.error("Recent activity error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch activity" });
+  }
+};
+
+// ─── TOP PAGES ──────────────────────────────────────────────────
+
+export const getTopPages = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const topPages = await PageView.aggregate([
+      { $group: { _id: { shareId: "$shareId", templateType: "$templateType" }, views: { $sum: 1 } } },
+      { $sort: { views: -1 } },
+      { $limit: 20 },
+    ]);
+
+    res.json({
+      success: true,
+      data: topPages.map((p) => ({
+        shareId: p._id.shareId,
+        templateType: p._id.templateType,
+        label: ALL_PAGE_MODELS.find((m) => m.type === p._id.templateType)?.label || p._id.templateType,
+        views: p.views,
+      })),
+    });
+  } catch (error) {
+    console.error("Top pages error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch top pages" });
+  }
+};
+
+// ─── CONTACT INQUIRIES ──────────────────────────────────────────
+
+export const getContactInquiries = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const filter = req.query.filter as string; // "all" | "unread" | "read"
+
+    const query: Record<string, unknown> = {};
+    if (filter === "unread") query.isRead = false;
+    else if (filter === "read") query.isRead = true;
+
+    const [items, total, unreadCount] = await Promise.all([
+      ContactInquiry.find(query)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      ContactInquiry.countDocuments(query),
+      ContactInquiry.countDocuments({ isRead: false }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        items,
+        unreadCount,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      },
+    });
+  } catch (error) {
+    console.error("Get contacts error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch contact inquiries" });
+  }
+};
+
+export const markContactRead = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { isRead } = req.body as { isRead: boolean };
+
+    const item = await ContactInquiry.findByIdAndUpdate(
+      id,
+      { isRead: !!isRead },
+      { new: true }
+    ).lean();
+
+    if (!item) {
+      res.status(404).json({ success: false, error: "Inquiry not found" });
+      return;
+    }
+
+    res.json({ success: true, data: item });
+  } catch (error) {
+    console.error("Mark contact error:", error);
+    res.status(500).json({ success: false, error: "Failed to update inquiry" });
+  }
+};
+
+export const updateContactNotes = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body as { adminNotes: string };
+
+    const item = await ContactInquiry.findByIdAndUpdate(
+      id,
+      { adminNotes: (adminNotes || "").slice(0, 2000) },
+      { new: true }
+    ).lean();
+
+    if (!item) {
+      res.status(404).json({ success: false, error: "Inquiry not found" });
+      return;
+    }
+
+    res.json({ success: true, data: item });
+  } catch (error) {
+    console.error("Update notes error:", error);
+    res.status(500).json({ success: false, error: "Failed to update notes" });
+  }
+};
+
+export const deleteContactInquiry = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const item = await ContactInquiry.findByIdAndDelete(id);
+    if (!item) {
+      res.status(404).json({ success: false, error: "Inquiry not found" });
+      return;
+    }
+    res.json({ success: true, message: "Inquiry deleted" });
+  } catch (error) {
+    console.error("Delete contact error:", error);
+    res.status(500).json({ success: false, error: "Failed to delete inquiry" });
+  }
+};

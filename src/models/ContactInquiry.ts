@@ -7,6 +7,8 @@ export interface IContactInquiry extends Document {
   message: string;
   ipAddress?: string;
   userAgent?: string;
+  isRead: boolean;
+  adminNotes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +48,16 @@ const contactInquirySchema = new Schema<IContactInquiry>(
     userAgent: {
       type: String,
       default: "",
+    },
+    isRead: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    adminNotes: {
+      type: String,
+      default: "",
+      maxlength: 2000,
     },
   },
   { timestamps: true }

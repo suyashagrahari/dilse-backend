@@ -11,8 +11,15 @@ import LoveGfPage from "../models/LoveGfPage";
 import DarlingPage from "../models/DarlingPage";
 import BirthdayGfPage from "../models/BirthdayGfPage";
 import SharedAccess from "../models/SharedAccess";
+import PageView from "../models/PageView";
 import User from "../models/User";
 import mongoose from "mongoose";
+
+function detectDevice(ua: string): "mobile" | "desktop" | "tablet" {
+  if (/tablet|ipad|playbook|silk/i.test(ua)) return "tablet";
+  if (/mobile|iphone|ipod|android|blackberry|opera mini|iemobile/i.test(ua)) return "mobile";
+  return "desktop";
+}
 
 interface TemplateLookup {
   model: mongoose.Model<unknown>;
@@ -48,6 +55,19 @@ export const getSharedPage = async (req: Request, res: Response): Promise<void> 
         const pageObj = (page as { toObject: () => Record<string, unknown> }).toObject();
         const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
         const hasPassword = !!pageObj.password;
+
+        // Track page view for analytics (fire-and-forget)
+        const ua = req.headers["user-agent"] || "";
+        PageView.create({
+          shareId,
+          templateType,
+          pageOwnerId: pageObj.userId as mongoose.Types.ObjectId,
+          visitorIp: (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip,
+          userAgent: ua.slice(0, 500),
+          referer: (req.headers.referer || req.headers.referrer || "").toString().slice(0, 500),
+          device: detectDevice(ua),
+        }).catch(() => {});
+
         res.json({
           success: true,
           templateType,
