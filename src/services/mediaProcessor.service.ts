@@ -7,10 +7,16 @@ const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 const ALLOWED_IMAGE_MIMES = new Set([
   "image/jpeg",
   "image/jpg",
+  "image/pjpeg",
   "image/png",
   "image/webp",
   "image/gif",
   "image/avif",
+  "image/heic",
+  "image/heif",
+  "image/bmp",
+  "image/tiff",
+  "image/svg+xml",
 ]);
 
 const ALLOWED_AUDIO_MIMES = new Set([
@@ -37,10 +43,16 @@ export interface MediaTransformOptions {
 }
 
 const parseDataUrl = (value: string): ParsedDataUrl | null => {
-  const match = /^data:([^;]+);base64,(.+)$/i.exec(value);
+  // Accept any data URL of the form:
+  //   data:<mime>[;param=value]*;base64,<payload>
+  // Examples handled:
+  //   data:image/jpeg;base64,...
+  //   data:image/png;charset=utf-8;base64,...
+  //   data:image/heic;base64,...
+  const match = /^data:([^;,]+)(?:;[^,]+)*?;base64,(.+)$/i.exec(value);
   if (!match) return null;
 
-  const mimeType = match[1].toLowerCase();
+  const mimeType = match[1].toLowerCase().trim();
   const buffer = Buffer.from(match[2], "base64");
 
   if (!buffer.length) return null;
@@ -70,8 +82,12 @@ const processImageBuffer = async (buffer: Buffer): Promise<Buffer> => {
 
 export const uploadImageDataUrl = async (dataUrl: string, folder: string): Promise<UploadedMediaResult> => {
   const parsed = parseDataUrl(dataUrl);
-  if (!parsed || !ALLOWED_IMAGE_MIMES.has(parsed.mimeType)) {
-    throw new Error("Unsupported image data URL format.");
+  if (!parsed) {
+    const preview = typeof dataUrl === "string" ? dataUrl.slice(0, 80) : String(dataUrl);
+    throw new Error(`Unsupported image data URL format. Received: "${preview}..."`);
+  }
+  if (!ALLOWED_IMAGE_MIMES.has(parsed.mimeType)) {
+    throw new Error(`Unsupported image MIME type: "${parsed.mimeType}".`);
   }
   if (parsed.buffer.length > MAX_IMAGE_BYTES) {
     throw new Error("Image file is too large. Max supported size is 12MB.");

@@ -47,6 +47,7 @@ export interface IChristianWeddingPage extends Document {
   passwordRaw: string;
   viewCount: number;
   isPublished: boolean;
+  templateVariant: "tabs" | "scroll";
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -125,6 +126,7 @@ const christianWeddingPageSchema = new Schema<IChristianWeddingPage>(
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },
     isPublished: { type: Boolean, default: false },
+    templateVariant: { type: String, enum: ["tabs", "scroll"], default: "tabs" },
   },
   { timestamps: true, collection: "christian_wedding_pages" }
 );

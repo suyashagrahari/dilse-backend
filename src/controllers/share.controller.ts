@@ -76,6 +76,7 @@ export const getSharedPage = async (req: Request, res: Response): Promise<void> 
           installCount: (pageObj.installCount as number) || 0,
           viewCount: (pageObj.viewCount as number) || 0,
           senderUserId: String(pageObj.userId),
+          templateVariant: (pageObj.templateVariant as string) || undefined,
           data: safeData,
         });
         return;

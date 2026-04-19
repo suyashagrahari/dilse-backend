@@ -94,7 +94,7 @@ export const createChristianWeddingPage = async (req: Request, res: Response): P
       brideName, groomName, weddingDate, venue, blessing,
       bridePhoto, brideDescription, brideTags, brideFamilyParents, brideFamilyGrandparents,
       groomPhoto, groomDescription, groomTags, groomFamilyParents, groomFamilyGrandparents,
-      events, galleryImages, password,
+      events, galleryImages, password, templateVariant,
     } = req.body;
 
     const payload = await transformMediaPayload(
@@ -124,6 +124,7 @@ export const createChristianWeddingPage = async (req: Request, res: Response): P
     const page = await ChristianWeddingPage.create({
       userId: req.userId,
       ...payload,
+      templateVariant: templateVariant === "scroll" ? "scroll" : "tabs",
     });
 
     res.status(201).json({ success: true, data: page });
@@ -163,7 +164,7 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
       "brideName", "groomName", "weddingDate", "venue", "blessing",
       "bridePhoto", "brideDescription", "brideTags", "brideFamilyParents", "brideFamilyGrandparents",
       "groomPhoto", "groomDescription", "groomTags", "groomFamilyParents", "groomFamilyGrandparents",
-      "events", "galleryImages", "password",
+      "events", "galleryImages", "password", "templateVariant",
     ];
 
     const page = await ChristianWeddingPage.findOne({ _id: req.params.id, userId: req.userId });
@@ -316,7 +317,13 @@ export const getSharedChristianWeddingPage = async (req: Request, res: Response)
 
     const pageObj = page.toObject();
     const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
-    res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "christian-wedding" });
+    res.json({
+      success: true,
+      data: safeData,
+      hasPassword: !!page.password,
+      templateType: "christian-wedding",
+      templateVariant: (page as unknown as { templateVariant?: string }).templateVariant || "tabs",
+    });
   } catch (error) {
     console.error("Get shared Christian wedding page error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch page" });
