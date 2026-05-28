@@ -13,6 +13,7 @@ import {
   markContactRead,
   updateContactNotes,
   deleteContactInquiry,
+  replyToContact,
 } from "../controllers/admin.controller";
 
 const router = Router();
@@ -35,5 +36,6 @@ router.get("/contacts", getContactInquiries);
 router.patch("/contacts/:id/read", markContactRead);
 router.patch("/contacts/:id/notes", updateContactNotes);
 router.delete("/contacts/:id", deleteContactInquiry);
+router.post("/contacts/:id/reply", replyToContact);
 
 export default router;
