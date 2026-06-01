@@ -96,7 +96,7 @@ type LoveGfUpdateBody = {
   personalMessage?: string;
   wishMessage?: string;
   loveDate?: string;
-  homePhotos?: string[];
+  homePhotos?: Array<{ url: string; cropX: number; cropY: number; scale: number }>;
   homeCoverPhoto?: unknown;
   galleryPhotos?: unknown[];
   quizQuestions?: import("../models/LoveGfPage").IQuizQuestion[];
