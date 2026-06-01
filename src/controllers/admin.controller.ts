@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import User, { UserRole } from "../models/User";
 import PageView from "../models/PageView";
 import ContactInquiry from "../models/ContactInquiry";
+import { sendContactReplyEmail } from "../utils/mailer";
 import BirthdayPage from "../models/BirthdayPage";
 import ValentinePage from "../models/ValentinePage";
 import HoliPage from "../models/HoliPage";
@@ -514,5 +515,38 @@ export const deleteContactInquiry = async (req: Request, res: Response): Promise
   } catch (error) {
     console.error("Delete contact error:", error);
     res.status(500).json({ success: false, error: "Failed to delete inquiry" });
+  }
+};
+
+export const replyToContact = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const body = String(req.body?.body ?? "").trim();
+
+    if (!body || body.length < 2) {
+      res.status(400).json({ success: false, error: "Reply body is required" });
+      return;
+    }
+    if (body.length > 4000) {
+      res.status(400).json({ success: false, error: "Reply too long (max 4000 chars)" });
+      return;
+    }
+
+    const item = await ContactInquiry.findById(id);
+    if (!item) {
+      res.status(404).json({ success: false, error: "Inquiry not found" });
+      return;
+    }
+
+    await sendContactReplyEmail(item.email, item.name, body, item.message);
+
+    item.replies.push({ body, sentAt: new Date() });
+    item.isRead = true;
+    await item.save();
+
+    res.json({ success: true, message: "Reply sent", data: { replies: item.replies } });
+  } catch (error) {
+    console.error("Reply to contact error:", error);
+    res.status(500).json({ success: false, error: "Failed to send reply" });
   }
 };

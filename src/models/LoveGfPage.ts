@@ -15,6 +15,7 @@ export interface IPhotoItem {
   letter: string;
   cropX: number;
   cropY: number;
+  scale: number;
 }
 
 export interface IHomeCoverPhoto {
@@ -48,7 +49,7 @@ export interface ILoveGfPage extends Document {
   wishMessage: string;
   loveDate: string;
   homeCoverPhoto: IHomeCoverPhoto;
-  homePhotos: string[];
+  homePhotos: Array<{ url: string; cropX: number; cropY: number; scale: number }>;
   galleryPhotos: IPhotoItem[];
   quizQuestions: IQuizQuestion[];
   truthDareQuestions: Array<{ type: "truth" | "dare"; text: string; photoUrl?: string; audioUrl?: string }>;
@@ -85,7 +86,17 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
       cropY: { type: Number, default: 50 },
       scale: { type: Number, default: 100 },
     },
-    homePhotos: { type: [String], default: [] },
+    homePhotos: {
+      type: [
+        {
+          url:   { type: String,  default: "" },
+          cropX: { type: Number,  default: 50 },
+          cropY: { type: Number,  default: 50 },
+          scale: { type: Number,  default: 100 },
+        },
+      ],
+      default: [],
+    },
     galleryPhotos: {
       type: [
         {
@@ -93,6 +104,7 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
           letter: { type: String, default: "" },
           cropX:  { type: Number, default: 50 },
           cropY:  { type: Number, default: 50 },
+          scale:  { type: Number, default: 100 },
         },
       ],
       default: [],

@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+export interface IReply {
+  body: string;
+  sentAt: Date;
+}
+
 export interface IContactInquiry extends Document {
   name: string;
   email: string;
@@ -9,9 +14,18 @@ export interface IContactInquiry extends Document {
   userAgent?: string;
   isRead: boolean;
   adminNotes?: string;
+  replies: IReply[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+const replySchema = new Schema<IReply>(
+  {
+    body: { type: String, required: true, maxlength: 4000 },
+    sentAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
 
 const contactInquirySchema = new Schema<IContactInquiry>(
   {
@@ -58,6 +72,10 @@ const contactInquirySchema = new Schema<IContactInquiry>(
       type: String,
       default: "",
       maxlength: 2000,
+    },
+    replies: {
+      type: [replySchema],
+      default: [],
     },
   },
   { timestamps: true }
