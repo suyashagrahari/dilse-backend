@@ -5,13 +5,14 @@ import { checkPublishAccess } from "../services/publishGate.service";
 
 // Normalize a gallery photo entry — handles both legacy string[] and new PhotoItem format
 function normalizePhoto(p: unknown) {
-  if (typeof p === "string") return { url: p, letter: "", cropX: 50, cropY: 50 };
+  if (typeof p === "string") return { url: p, letter: "", cropX: 50, cropY: 50, scale: 100 };
   const obj = p as Record<string, unknown>;
   return {
     url:    String(obj.url    ?? ""),
     letter: String(obj.letter ?? ""),
     cropX:  Number(obj.cropX  ?? 50),
     cropY:  Number(obj.cropY  ?? 50),
+    scale:  Number(obj.scale  ?? 100),
   };
 }
 
