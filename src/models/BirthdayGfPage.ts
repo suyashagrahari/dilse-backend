@@ -58,6 +58,7 @@ export interface IBirthdayGfPage extends Document {
   musicTracks: Array<{ title: string; artist: string; src: string }>;
   surprisePhoto: string;
   surpriseAudioUrl: string;
+  sharePhoto: string;
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -158,6 +159,7 @@ const birthdayGfPageSchema = new Schema<IBirthdayGfPage>(
     },
     surprisePhoto:    { type: String, default: "" },
     surpriseAudioUrl: { type: String, default: "" },
+    sharePhoto:       { type: String, default: "" },
     password:    { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount:   { type: Number, default: 0 },

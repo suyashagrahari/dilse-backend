@@ -35,7 +35,7 @@ export const createBirthdayGfPage = async (req: Request, res: Response): Promise
   try {
     const { recipientName, senderName, personalMessage, birthdayWish, birthdayDate,
             homePhoto1, homePhoto2, homeCoverPhoto, galleryPhotos, quizQuestions,
-            truthDareQuestions, musicTracks, surprisePhoto, surpriseAudioUrl, password } = req.body;
+            truthDareQuestions, musicTracks, surprisePhoto, surpriseAudioUrl, sharePhoto, password } = req.body;
 
     const payload = await transformMediaPayload(
       {
@@ -53,6 +53,7 @@ export const createBirthdayGfPage = async (req: Request, res: Response): Promise
         musicTracks:          musicTracks          || [],
         surprisePhoto:        surprisePhoto        || "",
         surpriseAudioUrl:     surpriseAudioUrl     || "",
+        sharePhoto:           sharePhoto           || "",
         password:             password             || "",
       },
       { template: "birthday-gf", userId: req.userId }
@@ -108,6 +109,7 @@ type BirthdayGfUpdateBody = {
   quizQuestions?: import("../models/BirthdayGfPage").IQuizQuestion[];
   truthDareQuestions?: import("../models/BirthdayGfPage").IBirthdayGfPage["truthDareQuestions"];
   musicTracks?: Array<{ title: string; artist: string; src: string }>;
+  sharePhoto?: string;
   password?: string;
 };
 
@@ -134,6 +136,7 @@ export const updateBirthdayGfPage = async (req: Request, res: Response): Promise
         musicTracks: Array.isArray(b.musicTracks) ? b.musicTracks : [],
         surprisePhoto: (b as Record<string, unknown>).surprisePhoto !== undefined ? (b as Record<string, unknown>).surprisePhoto : "",
         surpriseAudioUrl: (b as Record<string, unknown>).surpriseAudioUrl !== undefined ? (b as Record<string, unknown>).surpriseAudioUrl : "",
+        sharePhoto: b.sharePhoto !== undefined ? b.sharePhoto : "",
         password: b.password,
         ...("homeCoverPhoto" in b ? { homeCoverPhoto: normalizeHomeCover(b.homeCoverPhoto) } : {}),
       },
@@ -154,6 +157,7 @@ export const updateBirthdayGfPage = async (req: Request, res: Response): Promise
     if (payload.musicTracks          !== undefined) page.musicTracks          = payload.musicTracks;
     if (payload.surprisePhoto        !== undefined) page.surprisePhoto        = String(payload.surprisePhoto ?? "");
     if (payload.surpriseAudioUrl     !== undefined) page.surpriseAudioUrl     = String(payload.surpriseAudioUrl ?? "");
+    if (payload.sharePhoto           !== undefined) page.sharePhoto           = String(payload.sharePhoto ?? "");
     if (payload.password !== undefined && payload.password !== "") page.password = payload.password;
 
     await page.save();
