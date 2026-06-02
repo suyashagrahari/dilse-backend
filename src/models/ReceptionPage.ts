@@ -37,6 +37,7 @@ export interface IReceptionPage extends Document {
   families: { bride: string; groom: string };
   galleryImages: { src: string; alt: string; span: string; category: string }[];
   blessings: IReceptionBlessing[];
+  sharePhoto: string;
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -99,6 +100,7 @@ const receptionPageSchema = new Schema<IReceptionPage>(
       type: [receptionBlessingSchema],
       default: [],
     },
+    sharePhoto: { type: String, default: "" },
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },

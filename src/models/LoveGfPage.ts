@@ -54,6 +54,7 @@ export interface ILoveGfPage extends Document {
   quizQuestions: IQuizQuestion[];
   truthDareQuestions: Array<{ type: "truth" | "dare"; text: string; photoUrl?: string; audioUrl?: string }>;
   quizAttempts: Array<{ score: number; total: number; playedAt: Date }>;
+  sharePhoto: string;
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -140,6 +141,7 @@ const loveGfPageSchema = new Schema<ILoveGfPage>(
       ],
       default: [],
     },
+    sharePhoto:  { type: String, default: "" },
     password:    { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount:   { type: Number, default: 0 },

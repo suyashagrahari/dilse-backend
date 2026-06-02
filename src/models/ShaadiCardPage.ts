@@ -50,6 +50,7 @@ export interface IShaadiCardPage extends Document {
   galleryImages: { src: string; alt: string }[];
   // Blessings wall (guests can add)
   blessings: IShaadiCardBlessing[];
+  sharePhoto: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -136,6 +137,7 @@ const shaadiCardPageSchema = new Schema<IShaadiCardPage>(
       default: [],
     },
     // Security
+    sharePhoto: { type: String, default: "" },
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },

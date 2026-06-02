@@ -53,6 +53,7 @@ export interface IDarlingPage extends Document {
   quizQuestions: IQuizQuestion[];
   truthDareQuestions: Array<{ type: "truth" | "dare"; text: string; photoUrl?: string; audioUrl?: string }>;
   quizAttempts: Array<{ score: number; total: number; playedAt: Date }>;
+  sharePhoto: string;
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -128,6 +129,7 @@ const darlingPageSchema = new Schema<IDarlingPage>(
       ],
       default: [],
     },
+    sharePhoto:  { type: String, default: "" },
     password:    { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount:   { type: Number, default: 0 },

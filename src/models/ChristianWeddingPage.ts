@@ -43,6 +43,7 @@ export interface IChristianWeddingPage extends Document {
   events: IChristianWeddingEvent[];
   galleryImages: { src: string; alt: string }[];
   blessings: IChristianWeddingBlessing[];
+  sharePhoto: string;
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -122,6 +123,7 @@ const christianWeddingPageSchema = new Schema<IChristianWeddingPage>(
       type: [christianWeddingBlessingSchema],
       default: [],
     },
+    sharePhoto: { type: String, default: "" },
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },

@@ -46,6 +46,7 @@ export interface IWeddingPage extends Document {
   galleryImages: { src: string; alt: string }[];
   // Blessings wall (guests can add)
   blessings: IWeddingBlessing[];
+  sharePhoto: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -130,6 +131,7 @@ const weddingPageSchema = new Schema<IWeddingPage>(
       default: [],
     },
     // Security
+    sharePhoto: { type: String, default: "" },
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },
