@@ -35,7 +35,8 @@ function normalizeHomeCover(raw: unknown) {
 export const createLoveGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { recipientName, senderName, personalMessage, wishMessage, loveDate,
-            homePhotos, homeCoverPhoto, galleryPhotos, quizQuestions, truthDareQuestions, password } = req.body;
+            homePhotos, homeCoverPhoto, galleryPhotos, quizQuestions, truthDareQuestions,
+            sharePhoto, password } = req.body;
 
     const payload = await transformMediaPayload(
       {
@@ -49,6 +50,7 @@ export const createLoveGfPage = async (req: Request, res: Response): Promise<voi
         galleryPhotos:        (galleryPhotos       || []).map(normalizePhoto),
         quizQuestions:        quizQuestions        || [],
         truthDareQuestions:   truthDareQuestions   || [],
+        sharePhoto:           sharePhoto           || "",
         password:             password             || "",
       },
       { template: "love-gf", userId: req.userId }
@@ -102,6 +104,7 @@ type LoveGfUpdateBody = {
   galleryPhotos?: unknown[];
   quizQuestions?: import("../models/LoveGfPage").IQuizQuestion[];
   truthDareQuestions?: import("../models/LoveGfPage").ILoveGfPage["truthDareQuestions"];
+  sharePhoto?: string;
   password?: string;
 };
 
@@ -124,6 +127,7 @@ export const updateLoveGfPage = async (req: Request, res: Response): Promise<voi
         galleryPhotos: galleryList.map(normalizePhoto),
         quizQuestions: Array.isArray(b.quizQuestions) ? b.quizQuestions : [],
         truthDareQuestions: Array.isArray(b.truthDareQuestions) ? b.truthDareQuestions : [],
+        sharePhoto: b.sharePhoto || "",
         password: b.password,
         ...("homeCoverPhoto" in b ? { homeCoverPhoto: normalizeHomeCover(b.homeCoverPhoto) } : {}),
       },
@@ -140,6 +144,7 @@ export const updateLoveGfPage = async (req: Request, res: Response): Promise<voi
     if (payload.galleryPhotos        !== undefined) page.galleryPhotos        = payload.galleryPhotos;
     if (payload.quizQuestions        !== undefined) page.quizQuestions        = payload.quizQuestions;
     if (payload.truthDareQuestions   !== undefined) page.truthDareQuestions   = payload.truthDareQuestions;
+    if (payload.sharePhoto           !== undefined) page.sharePhoto           = String(payload.sharePhoto ?? "");
     if (payload.password !== undefined && payload.password !== "") page.password = payload.password;
 
     await page.save();
