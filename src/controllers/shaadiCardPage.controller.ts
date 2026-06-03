@@ -94,7 +94,7 @@ export const createShaadiCardPage = async (req: Request, res: Response): Promise
       brideName, groomName, weddingDate, venue, blessing,
       bridePhoto, brideDescription, brideTags, brideFamilyParents, brideFamilyGrandparents,
       groomPhoto, groomDescription, groomTags, groomFamilyParents, groomFamilyGrandparents,
-      events, galleryImages, password,
+      events, galleryImages, sharePhoto, password,
     } = req.body;
 
     const payload = await transformMediaPayload(
@@ -116,6 +116,7 @@ export const createShaadiCardPage = async (req: Request, res: Response): Promise
         groomFamilyGrandparents: groomFamilyGrandparents || "",
         events: normalizeAndSortEvents(events),
         galleryImages: galleryImages || [],
+        sharePhoto: sharePhoto || "",
         password: password || "",
       },
       { template: "shaadi", userId: req.userId }
@@ -163,7 +164,7 @@ export const updateShaadiCardPage = async (req: Request, res: Response): Promise
       "brideName", "groomName", "weddingDate", "venue", "blessing",
       "bridePhoto", "brideDescription", "brideTags", "brideFamilyParents", "brideFamilyGrandparents",
       "groomPhoto", "groomDescription", "groomTags", "groomFamilyParents", "groomFamilyGrandparents",
-      "events", "galleryImages", "password",
+      "events", "galleryImages", "sharePhoto", "password",
     ];
 
     const page = await ShaadiCardPage.findOne({ _id: req.params.id, userId: req.userId });

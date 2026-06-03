@@ -93,7 +93,7 @@ export const createWeddingPage = async (req: Request, res: Response): Promise<vo
       brideName, groomName, weddingDate, venue, blessing,
       bridePhoto, brideDescription, brideTags, brideFamilyParents, brideFamilyGrandparents,
       groomPhoto, groomDescription, groomTags, groomFamilyParents, groomFamilyGrandparents,
-      events, galleryImages, password,
+      events, galleryImages, sharePhoto, password,
     } = req.body;
 
     const payload = await transformMediaPayload(
@@ -115,6 +115,7 @@ export const createWeddingPage = async (req: Request, res: Response): Promise<vo
         groomFamilyGrandparents: groomFamilyGrandparents || "",
         events: normalizeAndSortEvents(events),
         galleryImages: galleryImages || [],
+        sharePhoto: sharePhoto || "",
         password: password || "",
       },
       { template: "wedding", userId: req.userId }
@@ -162,7 +163,7 @@ export const updateWeddingPage = async (req: Request, res: Response): Promise<vo
       "brideName", "groomName", "weddingDate", "venue", "blessing",
       "bridePhoto", "brideDescription", "brideTags", "brideFamilyParents", "brideFamilyGrandparents",
       "groomPhoto", "groomDescription", "groomTags", "groomFamilyParents", "groomFamilyGrandparents",
-      "events", "galleryImages", "password",
+      "events", "galleryImages", "sharePhoto", "password",
     ];
 
     const page = await WeddingPage.findOne({ _id: req.params.id, userId: req.userId });

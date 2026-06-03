@@ -10,7 +10,7 @@ export const createReceptionPage = async (req: Request, res: Response): Promise<
   try {
     const {
       brideName, groomName, receptionDate, venue, venueAddress, venueMapQuery, venueTimings,
-      tagline, heroImage, bride, groom, families, galleryImages, password,
+      tagline, heroImage, bride, groom, families, galleryImages, sharePhoto, password,
     } = req.body;
 
     const payload = await transformMediaPayload(
@@ -28,6 +28,7 @@ export const createReceptionPage = async (req: Request, res: Response): Promise<
         groom: groom || { name: "", role: "The Groom", description: "", photo: "", tags: [] },
         families: families || { bride: "", groom: "" },
         galleryImages: galleryImages || [],
+        sharePhoto: sharePhoto || "",
         password: password || "",
       },
       { template: "reception", userId: req.userId }
@@ -73,7 +74,7 @@ export const updateReceptionPage = async (req: Request, res: Response): Promise<
   try {
     const fields = [
       "brideName", "groomName", "receptionDate", "venue", "venueAddress", "venueMapQuery",
-      "venueTimings", "tagline", "heroImage", "bride", "groom", "families", "galleryImages", "password",
+      "venueTimings", "tagline", "heroImage", "bride", "groom", "families", "galleryImages", "sharePhoto", "password",
     ];
 
     const page = await ReceptionPage.findOne({ _id: req.params.id, userId: req.userId });

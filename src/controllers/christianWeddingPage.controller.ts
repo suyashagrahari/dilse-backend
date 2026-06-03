@@ -94,7 +94,7 @@ export const createChristianWeddingPage = async (req: Request, res: Response): P
       brideName, groomName, weddingDate, venue, blessing,
       bridePhoto, brideDescription, brideTags, brideFamilyParents, brideFamilyGrandparents,
       groomPhoto, groomDescription, groomTags, groomFamilyParents, groomFamilyGrandparents,
-      events, galleryImages, password, templateVariant,
+      events, galleryImages, sharePhoto, password, templateVariant,
     } = req.body;
 
     const payload = await transformMediaPayload(
@@ -116,6 +116,7 @@ export const createChristianWeddingPage = async (req: Request, res: Response): P
         groomFamilyGrandparents: groomFamilyGrandparents || "",
         events: normalizeAndSortEvents(events),
         galleryImages: galleryImages || [],
+        sharePhoto: sharePhoto || "",
         password: password || "",
       },
       { template: "christian-wedding", userId: req.userId }
@@ -164,7 +165,7 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
       "brideName", "groomName", "weddingDate", "venue", "blessing",
       "bridePhoto", "brideDescription", "brideTags", "brideFamilyParents", "brideFamilyGrandparents",
       "groomPhoto", "groomDescription", "groomTags", "groomFamilyParents", "groomFamilyGrandparents",
-      "events", "galleryImages", "password", "templateVariant",
+      "events", "galleryImages", "sharePhoto", "password", "templateVariant",
     ];
 
     const page = await ChristianWeddingPage.findOne({ _id: req.params.id, userId: req.userId });
