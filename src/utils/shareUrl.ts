@@ -2,15 +2,34 @@ import { env } from "../config/env";
 import User from "../models/User";
 
 /**
+ * Is this deployment actually served from the domain that owns the wildcard
+ * subdomain routing? Only production is: its SHARE_BASE_URL host is the root
+ * domain itself (or its www). Staging (e.g. stag.subhsandesh.in) also runs with
+ * APP_ENV=production and inherits ROOT_DOMAIN, but its host is NOT the apex — so
+ * a `{user}.{ROOT_DOMAIN}` link would point at production (a different DB) and
+ * 404. In that case we must fall back to the path-based SHARE_BASE_URL so the
+ * link resolves within the same environment the page was created in.
+ */
+function servesWildcardSubdomains(): boolean {
+  if (!env.ROOT_DOMAIN) return false;
+  try {
+    const shareHost = new URL(env.SHARE_BASE_URL).hostname.toLowerCase();
+    return shareHost === env.ROOT_DOMAIN || shareHost === `www.${env.ROOT_DOMAIN}`;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Build a share URL for a published page.
  *
- * - If ROOT_DOMAIN is configured AND the page owner has a subdomain:
- *     https://{subdomain}.{ROOT_DOMAIN}/{shareId}
- * - Otherwise fall back to the plain SHARE_BASE_URL:
- *     https://{SHARE_BASE_URL}/{shareId}
+ * - When served from the wildcard-owning root domain AND the owner has a
+ *   subdomain:  https://{subdomain}.{ROOT_DOMAIN}/{shareId}
+ * - Otherwise (staging, local, or owner without a subdomain) fall back to the
+ *   path-based SHARE_BASE_URL:  {SHARE_BASE_URL}/{shareId}
  */
 export async function buildShareUrl(shareId: string, userId: string): Promise<string> {
-  if (env.ROOT_DOMAIN) {
+  if (servesWildcardSubdomains()) {
     const user = await User.findById(userId).select("subdomain");
     if (user?.subdomain) {
       return `https://${user.subdomain}.${env.ROOT_DOMAIN}/${shareId}`;
