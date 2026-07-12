@@ -158,15 +158,25 @@ export async function sendOtpEmail(
 
 export async function sendApologyAgreementEmail(opts: {
   to: string[];
+  cc?: string[];
   senderName: string;
   recipientName: string;
   signerName: string;
   tokenId: string;
   pdf: Buffer;
 }): Promise<void> {
-  const recipients = Array.from(
-    new Set((opts.to || []).map((e) => (e || "").trim()).filter(Boolean))
-  );
+  const norm = (arr: string[] | undefined) =>
+    Array.from(new Set((arr || []).map((e) => (e || "").trim().toLowerCase()).filter(Boolean)));
+
+  let recipients = norm(opts.to);
+  // CC = extras not already in `to` (so both the delivery inbox and the creator get it).
+  let ccList = norm(opts.cc).filter((e) => !recipients.includes(e));
+
+  // Never send with an empty `to`: if only a CC address exists, promote it.
+  if (recipients.length === 0 && ccList.length > 0) {
+    recipients = ccList;
+    ccList = [];
+  }
 
   if (recipients.length === 0) {
     console.log(`[APOLOGY AGREEMENT — no recipients] Token: ${opts.tokenId}`);
@@ -175,7 +185,7 @@ export async function sendApologyAgreementEmail(opts: {
 
   if (!resend) {
     console.log(
-      `\n[APOLOGY AGREEMENT — no RESEND_API_KEY] To: ${recipients.join(", ")} | Signed by: ${opts.signerName} | Token: ${opts.tokenId}\n`
+      `\n[APOLOGY AGREEMENT — no RESEND_API_KEY] To: ${recipients.join(", ")}${ccList.length ? ` | Cc: ${ccList.join(", ")}` : ""} | Signed by: ${opts.signerName} | Token: ${opts.tokenId}\n`
     );
     return;
   }
@@ -184,6 +194,7 @@ export async function sendApologyAgreementEmail(opts: {
     await resend.emails.send({
       from: "SubhSandesh <love@subhsandesh.in>",
       to: recipients,
+      ...(ccList.length ? { cc: ccList } : {}),
       replyTo: "team@subhsandesh.in",
       subject: `💖 Forgiveness Agreement — signed by ${opts.signerName}`,
       text: `Wonderful news! ${opts.signerName} just forgave ${opts.senderName} 💖\n\nThe apology has been lovingly accepted, and the official Forgiveness Agreement has been signed. Your signed agreement is attached to this email as a keepsake.\n\nToken: ${opts.tokenId}\n\nMade with love,\n— SubhSandesh\nteam@subhsandesh.in | subhsandesh.in`,

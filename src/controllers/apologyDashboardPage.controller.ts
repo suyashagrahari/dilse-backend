@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { randomBytes } from "crypto";
 import ApologyDashboardPage from "../models/ApologyDashboardPage";
+import User from "../models/User";
 import { transformMediaPayload, uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { generateApologyPdf } from "../services/apologyPdf.service";
@@ -259,6 +260,16 @@ export const signApologyAgreement = async (req: Request, res: Response): Promise
       day: "numeric",
     });
 
+    // The creator's account email → CC'd so BOTH the delivery inbox and the person
+    // who built the apology receive the same signed keepsake PDF.
+    let creatorEmail = "";
+    try {
+      const owner = await User.findById(page.userId).select("email");
+      creatorEmail = (owner?.email || "").trim();
+    } catch (e) {
+      console.error("Apology creator lookup error:", e);
+    }
+
     // Generate the PDF and email it. A mail/PDF failure must not fail the signature record.
     try {
       const pdf = await generateApologyPdf({
@@ -275,6 +286,7 @@ export const signApologyAgreement = async (req: Request, res: Response): Promise
 
       await sendApologyAgreementEmail({
         to: [page.deliveryEmail, signerEmail].filter(Boolean) as string[],
+        cc: [creatorEmail].filter(Boolean) as string[],
         senderName: page.senderName,
         recipientName: page.recipientName,
         signerName: signerName.trim(),
