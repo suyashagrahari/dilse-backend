@@ -324,6 +324,37 @@ export const getUserDetail = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+// Admin: permanently delete any user's page (across all template types).
+// Deleting removes the doc entirely, so its shared link 404s for everyone.
+export const deleteUserPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const pageId = String(req.params.pageId || "");
+    const templateType = String(req.query.templateType || req.body?.templateType || "");
+
+    if (!mongoose.Types.ObjectId.isValid(pageId)) {
+      res.status(400).json({ success: false, error: "Invalid page id" });
+      return;
+    }
+
+    const entry = ALL_PAGE_MODELS.find((m) => m.type === templateType);
+    if (!entry) {
+      res.status(400).json({ success: false, error: "Unknown or unsupported template type" });
+      return;
+    }
+
+    const deleted = await (entry.model as mongoose.Model<unknown>).findByIdAndDelete(pageId).lean();
+    if (!deleted) {
+      res.status(404).json({ success: false, error: "Page not found" });
+      return;
+    }
+
+    res.json({ success: true, message: "Page deleted successfully" });
+  } catch (error) {
+    console.error("Admin delete page error:", error);
+    res.status(500).json({ success: false, error: "Failed to delete page" });
+  }
+};
+
 // ─── CHANGE USER ROLE ───────────────────────────────────────────
 
 const SUPER_ADMIN_EMAIL = "suyashagrahari2121@gmail.com";

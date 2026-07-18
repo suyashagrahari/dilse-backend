@@ -7,6 +7,7 @@ import {
   getAllUsers,
   getUserDetail,
   changeUserRole,
+  deleteUserPage,
   getRecentActivity,
   getTopPages,
   getContactInquiries,
@@ -30,6 +31,7 @@ router.get("/analytics/recent-activity", getRecentActivity);
 router.get("/users", getAllUsers);
 router.get("/users/:userId", getUserDetail);
 router.patch("/users/:userId/role", changeUserRole);
+router.delete("/pages/:pageId", deleteUserPage);
 
 // Contact inquiries
 router.get("/contacts", getContactInquiries);
