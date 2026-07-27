@@ -18,6 +18,14 @@ export interface IQuizCard {
   memory: string;
 }
 
+/** Recipient-authored "love map" answers, saved back from the shared page. */
+export interface ILoveMap {
+  foods: string;
+  stress: string;
+  dreams: string;
+  dates: string;
+}
+
 export type DistanceUnit = "km" | "mi";
 export type AccentTint = "indigo" | "pink";
 
@@ -33,6 +41,8 @@ export interface IMissYouGfPage extends Document {
   yourCity: string;
   theirCity: string;
   reunionDate: string;
+  /** ISO — the moment the missing began (last goodbye); powers the count-up timer. */
+  sinceDate: string;
   distanceUnit: DistanceUnit;
   memories: IMemory[];
   secret: string;
@@ -42,6 +52,11 @@ export interface IMissYouGfPage extends Document {
   backgroundMusic: string;
   accentTint: AccentTint;
   sharePhoto: string;
+  // Recipient engagement (written from the shared page, read by the owner's history)
+  hugCount: number;
+  lastHugAt?: Date;
+  loveMap: ILoveMap;
+  loveMapUpdatedAt?: Date;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -65,6 +80,7 @@ const missYouGfPageSchema = new Schema<IMissYouGfPage>(
     yourCity: { type: String, default: "" },
     theirCity: { type: String, default: "" },
     reunionDate: { type: String, default: "" },
+    sinceDate: { type: String, default: "" },
     distanceUnit: { type: String, enum: ["km", "mi"], default: "km" },
     memories: {
       type: [
@@ -99,6 +115,22 @@ const missYouGfPageSchema = new Schema<IMissYouGfPage>(
     backgroundMusic: { type: String, default: "" },
     accentTint: { type: String, enum: ["indigo", "pink"], default: "indigo" },
     sharePhoto: { type: String, default: "" },
+    // Recipient engagement
+    hugCount: { type: Number, default: 0 },
+    lastHugAt: { type: Date },
+    loveMap: {
+      type: new Schema<ILoveMap>(
+        {
+          foods: { type: String, default: "" },
+          stress: { type: String, default: "" },
+          dreams: { type: String, default: "" },
+          dates: { type: String, default: "" },
+        },
+        { _id: false }
+      ),
+      default: () => ({ foods: "", stress: "", dreams: "", dates: "" }),
+    },
+    loveMapUpdatedAt: { type: Date },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

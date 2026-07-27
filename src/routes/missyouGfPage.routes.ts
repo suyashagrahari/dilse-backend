@@ -8,6 +8,8 @@ import {
   publishMissYouGfPage,
   getSharedMissYouGfPage,
   verifyMissYouGfPagePassword,
+  hugMissYouGfPage,
+  saveLoveMapMissYouGfPage,
   deleteMissYouGfPage,
 } from "../controllers/missyouGfPage.controller";
 
@@ -15,6 +17,8 @@ const router = Router();
 
 router.get("/share/:shareId", getSharedMissYouGfPage);
 router.post("/share/:shareId/verify", verifyMissYouGfPagePassword);
+router.post("/share/:shareId/hug", hugMissYouGfPage);
+router.put("/share/:shareId/lovemap", saveLoveMapMissYouGfPage);
 
 router.use(protect);
 router.post("/", createMissYouGfPage);

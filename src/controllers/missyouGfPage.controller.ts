@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import MissYouGfPage from "../models/MissYouGfPage";
+import type { ILoveMap } from "../models/MissYouGfPage";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 
 export const createMissYouGfPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { senderName, recipientName, petName, coverLine, letterBody, signature,
-            yourCity, theirCity, reunionDate, distanceUnit, memories, secret,
+            yourCity, theirCity, reunionDate, sinceDate, distanceUnit, memories, secret,
             openWhen, quiz, voiceUrl, backgroundMusic, accentTint, sharePhoto, password } = req.body;
 
     const payload = await transformMediaPayload(
@@ -20,6 +21,7 @@ export const createMissYouGfPage = async (req: Request, res: Response): Promise<
         yourCity:        yourCity        || "",
         theirCity:       theirCity       || "",
         reunionDate:     reunionDate     || "",
+        sinceDate:       sinceDate       || "",
         distanceUnit:    distanceUnit === "mi" ? "mi" : "km",
         memories:        Array.isArray(memories) ? memories : [],
         secret:          secret          || "",
@@ -81,6 +83,7 @@ type MissYouGfUpdateBody = {
   yourCity?: string;
   theirCity?: string;
   reunionDate?: string;
+  sinceDate?: string;
   distanceUnit?: string;
   memories?: import("../models/MissYouGfPage").IMemory[];
   secret?: string;
@@ -111,6 +114,7 @@ export const updateMissYouGfPage = async (req: Request, res: Response): Promise<
         yourCity: b.yourCity,
         theirCity: b.theirCity,
         reunionDate: b.reunionDate,
+        sinceDate: b.sinceDate,
         distanceUnit: b.distanceUnit,
         memories: Array.isArray(b.memories) ? b.memories : undefined,
         secret: b.secret,
@@ -134,6 +138,7 @@ export const updateMissYouGfPage = async (req: Request, res: Response): Promise<
     if (payload.yourCity        !== undefined) page.yourCity        = payload.yourCity;
     if (payload.theirCity       !== undefined) page.theirCity       = payload.theirCity;
     if (payload.reunionDate     !== undefined) page.reunionDate     = payload.reunionDate;
+    if (payload.sinceDate       !== undefined) page.sinceDate       = String(payload.sinceDate ?? "");
     if (payload.distanceUnit    !== undefined) page.distanceUnit    = payload.distanceUnit === "mi" ? "mi" : "km";
     if (payload.memories        !== undefined) page.memories        = payload.memories;
     if (payload.secret          !== undefined) page.secret          = payload.secret;
@@ -214,6 +219,48 @@ export const verifyMissYouGfPagePassword = async (req: Request, res: Response): 
   } catch (error) {
     console.error("Verify miss you gf page password error:", error);
     res.status(500).json({ success: false, error: "Verification failed" });
+  }
+};
+
+// ── Public engagement (called from the shared recipient page, no auth) ──────────
+
+/** Increment the hug counter. Body: { delta?: number } (clamped 1..50). */
+export const hugMissYouGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const raw = Number((req.body as { delta?: unknown }).delta);
+    const delta = Number.isFinite(raw) ? Math.max(1, Math.min(50, Math.floor(raw))) : 1;
+    const page = await MissYouGfPage.findOneAndUpdate(
+      { shareId: req.params.shareId, isPublished: true },
+      { $inc: { hugCount: delta }, $set: { lastHugAt: new Date() } },
+      { new: true }
+    ).select("hugCount");
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    res.json({ success: true, hugCount: page.hugCount });
+  } catch (error) {
+    console.error("Hug miss you gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to register hug" });
+  }
+};
+
+/** Save the recipient's "love map" answers. Body: partial ILoveMap (each ≤600 chars). */
+export const saveLoveMapMissYouGfPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const b = (req.body || {}) as Partial<ILoveMap>;
+    const clip = (v: unknown) => (typeof v === "string" ? v.slice(0, 600) : "");
+    const set: Record<string, unknown> = { loveMapUpdatedAt: new Date() };
+    (["foods", "stress", "dreams", "dates"] as const).forEach((k) => {
+      if (b[k] !== undefined) set[`loveMap.${k}`] = clip(b[k]);
+    });
+    const page = await MissYouGfPage.findOneAndUpdate(
+      { shareId: req.params.shareId, isPublished: true },
+      { $set: set },
+      { new: true }
+    ).select("loveMap");
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    res.json({ success: true, loveMap: page.loveMap });
+  } catch (error) {
+    console.error("Save love map miss you gf page error:", error);
+    res.status(500).json({ success: false, error: "Failed to save" });
   }
 };
 
