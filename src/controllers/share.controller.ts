@@ -11,6 +11,7 @@ import LoveGfPage from "../models/LoveGfPage";
 import DarlingPage from "../models/DarlingPage";
 import BirthdayGfPage from "../models/BirthdayGfPage";
 import ApologyDashboardPage from "../models/ApologyDashboardPage";
+import MissYouGfPage from "../models/MissYouGfPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -41,6 +42,7 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: DarlingPage as mongoose.Model<unknown>, templateType: "darling", editorRoute: "/darling" },
   { model: BirthdayGfPage as mongoose.Model<unknown>, templateType: "birthday-gf", editorRoute: "/birthday-gf" },
   { model: ApologyDashboardPage as mongoose.Model<unknown>, templateType: "apology-dashboard", editorRoute: "/apology-dashboard" },
+  { model: MissYouGfPage as mongoose.Model<unknown>, templateType: "missyou-gf", editorRoute: "/missyou-gf" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
