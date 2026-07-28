@@ -1,3 +1,6 @@
+# syntax=docker/dockerfile:1
+# ↑ Enables the BuildKit `--mount=type=cache` npm store shared across stages.
+
 # ── Stage 1: Install all dependencies (including native builds) ─────────────
 FROM node:20-alpine AS deps
 
@@ -6,7 +9,7 @@ RUN apk add --no-cache python3 make g++ libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --frozen-lockfile
+RUN --mount=type=cache,target=/root/.npm npm ci --frozen-lockfile
 
 # ── Stage 2: TypeScript compilation ─────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -25,7 +28,7 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --frozen-lockfile && npm cache clean --force
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --frozen-lockfile
 
 # ── Stage 4: Minimal production runner ──────────────────────────────────────
 FROM node:20-alpine AS runner
