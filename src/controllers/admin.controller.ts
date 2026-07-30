@@ -15,7 +15,13 @@ import ChristianWeddingPage from "../models/ChristianWeddingPage";
 import LoveGfPage from "../models/LoveGfPage";
 import DarlingPage from "../models/DarlingPage";
 import BirthdayGfPage from "../models/BirthdayGfPage";
+import ApologyDashboardPage from "../models/ApologyDashboardPage";
+import MissYouGfPage from "../models/MissYouGfPage";
+import BouquetGfPage from "../models/BouquetGfPage";
 
+// Must stay in sync with TEMPLATE_LOOKUPS in share.controller.ts — a template
+// missing here is invisible to the admin panel: its pages never show in the user
+// detail modal, aren't counted in analytics, and can't be deleted.
 const ALL_PAGE_MODELS = [
   { model: BirthdayPage, type: "birthday", label: "Birthday" },
   { model: ValentinePage, type: "valentine", label: "Valentine" },
@@ -28,6 +34,9 @@ const ALL_PAGE_MODELS = [
   { model: LoveGfPage, type: "love-gf", label: "Love GF" },
   { model: DarlingPage, type: "darling", label: "Darling" },
   { model: BirthdayGfPage, type: "birthday-gf", label: "Birthday GF" },
+  { model: ApologyDashboardPage, type: "apology-dashboard", label: "Apology Dashboard" },
+  { model: MissYouGfPage, type: "missyou-gf", label: "Miss You GF" },
+  { model: BouquetGfPage, type: "bouquet-gf", label: "Bouquet GF" },
 ];
 
 // ─── ANALYTICS DASHBOARD ────────────────────────────────────────
