@@ -39,6 +39,12 @@ export interface ICourtOfLovePage extends Document {
   signatureName: string;
   /** Title printed on the certificate. */
   certificateTitle: string;
+  /**
+   * BCP-47 tag for the language the content is written in ("hi", "hi-Latn",
+   * "ur", …). Set when the case was AI-generated from a story; the viewer uses
+   * it for the `lang` attribute and to flip to RTL where the script needs it.
+   */
+  language: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -74,6 +80,7 @@ const courtOfLovePageSchema = new Schema<ICourtOfLovePage>(
     secretLetter: { type: String, default: "", maxlength: 3000 },
     signatureName: { type: String, default: "", maxlength: 80 },
     certificateTitle: { type: String, default: "", maxlength: 120 },
+    language: { type: String, default: "en", maxlength: 24 },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

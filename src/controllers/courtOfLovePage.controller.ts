@@ -1,6 +1,14 @@
 import { Request, Response } from "express";
+import OpenAI from "openai";
 import CourtOfLovePage, { IQuizQuestion } from "../models/CourtOfLovePage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import {
+  AiRefusedError,
+  AiUnavailableError,
+  MIN_STORY_CHARS,
+  generateCaseFromStory,
+  sanitizeStory,
+} from "../services/courtOfLoveAi.service";
 
 const MAX_QUESTIONS = 5;
 const OPTIONS_PER_QUESTION = 4;
@@ -45,6 +53,7 @@ type CourtOfLoveBody = {
   secretLetter?: unknown;
   signatureName?: unknown;
   certificateTitle?: unknown;
+  language?: unknown;
   password?: unknown;
 };
 
@@ -62,6 +71,7 @@ export const createCourtOfLovePage = async (req: Request, res: Response): Promis
       secretLetter: str(b.secretLetter, 3000),
       signatureName: str(b.signatureName, 80),
       certificateTitle: str(b.certificateTitle, 120),
+      language: str(b.language, 24) || "en",
       password: str(b.password, 128),
     });
 
@@ -115,6 +125,7 @@ export const updateCourtOfLovePage = async (req: Request, res: Response): Promis
     if (b.secretLetter     !== undefined) page.secretLetter     = str(b.secretLetter, 3000);
     if (b.signatureName    !== undefined) page.signatureName    = str(b.signatureName, 80);
     if (b.certificateTitle !== undefined) page.certificateTitle = str(b.certificateTitle, 120);
+    if (b.language         !== undefined) page.language         = str(b.language, 24) || "en";
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
@@ -187,6 +198,82 @@ export const verifyCourtOfLovePagePassword = async (req: Request, res: Response)
   } catch (error) {
     console.error("Verify court of love page password error:", error);
     res.status(500).json({ success: false, error: "Verification failed" });
+  }
+};
+
+/**
+ * Turn the sender's own story into a full case file, in whatever language and
+ * script they wrote it in.
+ *
+ * Nothing is persisted here — this only returns generated content for the editor
+ * to drop into its form, which the sender can then edit freely before publishing.
+ * Deliberately not storing the raw story: it is the most personal thing they
+ * type, the recipient never needs it, and the page has no use for it after the
+ * questions exist.
+ */
+export const generateCourtOfLoveContent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const body = req.body as { story?: unknown; plaintiffName?: unknown; accusedName?: unknown };
+    const story = sanitizeStory(body.story);
+
+    if (story.length < MIN_STORY_CHARS) {
+      res.status(400).json({
+        success: false,
+        error: `Tell us a little more about you two — at least ${MIN_STORY_CHARS} characters.`,
+      });
+      return;
+    }
+
+    const result = await generateCaseFromStory({
+      story,
+      plaintiffName: str(body.plaintiffName, 80),
+      accusedName: str(body.accusedName, 80),
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error: unknown) {
+    if (error instanceof AiUnavailableError) {
+      // The key is missing/misconfigured. 503 so the client can fall back to the
+      // hand-written defaults rather than presenting this as the user's mistake.
+      console.error("Court of love AI not configured:", error.message);
+      res.status(503).json({
+        success: false,
+        error: "AI writing isn't available right now. You can still write the hearings yourself.",
+      });
+      return;
+    }
+
+    if (error instanceof AiRefusedError) {
+      res.status(422).json({
+        success: false,
+        error: "The AI couldn't work with that story. Try rephrasing it, or write the hearings yourself.",
+      });
+      return;
+    }
+
+    if (error instanceof OpenAI.APIError) {
+      if (error.status === 401) {
+        console.error("Court of love AI auth error — check OPENAI_API_KEY");
+        res.status(503).json({
+          success: false,
+          error: "AI writing isn't available right now. You can still write the hearings yourself.",
+        });
+        return;
+      }
+      if (error.status === 429) {
+        res.status(429).json({
+          success: false,
+          error: "The AI is busy right now. Please wait a moment and try again.",
+        });
+        return;
+      }
+    }
+
+    console.error("Generate court of love content error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Couldn't write the hearings. Please try again.",
+    });
   }
 };
 
