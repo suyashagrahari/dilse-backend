@@ -14,6 +14,7 @@ import ApologyDashboardPage from "../models/ApologyDashboardPage";
 import MissYouGfPage from "../models/MissYouGfPage";
 import BouquetGfPage from "../models/BouquetGfPage";
 import CourtOfLovePage from "../models/CourtOfLovePage";
+import ProposalPage from "../models/ProposalPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -47,6 +48,7 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: MissYouGfPage as mongoose.Model<unknown>, templateType: "missyou-gf", editorRoute: "/missyou-gf" },
   { model: BouquetGfPage as mongoose.Model<unknown>, templateType: "bouquet-gf", editorRoute: "/bouquet-gf" },
   { model: CourtOfLovePage as mongoose.Model<unknown>, templateType: "court-of-love", editorRoute: "/court-of-love" },
+  { model: ProposalPage as mongoose.Model<unknown>, templateType: "proposal", editorRoute: "/proposal" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
