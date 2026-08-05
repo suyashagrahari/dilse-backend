@@ -2,52 +2,77 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-/** One polaroid on the memory lane wall. */
-export interface IMemory {
-  /**
-   * Either a bundled asset path (`/templates/train-ticket/…`) or a base64 data URL the
-   * sender uploaded in the EditSheet. Deliberately unbounded — an uploaded photo
-   * arrives inline and a maxlength would silently truncate it into a broken image.
-   */
-  imageUrl: string;
-  /** The line written under the polaroid. Kept short — it sits on one or two lines. */
-  caption: string;
+/**
+ * Train Ticket — a parody reservation slip whose reveal mechanic is a PNR status
+ * check. Everything is invented: the issuing authority is the fictional
+ * "Indian Hearts Railway / IHRCTC" and no real carrier's marks are stored,
+ * referenced or reproduced anywhere in this template.
+ */
+
+/** One traveller on the slip. `gender` mirrors the single-letter column a slip prints. */
+export interface IPassenger {
+  name: string;
+  age: number;
+  /** M / F / X — X is the neutral option offered in the editor. */
+  gender: string;
+  /** What the slip was booked as, e.g. "WL 47". */
+  bookingStatus: string;
+  /** What it resolved to, e.g. "CNF". */
+  currentStatus: string;
+  coach: string;
+  seat: string;
+  berth: string;
 }
 
-/** Which bundled animation headlines the trainTicket moment. */
-export type HeroArt = "ring" | "rose" | "bouquet";
+/** One label/value pair in the fare block. Values are prose, not currency. */
+export interface IFareLine {
+  label: string;
+  value: string;
+}
+
+/** One node on the running-status timeline (the relationship as a route). */
+export interface IStation {
+  name: string;
+  /** Optional parenthetical, e.g. "unscheduled stop". */
+  label: string;
+  /** ISO timestamp, or "" when the stop has no date yet. */
+  at: string;
+  /** Right-aligned detail text, e.g. "dep 14 Mar 2023, 02:11" or "27 times". */
+  detail: string;
+  status: "passed" | "current" | "upcoming";
+}
 
 export interface ITrainTicketPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
-  /** Who is asking. Signs the secret note. */
-  senderName: string;
-  /** Who is being asked. Drives every second-person line in the template. */
-  recipientName: string;
-  /** Section 1 — the audio gate. */
-  gateTitle: string;
-  gateButtonLabel: string;
-  /** Section 2 — the scrapbook. */
-  memoryLaneTitle: string;
-  memories: IMemory[];
-  /** Section 3 — the ask. */
-  askHeadline: string;
-  heroArt: HeroArt;
-  yesLabel: string;
-  /** Section 4 — the payoff. */
-  celebrationTitle: string;
-  secretNote: string;
+
+  /** Reservation identity. */
+  pnr: string;
+  trainNo: string;
+  trainName: string;
+  from: { code: string; name: string };
+  to: { code: string; name: string };
+  /** ISO. Drives the live boarding countdown. */
+  departureAt: string;
+  /** ISO. Printed as the arrival time on the slip. */
+  arrivalAt: string;
   /**
-   * ISO `YYYY-MM-DD` of the day they met. Stored as a string rather than a Date
-   * so it round-trips through JSON untouched and never shifts across timezones.
-   * Empty string hides the day counter.
+   * ISO. THE GATE. Until this moment passes, the shared endpoint refuses to
+   * emit passenger names, seats or the letter — see `redactUntilChart` in the
+   * controller. Empty string means "chart already prepared".
    */
-  metDate: string;
-  /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
-   */
-  musicUrl: string;
+  chartPreparedAt: string;
+  classCode: string;
+  quota: string;
+
+  passengers: IPassenger[];
+  fare: IFareLine[];
+  stations: IStation[];
+  delay: { amount: string; reason: string };
+  finePrint: string[];
+  /** The sincere payload, shown under the slip once the chart is prepared. */
+  letter: string;
+
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -58,10 +83,43 @@ export interface ITrainTicketPage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
-const memorySchema = new Schema<IMemory>(
+const passengerSchema = new Schema<IPassenger>(
   {
-    imageUrl: { type: String, default: "" },
-    caption: { type: String, default: "", maxlength: 140 },
+    name: { type: String, default: "", maxlength: 60 },
+    age: { type: Number, default: 0, min: 0, max: 150 },
+    gender: { type: String, default: "X", maxlength: 1 },
+    bookingStatus: { type: String, default: "", maxlength: 24 },
+    currentStatus: { type: String, default: "", maxlength: 24 },
+    coach: { type: String, default: "", maxlength: 8 },
+    seat: { type: String, default: "", maxlength: 8 },
+    berth: { type: String, default: "", maxlength: 24 },
+  },
+  { _id: false }
+);
+
+const fareLineSchema = new Schema<IFareLine>(
+  {
+    label: { type: String, default: "", maxlength: 60 },
+    value: { type: String, default: "", maxlength: 60 },
+  },
+  { _id: false }
+);
+
+const stationSchema = new Schema<IStation>(
+  {
+    name: { type: String, default: "", maxlength: 60 },
+    label: { type: String, default: "", maxlength: 40 },
+    at: { type: String, default: "", maxlength: 40 },
+    detail: { type: String, default: "", maxlength: 60 },
+    status: { type: String, enum: ["passed", "current", "upcoming"], default: "upcoming" },
+  },
+  { _id: false }
+);
+
+const stationCodeSchema = new Schema<{ code: string; name: string }>(
+  {
+    code: { type: String, default: "", maxlength: 6 },
+    name: { type: String, default: "", maxlength: 40 },
   },
   { _id: false }
 );
@@ -70,19 +128,34 @@ const trainTicketPageSchema = new Schema<ITrainTicketPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
-    senderName: { type: String, default: "", maxlength: 80 },
-    recipientName: { type: String, default: "", maxlength: 80 },
-    gateTitle: { type: String, default: "", maxlength: 160 },
-    gateButtonLabel: { type: String, default: "", maxlength: 60 },
-    memoryLaneTitle: { type: String, default: "", maxlength: 160 },
-    memories: { type: [memorySchema], default: [] },
-    askHeadline: { type: String, default: "", maxlength: 200 },
-    heroArt: { type: String, enum: ["ring", "rose", "bouquet"], default: "ring" },
-    yesLabel: { type: String, default: "", maxlength: 60 },
-    celebrationTitle: { type: String, default: "", maxlength: 200 },
-    secretNote: { type: String, default: "", maxlength: 3000 },
-    metDate: { type: String, default: "", maxlength: 24 },
-    musicUrl: { type: String, default: "", maxlength: 2000 },
+
+    pnr: { type: String, default: "", maxlength: 24 },
+    trainNo: { type: String, default: "", maxlength: 12 },
+    trainName: { type: String, default: "", maxlength: 40 },
+    from: { type: stationCodeSchema, default: () => ({ code: "", name: "" }) },
+    to: { type: stationCodeSchema, default: () => ({ code: "", name: "" }) },
+    departureAt: { type: String, default: "", maxlength: 40 },
+    arrivalAt: { type: String, default: "", maxlength: 40 },
+    chartPreparedAt: { type: String, default: "", maxlength: 40 },
+    classCode: { type: String, default: "", maxlength: 8 },
+    quota: { type: String, default: "", maxlength: 16 },
+
+    passengers: { type: [passengerSchema], default: [] },
+    fare: { type: [fareLineSchema], default: [] },
+    stations: { type: [stationSchema], default: [] },
+    delay: {
+      type: new Schema(
+        {
+          amount: { type: String, default: "", maxlength: 40 },
+          reason: { type: String, default: "", maxlength: 120 },
+        },
+        { _id: false }
+      ),
+      default: () => ({ amount: "", reason: "" }),
+    },
+    finePrint: { type: [String], default: [] },
+    letter: { type: String, default: "", maxlength: 4000 },
+
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
