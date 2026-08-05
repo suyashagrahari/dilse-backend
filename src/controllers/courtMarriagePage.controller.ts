@@ -1,49 +1,97 @@
 import { Request, Response } from "express";
-import CourtMarriagePage, { IMemory, HeroArt } from "../models/CourtMarriagePage";
+import CourtMarriagePage, {
+  ICertField,
+  IParty,
+  IWitness,
+  CertificateState,
+} from "../models/CourtMarriagePage";
 import { checkPublishAccess } from "../services/publishGate.service";
 
-const MAX_MEMORIES = 6;
-const HERO_ART: HeroArt[] = ["ring", "rose", "bouquet"];
+/** The certificate has exactly three witness columns; unsigned ones stay blank. */
+const WITNESS_SLOTS = 3;
+/** 4–6 dot-leader rows read as a form; more and the block runs into the footer. */
+const MAX_FIELDS = 6;
+const STATES: CertificateState[] = ["draft", "awaiting_witnesses", "registered"];
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
-/**
- * `imageUrl` is left uncapped on purpose: an uploaded photo arrives as an inline
- * base64 data URL, and slicing it would produce a silently broken image.
- */
-const sanitizeMemories = (raw: unknown): IMemory[] => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .slice(0, MAX_MEMORIES)
-    .map((m) => {
-      const src = (m ?? {}) as Record<string, unknown>;
-      return {
-        imageUrl: typeof src.imageUrl === "string" ? src.imageUrl : "",
-        caption: str(src.caption, 140),
-      };
-    })
-    // A polaroid with no picture would render an empty white card — drop it.
-    .filter((m) => m.imageUrl.trim().length > 0);
+const int = (v: unknown, min: number, max: number): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
 };
 
-const sanitizeHeroArt = (raw: unknown): HeroArt =>
-  typeof raw === "string" && HERO_ART.includes(raw as HeroArt) ? (raw as HeroArt) : "ring";
+const sanitizeParty = (raw: unknown): IParty => {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  return {
+    name: str(src.name, 40),
+    age: int(src.age, 0, 120),
+    city: str(src.city, 40),
+  };
+};
+
+const sanitizeFields = (raw: unknown): ICertField[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_FIELDS)
+    .map((f) => {
+      const src = (f ?? {}) as Record<string, unknown>;
+      return { label: str(src.label, 40), value: str(src.value, 24) };
+    })
+    // A row with no label would print as a naked dot leader — drop it.
+    .filter((f) => f.label.trim().length > 0);
+};
+
+/**
+ * SVG path data only: the drawing commands, digits, separators and signs. This
+ * is a strict allowlist, so nothing that is not a path can ride in on the `d`
+ * attribute of a rendered `<path>`.
+ */
+const sanitizePath = (raw: unknown): string => {
+  if (typeof raw !== "string") return "";
+  const trimmed = raw.slice(0, 1200).trim();
+  if (!trimmed) return "";
+  return /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\-+\s]+$/.test(trimmed) ? trimmed : "";
+};
+
+/**
+ * Always returns exactly three slots, padded with blanks. The template relies on
+ * that, and it is also what the (later) witness-signing flow will index into.
+ */
+const sanitizeWitnesses = (raw: unknown): IWitness[] => {
+  const list = Array.isArray(raw) ? raw.slice(0, WITNESS_SLOTS) : [];
+  const out: IWitness[] = list.map((w) => {
+    const src = (w ?? {}) as Record<string, unknown>;
+    return { name: str(src.name, 30), signaturePath: sanitizePath(src.signaturePath) };
+  });
+  while (out.length < WITNESS_SLOTS) out.push({ name: "", signaturePath: "" });
+  return out;
+};
+
+const sanitizeState = (raw: unknown): CertificateState =>
+  typeof raw === "string" && STATES.includes(raw as CertificateState)
+    ? (raw as CertificateState)
+    : "registered";
+
+/** "2026-03-14" only. Anything else is dropped rather than half-parsed. */
+const sanitizeDate = (raw: unknown): string => {
+  const s = str(raw, 24);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+};
 
 type CourtMarriageBody = {
-  senderName?: unknown;
-  recipientName?: unknown;
-  gateTitle?: unknown;
-  gateButtonLabel?: unknown;
-  memoryLaneTitle?: unknown;
-  memories?: unknown;
-  askHeadline?: unknown;
-  heroArt?: unknown;
-  yesLabel?: unknown;
-  celebrationTitle?: unknown;
-  secretNote?: unknown;
-  metDate?: unknown;
-  musicUrl?: unknown;
+  partyA?: unknown;
+  partyB?: unknown;
+  photoUrl?: unknown;
+  certificateNo?: unknown;
+  registeredOn?: unknown;
+  knownSinceDays?: unknown;
+  fields?: unknown;
+  witnesses?: unknown;
+  registrarSignaturePath?: unknown;
+  objectionCount?: unknown;
+  certificateState?: unknown;
   password?: unknown;
 };
 
@@ -53,19 +101,18 @@ export const createCourtMarriagePage = async (req: Request, res: Response): Prom
 
     const page = await CourtMarriagePage.create({
       userId: req.userId,
-      senderName: str(b.senderName, 80),
-      recipientName: str(b.recipientName, 80),
-      gateTitle: str(b.gateTitle, 160),
-      gateButtonLabel: str(b.gateButtonLabel, 60),
-      memoryLaneTitle: str(b.memoryLaneTitle, 160),
-      memories: sanitizeMemories(b.memories),
-      askHeadline: str(b.askHeadline, 200),
-      heroArt: sanitizeHeroArt(b.heroArt),
-      yesLabel: str(b.yesLabel, 60),
-      celebrationTitle: str(b.celebrationTitle, 200),
-      secretNote: str(b.secretNote, 3000),
-      metDate: str(b.metDate, 24),
-      musicUrl: str(b.musicUrl, 2000),
+      partyA: sanitizeParty(b.partyA),
+      partyB: sanitizeParty(b.partyB),
+      // Uncapped on purpose: an uploaded photo arrives as an inline data URL.
+      photoUrl: typeof b.photoUrl === "string" ? b.photoUrl : "",
+      certificateNo: str(b.certificateNo, 24),
+      registeredOn: sanitizeDate(b.registeredOn),
+      knownSinceDays: int(b.knownSinceDays, 0, 100000),
+      fields: sanitizeFields(b.fields),
+      witnesses: sanitizeWitnesses(b.witnesses),
+      registrarSignaturePath: sanitizePath(b.registrarSignaturePath),
+      objectionCount: int(b.objectionCount, 0, 9999),
+      certificateState: sanitizeState(b.certificateState),
       password: str(b.password, 128),
     });
 
@@ -111,19 +158,17 @@ export const updateCourtMarriagePage = async (req: Request, res: Response): Prom
     const page = await CourtMarriagePage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.senderName       !== undefined) page.senderName       = str(b.senderName, 80);
-    if (b.recipientName    !== undefined) page.recipientName    = str(b.recipientName, 80);
-    if (b.gateTitle        !== undefined) page.gateTitle        = str(b.gateTitle, 160);
-    if (b.gateButtonLabel  !== undefined) page.gateButtonLabel  = str(b.gateButtonLabel, 60);
-    if (b.memoryLaneTitle  !== undefined) page.memoryLaneTitle  = str(b.memoryLaneTitle, 160);
-    if (b.memories         !== undefined) page.memories         = sanitizeMemories(b.memories);
-    if (b.askHeadline      !== undefined) page.askHeadline      = str(b.askHeadline, 200);
-    if (b.heroArt          !== undefined) page.heroArt          = sanitizeHeroArt(b.heroArt);
-    if (b.yesLabel         !== undefined) page.yesLabel         = str(b.yesLabel, 60);
-    if (b.celebrationTitle !== undefined) page.celebrationTitle = str(b.celebrationTitle, 200);
-    if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
-    if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
-    if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.partyA                 !== undefined) page.partyA                 = sanitizeParty(b.partyA);
+    if (b.partyB                 !== undefined) page.partyB                 = sanitizeParty(b.partyB);
+    if (b.photoUrl               !== undefined) page.photoUrl               = typeof b.photoUrl === "string" ? b.photoUrl : "";
+    if (b.certificateNo          !== undefined) page.certificateNo          = str(b.certificateNo, 24);
+    if (b.registeredOn           !== undefined) page.registeredOn           = sanitizeDate(b.registeredOn);
+    if (b.knownSinceDays         !== undefined) page.knownSinceDays         = int(b.knownSinceDays, 0, 100000);
+    if (b.fields                 !== undefined) page.fields                 = sanitizeFields(b.fields);
+    if (b.witnesses              !== undefined) page.witnesses              = sanitizeWitnesses(b.witnesses);
+    if (b.registrarSignaturePath !== undefined) page.registrarSignaturePath = sanitizePath(b.registrarSignaturePath);
+    if (b.objectionCount         !== undefined) page.objectionCount         = int(b.objectionCount, 0, 9999);
+    if (b.certificateState       !== undefined) page.certificateState       = sanitizeState(b.certificateState);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
