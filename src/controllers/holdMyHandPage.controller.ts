@@ -1,71 +1,88 @@
 import { Request, Response } from "express";
-import HoldMyHandPage, { IMemory, HeroArt } from "../models/HoldMyHandPage";
+import HoldMyHandPage, { IHoldLine, HoldMode } from "../models/HoldMyHandPage";
 import { checkPublishAccess } from "../services/publishGate.service";
 
-const MAX_MEMORIES = 6;
-const HERO_ART: HeroArt[] = ["ring", "rose", "bouquet"];
+const MAX_HOLD_LINES = 24;
+const MAX_RELEASE_LINES = 16;
+const MAX_GHOSTS = 12;
+
+/** Hold duration bounds. Below 10s the mechanic is pointless; above 5min it is cruel. */
+const MIN_DURATION_MS = 10_000;
+const MAX_DURATION_MS = 300_000;
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
-/**
- * `imageUrl` is left uncapped on purpose: an uploaded photo arrives as an inline
- * base64 data URL, and slicing it would produce a silently broken image.
- */
-const sanitizeMemories = (raw: unknown): IMemory[] => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .slice(0, MAX_MEMORIES)
-    .map((m) => {
-      const src = (m ?? {}) as Record<string, unknown>;
-      return {
-        imageUrl: typeof src.imageUrl === "string" ? src.imageUrl : "",
-        caption: str(src.caption, 140),
-      };
-    })
-    // A polaroid with no picture would render an empty white card — drop it.
-    .filter((m) => m.imageUrl.trim().length > 0);
+const clampDuration = (raw: unknown): number => {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 60_000;
+  return Math.min(MAX_DURATION_MS, Math.max(MIN_DURATION_MS, Math.round(n)));
 };
 
-const sanitizeHeroArt = (raw: unknown): HeroArt =>
-  typeof raw === "string" && HERO_ART.includes(raw as HeroArt) ? (raw as HeroArt) : "ring";
+const sanitizeMode = (raw: unknown): HoldMode => (raw === "evil" ? "evil" : "kind");
+
+const sanitizeHands = (raw: unknown): number => (Number(raw) === 2 ? 2 : 1);
+
+/**
+ * Hold lines are sorted by `atMs` on the way in so the client can walk them
+ * linearly, and any line past the configured duration is dropped — it could
+ * never fire and would only confuse the sender's own preview.
+ */
+const sanitizeHoldLines = (raw: unknown, durationMs: number): IHoldLine[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_HOLD_LINES)
+    .map((l) => {
+      const src = (l ?? {}) as Record<string, unknown>;
+      const at = Number(src.atMs);
+      return {
+        atMs: Number.isFinite(at) ? Math.min(durationMs, Math.max(0, Math.round(at))) : 0,
+        text: str(src.text, 160),
+      };
+    })
+    .filter((l) => l.text.trim().length > 0)
+    .sort((a, b) => a.atMs - b.atMs);
+};
+
+const sanitizeStrings = (raw: unknown, max: number, len: number): string[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, max)
+    .map((s) => str(s, len))
+    .filter((s) => s.trim().length > 0);
+};
 
 type HoldMyHandBody = {
   senderName?: unknown;
   recipientName?: unknown;
-  gateTitle?: unknown;
-  gateButtonLabel?: unknown;
-  memoryLaneTitle?: unknown;
-  memories?: unknown;
-  askHeadline?: unknown;
-  heroArt?: unknown;
-  yesLabel?: unknown;
-  celebrationTitle?: unknown;
-  secretNote?: unknown;
-  metDate?: unknown;
-  musicUrl?: unknown;
+  photoUrl?: unknown;
+  durationMs?: unknown;
+  mode?: unknown;
+  hands?: unknown;
+  holdLines?: unknown;
+  releaseLines?: unknown;
+  ghostFragments?: unknown;
+  letter?: unknown;
   password?: unknown;
 };
 
 export const createHoldMyHandPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const b = req.body as HoldMyHandBody;
+    const durationMs = clampDuration(b.durationMs);
 
     const page = await HoldMyHandPage.create({
       userId: req.userId,
       senderName: str(b.senderName, 80),
       recipientName: str(b.recipientName, 80),
-      gateTitle: str(b.gateTitle, 160),
-      gateButtonLabel: str(b.gateButtonLabel, 60),
-      memoryLaneTitle: str(b.memoryLaneTitle, 160),
-      memories: sanitizeMemories(b.memories),
-      askHeadline: str(b.askHeadline, 200),
-      heroArt: sanitizeHeroArt(b.heroArt),
-      yesLabel: str(b.yesLabel, 60),
-      celebrationTitle: str(b.celebrationTitle, 200),
-      secretNote: str(b.secretNote, 3000),
-      metDate: str(b.metDate, 24),
-      musicUrl: str(b.musicUrl, 2000),
+      photoUrl: typeof b.photoUrl === "string" ? b.photoUrl : "",
+      durationMs,
+      mode: sanitizeMode(b.mode),
+      hands: sanitizeHands(b.hands),
+      holdLines: sanitizeHoldLines(b.holdLines, durationMs),
+      releaseLines: sanitizeStrings(b.releaseLines, MAX_RELEASE_LINES, 160),
+      ghostFragments: sanitizeStrings(b.ghostFragments, MAX_GHOSTS, 200),
+      letter: str(b.letter, 4000),
       password: str(b.password, 128),
     });
 
@@ -111,19 +128,18 @@ export const updateHoldMyHandPage = async (req: Request, res: Response): Promise
     const page = await HoldMyHandPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.senderName       !== undefined) page.senderName       = str(b.senderName, 80);
-    if (b.recipientName    !== undefined) page.recipientName    = str(b.recipientName, 80);
-    if (b.gateTitle        !== undefined) page.gateTitle        = str(b.gateTitle, 160);
-    if (b.gateButtonLabel  !== undefined) page.gateButtonLabel  = str(b.gateButtonLabel, 60);
-    if (b.memoryLaneTitle  !== undefined) page.memoryLaneTitle  = str(b.memoryLaneTitle, 160);
-    if (b.memories         !== undefined) page.memories         = sanitizeMemories(b.memories);
-    if (b.askHeadline      !== undefined) page.askHeadline      = str(b.askHeadline, 200);
-    if (b.heroArt          !== undefined) page.heroArt          = sanitizeHeroArt(b.heroArt);
-    if (b.yesLabel         !== undefined) page.yesLabel         = str(b.yesLabel, 60);
-    if (b.celebrationTitle !== undefined) page.celebrationTitle = str(b.celebrationTitle, 200);
-    if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
-    if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
-    if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.senderName    !== undefined) page.senderName    = str(b.senderName, 80);
+    if (b.recipientName !== undefined) page.recipientName = str(b.recipientName, 80);
+    if (b.photoUrl      !== undefined) page.photoUrl      = typeof b.photoUrl === "string" ? b.photoUrl : "";
+    if (b.durationMs    !== undefined) page.durationMs    = clampDuration(b.durationMs);
+    if (b.mode          !== undefined) page.mode          = sanitizeMode(b.mode);
+    if (b.hands         !== undefined) page.hands         = sanitizeHands(b.hands);
+    // Clamped against the *effective* duration so shortening the hold also
+    // prunes lines that just became unreachable.
+    if (b.holdLines     !== undefined) page.holdLines     = sanitizeHoldLines(b.holdLines, page.durationMs);
+    if (b.releaseLines  !== undefined) page.releaseLines  = sanitizeStrings(b.releaseLines, MAX_RELEASE_LINES, 160);
+    if (b.ghostFragments!== undefined) page.ghostFragments= sanitizeStrings(b.ghostFragments, MAX_GHOSTS, 200);
+    if (b.letter        !== undefined) page.letter        = str(b.letter, 4000);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

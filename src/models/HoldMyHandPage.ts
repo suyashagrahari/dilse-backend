@@ -2,52 +2,47 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-/** One polaroid on the memory lane wall. */
-export interface IMemory {
-  /**
-   * Either a bundled asset path (`/templates/hold-my-hand/…`) or a base64 data URL the
-   * sender uploaded in the EditSheet. Deliberately unbounded — an uploaded photo
-   * arrives inline and a maxlength would silently truncate it into a broken image.
-   */
-  imageUrl: string;
-  /** The line written under the polaroid. Kept short — it sits on one or two lines. */
-  caption: string;
+/** One line that surfaces once `progressMs` reaches `atMs`. */
+export interface IHoldLine {
+  /** Milliseconds of accumulated hold at which this line becomes eligible. */
+  atMs: number;
+  /** The line itself. Short — it sits over the photo for ~2.5s. */
+  text: string;
 }
 
-/** Which bundled animation headlines the holdMyHand moment. */
-export type HeroArt = "ring" | "rose" | "bouquet";
+/**
+ * `kind`  — sincere run. "okay, you can let go now." at the end is honest.
+ * `evil`  — the betrayal. The same line is bait; letting go costs 5x drain.
+ */
+export type HoldMode = "kind" | "evil";
 
 export interface IHoldMyHandPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
-  /** Who is asking. Signs the secret note. */
+  /** Who is asking them to hold on. Signs the letter. */
   senderName: string;
-  /** Who is being asked. Drives every second-person line in the template. */
+  /** Who is holding. Drives every second-person line. */
   recipientName: string;
-  /** Section 1 — the audio gate. */
-  gateTitle: string;
-  gateButtonLabel: string;
-  /** Section 2 — the scrapbook. */
-  memoryLaneTitle: string;
-  memories: IMemory[];
-  /** Section 3 — the ask. */
-  askHeadline: string;
-  heroArt: HeroArt;
-  yesLabel: string;
-  /** Section 4 — the payoff. */
-  celebrationTitle: string;
-  secretNote: string;
   /**
-   * ISO `YYYY-MM-DD` of the day they met. Stored as a string rather than a Date
-   * so it round-trips through JSON untouched and never shifts across timezones.
-   * Empty string hides the day counter.
+   * The face that comes into focus. Either a bundled asset path
+   * (`/templates/hold-my-hand/…`) or a base64 data URL uploaded in the EditSheet.
+   * Deliberately uncapped — an uploaded photo arrives inline and a maxlength
+   * would silently truncate it into a broken image. Empty string → heart fallback.
    */
-  metDate: string;
-  /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
-   */
-  musicUrl: string;
+  photoUrl: string;
+  /** How long they must hold, in ms. Clamped 10s–5min by the controller. */
+  durationMs: number;
+  mode: HoldMode;
+  /** 1 = one finger. 2 = two simultaneous pointers for the whole duration. */
+  hands: number;
+  /** Timed lines shown during a successful hold. */
+  holdLines: IHoldLine[];
+  /** Shown on release, indexed by how many times they have let go. */
+  releaseLines: string[];
+  /** Low-opacity fragments of the letter; one surfaces per 12s of progress. */
+  ghostFragments: string[];
+  /** The full letter, revealed only at 100%. */
+  letter: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -58,10 +53,10 @@ export interface IHoldMyHandPage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
-const memorySchema = new Schema<IMemory>(
+const holdLineSchema = new Schema<IHoldLine>(
   {
-    imageUrl: { type: String, default: "" },
-    caption: { type: String, default: "", maxlength: 140 },
+    atMs: { type: Number, default: 0, min: 0 },
+    text: { type: String, default: "", maxlength: 160 },
   },
   { _id: false }
 );
@@ -72,17 +67,14 @@ const holdMyHandPageSchema = new Schema<IHoldMyHandPage>(
     shareId: { type: String, unique: true, sparse: true, index: true },
     senderName: { type: String, default: "", maxlength: 80 },
     recipientName: { type: String, default: "", maxlength: 80 },
-    gateTitle: { type: String, default: "", maxlength: 160 },
-    gateButtonLabel: { type: String, default: "", maxlength: 60 },
-    memoryLaneTitle: { type: String, default: "", maxlength: 160 },
-    memories: { type: [memorySchema], default: [] },
-    askHeadline: { type: String, default: "", maxlength: 200 },
-    heroArt: { type: String, enum: ["ring", "rose", "bouquet"], default: "ring" },
-    yesLabel: { type: String, default: "", maxlength: 60 },
-    celebrationTitle: { type: String, default: "", maxlength: 200 },
-    secretNote: { type: String, default: "", maxlength: 3000 },
-    metDate: { type: String, default: "", maxlength: 24 },
-    musicUrl: { type: String, default: "", maxlength: 2000 },
+    photoUrl: { type: String, default: "" },
+    durationMs: { type: Number, default: 60000, min: 10000, max: 300000 },
+    mode: { type: String, enum: ["kind", "evil"], default: "kind" },
+    hands: { type: Number, enum: [1, 2], default: 1 },
+    holdLines: { type: [holdLineSchema], default: [] },
+    releaseLines: { type: [String], default: [] },
+    ghostFragments: { type: [String], default: [] },
+    letter: { type: String, default: "", maxlength: 4000 },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
