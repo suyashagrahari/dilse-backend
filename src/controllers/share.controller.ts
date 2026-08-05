@@ -15,6 +15,10 @@ import MissYouGfPage from "../models/MissYouGfPage";
 import BouquetGfPage from "../models/BouquetGfPage";
 import CourtOfLovePage from "../models/CourtOfLovePage";
 import ProposalPage from "../models/ProposalPage";
+import CourtMarriagePage from "../models/CourtMarriagePage";
+import HoldMyHandPage from "../models/HoldMyHandPage";
+import TrainTicketPage from "../models/TrainTicketPage";
+import LegalNoticePage from "../models/LegalNoticePage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -49,6 +53,10 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: BouquetGfPage as mongoose.Model<unknown>, templateType: "bouquet-gf", editorRoute: "/bouquet-gf" },
   { model: CourtOfLovePage as mongoose.Model<unknown>, templateType: "court-of-love", editorRoute: "/court-of-love" },
   { model: ProposalPage as mongoose.Model<unknown>, templateType: "proposal", editorRoute: "/proposal" },
+  { model: CourtMarriagePage as mongoose.Model<unknown>, templateType: "court-marriage", editorRoute: "/court-marriage" },
+  { model: HoldMyHandPage as mongoose.Model<unknown>, templateType: "hold-my-hand", editorRoute: "/hold-my-hand" },
+  { model: TrainTicketPage as mongoose.Model<unknown>, templateType: "train-ticket", editorRoute: "/train-ticket" },
+  { model: LegalNoticePage as mongoose.Model<unknown>, templateType: "legal-notice", editorRoute: "/legal-notice" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
