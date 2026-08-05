@@ -2,52 +2,58 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-/** One polaroid on the memory lane wall. */
-export interface IMemory {
-  /**
-   * Either a bundled asset path (`/templates/court-marriage/…`) or a base64 data URL the
-   * sender uploaded in the EditSheet. Deliberately unbounded — an uploaded photo
-   * arrives inline and a maxlength would silently truncate it into a broken image.
-   */
-  imageUrl: string;
-  /** The line written under the polaroid. Kept short — it sits on one or two lines. */
-  caption: string;
+/** One of the two people being registered. */
+export interface IParty {
+  name: string;
+  age: number;
+  city: string;
 }
 
-/** Which bundled animation headlines the courtMarriage moment. */
-export type HeroArt = "ring" | "rose" | "bouquet";
+/** One dot-leader row in the middle of the certificate. */
+export interface ICertField {
+  label: string;
+  value: string;
+}
+
+/**
+ * A witness slot. `signaturePath` is SVG path data (a 0 0 160 48 viewBox), never
+ * an image — the certificate draws it as a stroked <path> so it stays crisp in
+ * the PNG export. An empty string means "not yet signed", which the template
+ * renders as a blank ruled line.
+ */
+export interface IWitness {
+  name: string;
+  signaturePath: string;
+}
+
+/**
+ * Explicit lifecycle. The witness-signature-collection flow (a `/witness/:token`
+ * page that fills the three slots) lands in a later session; keeping this field
+ * now means that flow only has to flip the state, not migrate the collection.
+ */
+export type CertificateState = "draft" | "awaiting_witnesses" | "registered";
 
 export interface ICourtMarriagePage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
-  /** Who is asking. Signs the secret note. */
-  senderName: string;
-  /** Who is being asked. Drives every second-person line in the template. */
-  recipientName: string;
-  /** Section 1 — the audio gate. */
-  gateTitle: string;
-  gateButtonLabel: string;
-  /** Section 2 — the scrapbook. */
-  memoryLaneTitle: string;
-  memories: IMemory[];
-  /** Section 3 — the ask. */
-  askHeadline: string;
-  heroArt: HeroArt;
-  yesLabel: string;
-  /** Section 4 — the payoff. */
-  celebrationTitle: string;
-  secretNote: string;
+  partyA: IParty;
+  partyB: IParty;
   /**
-   * ISO `YYYY-MM-DD` of the day they met. Stored as a string rather than a Date
-   * so it round-trips through JSON untouched and never shifts across timezones.
-   * Empty string hides the day counter.
+   * The joint photograph. Deliberately unbounded — an uploaded photo arrives as
+   * an inline base64 data URL and a maxlength would silently truncate it into a
+   * broken image. `null`/"" prints the empty "affix joint photograph" frame.
    */
-  metDate: string;
-  /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
-   */
-  musicUrl: string;
+  photoUrl: string;
+  /** e.g. "RH/2026/004402". Also the deterministic seed for the ink jitter. */
+  certificateNo: string;
+  /** ISO `YYYY-MM-DD`, stored as a string so it never shifts across timezones. */
+  registeredOn: string;
+  knownSinceDays: number;
+  fields: ICertField[];
+  witnesses: IWitness[];
+  registrarSignaturePath: string;
+  objectionCount: number;
+  certificateState: CertificateState;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -58,10 +64,28 @@ export interface ICourtMarriagePage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
-const memorySchema = new Schema<IMemory>(
+const partySchema = new Schema<IParty>(
   {
-    imageUrl: { type: String, default: "" },
-    caption: { type: String, default: "", maxlength: 140 },
+    name: { type: String, default: "", maxlength: 40 },
+    age: { type: Number, default: 0, min: 0, max: 120 },
+    city: { type: String, default: "", maxlength: 40 },
+  },
+  { _id: false }
+);
+
+const certFieldSchema = new Schema<ICertField>(
+  {
+    label: { type: String, default: "", maxlength: 40 },
+    value: { type: String, default: "", maxlength: 24 },
+  },
+  { _id: false }
+);
+
+const witnessSchema = new Schema<IWitness>(
+  {
+    name: { type: String, default: "", maxlength: 30 },
+    // Path data for a short cursive scrawl; 1200 is far more than any hand needs.
+    signaturePath: { type: String, default: "", maxlength: 1200 },
   },
   { _id: false }
 );
@@ -70,19 +94,21 @@ const courtMarriagePageSchema = new Schema<ICourtMarriagePage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
-    senderName: { type: String, default: "", maxlength: 80 },
-    recipientName: { type: String, default: "", maxlength: 80 },
-    gateTitle: { type: String, default: "", maxlength: 160 },
-    gateButtonLabel: { type: String, default: "", maxlength: 60 },
-    memoryLaneTitle: { type: String, default: "", maxlength: 160 },
-    memories: { type: [memorySchema], default: [] },
-    askHeadline: { type: String, default: "", maxlength: 200 },
-    heroArt: { type: String, enum: ["ring", "rose", "bouquet"], default: "ring" },
-    yesLabel: { type: String, default: "", maxlength: 60 },
-    celebrationTitle: { type: String, default: "", maxlength: 200 },
-    secretNote: { type: String, default: "", maxlength: 3000 },
-    metDate: { type: String, default: "", maxlength: 24 },
-    musicUrl: { type: String, default: "", maxlength: 2000 },
+    partyA: { type: partySchema, default: () => ({}) },
+    partyB: { type: partySchema, default: () => ({}) },
+    photoUrl: { type: String, default: "" },
+    certificateNo: { type: String, default: "", maxlength: 24 },
+    registeredOn: { type: String, default: "", maxlength: 24 },
+    knownSinceDays: { type: Number, default: 0, min: 0, max: 100000 },
+    fields: { type: [certFieldSchema], default: [] },
+    witnesses: { type: [witnessSchema], default: [] },
+    registrarSignaturePath: { type: String, default: "", maxlength: 1200 },
+    objectionCount: { type: Number, default: 0, min: 0, max: 9999 },
+    certificateState: {
+      type: String,
+      enum: ["draft", "awaiting_witnesses", "registered"],
+      default: "registered",
+    },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
