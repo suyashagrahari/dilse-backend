@@ -78,6 +78,13 @@ export const FLAGS_LIMITS = {
   /** The spec's hard limit — the card is a fixed-width artifact. */
   statement: 70,
   response: 400,
+  /**
+   * The stored value is always an S3 URL — an inline `data:` upload is pushed
+   * to the bucket by the controller before it reaches the document, so this
+   * can be capped. Storing base64 here would bloat both the document and every
+   * shared-page response.
+   */
+  photoUrl: 2000,
   finalCard: 1000,
   password: 128,
   maxCards: 24,
@@ -113,7 +120,7 @@ const senderSchema = new Schema<IFlagsSender>(
   {
     name: { type: String, default: "", maxlength: FLAGS_LIMITS.senderName },
     age: { type: Number, default: FLAGS_LIMITS.minAge, min: FLAGS_LIMITS.minAge, max: FLAGS_LIMITS.maxAge },
-    photoUrl: { type: String, default: "" },
+    photoUrl: { type: String, default: "", maxlength: FLAGS_LIMITS.photoUrl },
     tagline: { type: String, default: "", maxlength: FLAGS_LIMITS.senderTagline },
   },
   { _id: false }

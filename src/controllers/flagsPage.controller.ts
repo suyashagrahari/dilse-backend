@@ -9,6 +9,7 @@ import FlagsPage, {
   type SwipeChoice,
 } from "../models/FlagsPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 
 // ── Sanitisers ───────────────────────────────────────────────────────────────
 // Every value that reaches the document goes through one of these. The client
@@ -19,8 +20,27 @@ import { checkPublishAccess } from "../services/publishGate.service";
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
-/** `photoUrl` is uncapped — it may be an inline base64 data URL. */
-const url = (v: unknown): string => (typeof v === "string" ? v : "");
+/**
+ * The sender's photo arrives either as an already-hosted URL or as an inline
+ * `data:` URL straight from the file picker. Base64 must never reach the
+ * document: it would bloat the page, count against Mongo's 16MB ceiling, and be
+ * re-sent verbatim in every shared-page response. Push it to S3 and keep the
+ * link.
+ *
+ * Failure yields "" rather than a 500 — the photo is optional and the deck
+ * falls back to an initial card, so a bad upload must not block publishing.
+ */
+const resolvePhotoUrl = async (v: unknown, userId?: string): Promise<string> => {
+  if (typeof v !== "string" || !v) return "";
+  if (!v.startsWith("data:")) return v.slice(0, FLAGS_LIMITS.photoUrl);
+  try {
+    const uploaded = await uploadImageDataUrl(v, `flags/users/${String(userId || "anonymous")}/sender`);
+    return uploaded.url.slice(0, FLAGS_LIMITS.photoUrl);
+  } catch (err) {
+    console.error("flags: sender photo upload failed", err);
+    return "";
+  }
+};
 
 const clampAge = (v: unknown): number => {
   const n = typeof v === "number" ? v : Number(v);
@@ -31,12 +51,12 @@ const clampAge = (v: unknown): number => {
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
   typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
 
-const sanitizeSender = (raw: unknown): IFlagsSender => {
+const sanitizeSender = async (raw: unknown, userId?: string): Promise<IFlagsSender> => {
   const s = (raw ?? {}) as Record<string, unknown>;
   return {
     name: str(s.name, FLAGS_LIMITS.senderName),
     age: clampAge(s.age),
-    photoUrl: url(s.photoUrl),
+    photoUrl: await resolvePhotoUrl(s.photoUrl, userId),
     tagline: str(s.tagline, FLAGS_LIMITS.senderTagline),
   };
 };
@@ -87,7 +107,7 @@ export const createFlagsPage = async (req: Request, res: Response): Promise<void
 
     const page = await FlagsPage.create({
       userId: req.userId,
-      sender: sanitizeSender(b.sender),
+      sender: await sanitizeSender(b.sender, req.userId),
       recipientName: str(b.recipientName, FLAGS_LIMITS.recipientName),
       cards: sanitizeCards(b.cards),
       finalCard: str(b.finalCard, FLAGS_LIMITS.finalCard),
@@ -136,7 +156,7 @@ export const updateFlagsPage = async (req: Request, res: Response): Promise<void
     const page = await FlagsPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.sender        !== undefined) page.sender        = sanitizeSender(b.sender);
+    if (b.sender        !== undefined) page.sender        = await sanitizeSender(b.sender, req.userId);
     if (b.recipientName !== undefined) page.recipientName = str(b.recipientName, FLAGS_LIMITS.recipientName);
     if (b.cards         !== undefined) page.cards         = sanitizeCards(b.cards);
     if (b.finalCard     !== undefined) page.finalCard     = str(b.finalCard, FLAGS_LIMITS.finalCard);
