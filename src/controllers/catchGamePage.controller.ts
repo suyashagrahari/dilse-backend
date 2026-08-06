@@ -1,50 +1,118 @@
 import { Request, Response } from "express";
-import CatchPage, { IMemory, HeroArt } from "../models/CatchPage";
+import CatchPage, { CATCH_LIMITS, IBadItem, IGoodItem } from "../models/CatchPage";
+import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
-
-const MAX_MEMORIES = 6;
-const HERO_ART: HeroArt[] = ["ring", "rose", "bouquet"];
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
 /**
- * `imageUrl` is left uncapped on purpose: an uploaded photo arrives as an inline
- * base64 data URL, and slicing it would produce a silently broken image.
+ * Every write goes through an explicit allow-list of the seven content fields.
+ * `req.body` is never spread into the document, so a caller cannot smuggle in
+ * `userId`, `isPublished`, `shareId`, `viewCount` or `passwordRaw`.
  */
-const sanitizeMemories = (raw: unknown): IMemory[] => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .slice(0, MAX_MEMORIES)
-    .map((m) => {
-      const src = (m ?? {}) as Record<string, unknown>;
-      return {
-        imageUrl: typeof src.imageUrl === "string" ? src.imageUrl : "",
-        caption: str(src.caption, 140),
-      };
-    })
-    // A polaroid with no picture would render an empty white card — drop it.
-    .filter((m) => m.imageUrl.trim().length > 0);
+type CatchBody = {
+  recipientName?: unknown;
+  senderName?: unknown;
+  faceUrl?: unknown;
+  goodItems?: unknown;
+  badItems?: unknown;
+  closingLine?: unknown;
+  durationMs?: unknown;
+  password?: unknown;
 };
 
-const sanitizeHeroArt = (raw: unknown): HeroArt =>
-  typeof raw === "string" && HERO_ART.includes(raw as HeroArt) ? (raw as HeroArt) : "ring";
+/**
+ * Ids have to be unique: the client reports which lines never arrived by id, so
+ * a duplicate would make a missed line indistinguishable from a caught one.
+ * Blank or repeated ids are replaced with a positional fallback.
+ */
+const uniqueId = (raw: unknown, used: Set<string>, prefix: string, index: number): string => {
+  const candidate = str(raw, CATCH_LIMITS.itemId).trim();
+  const id = candidate && !used.has(candidate) ? candidate : `${prefix}${index + 1}`;
+  // Even the fallback can collide if the caller sent literal "g1" out of order.
+  let final = id;
+  let n = index + 1;
+  while (used.has(final)) final = `${prefix}${++n}`;
+  used.add(final);
+  return final;
+};
 
-type CatchBody = {
-  senderName?: unknown;
-  recipientName?: unknown;
-  gateTitle?: unknown;
-  gateButtonLabel?: unknown;
-  memoryLaneTitle?: unknown;
-  memories?: unknown;
-  askHeadline?: unknown;
-  heroArt?: unknown;
-  yesLabel?: unknown;
-  celebrationTitle?: unknown;
-  secretNote?: unknown;
-  metDate?: unknown;
-  musicUrl?: unknown;
-  password?: unknown;
+/**
+ * A good item exists to deliver one line. One with no line would spawn as a
+ * catchable object that hands over nothing, so it is dropped — the same rule
+ * `dbToCatchData` applies on the client.
+ */
+const sanitizeGoodItems = (raw: unknown): IGoodItem[] => {
+  if (!Array.isArray(raw)) return [];
+  const used = new Set<string>();
+  const out: IGoodItem[] = [];
+  for (const entry of raw.slice(0, CATCH_LIMITS.maxRawItems)) {
+    if (out.length >= CATCH_LIMITS.maxGoodItems) break;
+    const src = (entry ?? {}) as Record<string, unknown>;
+    const line = str(src.line, CATCH_LIMITS.itemLine).trim();
+    if (!line) continue;
+    out.push({
+      id: uniqueId(src.id, used, "g", out.length),
+      emoji: str(src.emoji, CATCH_LIMITS.emoji) || "💛",
+      label: str(src.label, CATCH_LIMITS.itemLabel),
+      line,
+    });
+  }
+  return out;
+};
+
+/** A hazard with neither an emoji nor a label would fall as an invisible blank. */
+const sanitizeBadItems = (raw: unknown): IBadItem[] => {
+  if (!Array.isArray(raw)) return [];
+  const used = new Set<string>();
+  const out: IBadItem[] = [];
+  for (const entry of raw.slice(0, CATCH_LIMITS.maxRawItems)) {
+    if (out.length >= CATCH_LIMITS.maxBadItems) break;
+    const src = (entry ?? {}) as Record<string, unknown>;
+    const emoji = str(src.emoji, CATCH_LIMITS.emoji).trim();
+    const label = str(src.label, CATCH_LIMITS.itemLabel).trim();
+    if (!emoji && !label) continue;
+    out.push({
+      id: uniqueId(src.id, used, "b", out.length),
+      emoji: emoji || "🚩",
+      label,
+    });
+  }
+  return out;
+};
+
+/** Clamped here as well as on the client — the client is not a security boundary. */
+const clampDuration = (raw: unknown): number => {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return CATCH_LIMITS.durationDefaultMs;
+  return Math.min(
+    CATCH_LIMITS.durationMaxMs,
+    Math.max(CATCH_LIMITS.durationMinMs, Math.round(n))
+  );
+};
+
+/**
+ * The paddle photo arrives either as an ordinary URL or as an inline base64 data
+ * URL straight out of the EditSheet file picker. A data URL is uploaded to S3 and
+ * only the resulting link is stored — persisting the base64 would bloat the
+ * document toward Mongo's 16MB ceiling.
+ *
+ * An upload failure is logged and yields an empty string rather than a 500: the
+ * face is optional by design (the client falls back to an initial), so a bad
+ * photo must not block the whole page from being saved.
+ */
+const resolveFaceUrl = async (raw: unknown, userId: unknown): Promise<string> => {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (!value) return "";
+  if (!value.startsWith("data:")) return value.slice(0, CATCH_LIMITS.faceUrl);
+  try {
+    const uploaded = await uploadImageDataUrl(value, `catch/users/${String(userId || "anonymous")}/face`);
+    return uploaded.url.slice(0, CATCH_LIMITS.faceUrl);
+  } catch (error) {
+    console.error("Catch face upload error:", error);
+    return "";
+  }
 };
 
 export const createCatchPage = async (req: Request, res: Response): Promise<void> => {
@@ -53,20 +121,14 @@ export const createCatchPage = async (req: Request, res: Response): Promise<void
 
     const page = await CatchPage.create({
       userId: req.userId,
-      senderName: str(b.senderName, 80),
-      recipientName: str(b.recipientName, 80),
-      gateTitle: str(b.gateTitle, 160),
-      gateButtonLabel: str(b.gateButtonLabel, 60),
-      memoryLaneTitle: str(b.memoryLaneTitle, 160),
-      memories: sanitizeMemories(b.memories),
-      askHeadline: str(b.askHeadline, 200),
-      heroArt: sanitizeHeroArt(b.heroArt),
-      yesLabel: str(b.yesLabel, 60),
-      celebrationTitle: str(b.celebrationTitle, 200),
-      secretNote: str(b.secretNote, 3000),
-      metDate: str(b.metDate, 24),
-      musicUrl: str(b.musicUrl, 2000),
-      password: str(b.password, 128),
+      recipientName: str(b.recipientName, CATCH_LIMITS.name),
+      senderName: str(b.senderName, CATCH_LIMITS.name),
+      faceUrl: await resolveFaceUrl(b.faceUrl, req.userId),
+      goodItems: sanitizeGoodItems(b.goodItems),
+      badItems: sanitizeBadItems(b.badItems),
+      closingLine: str(b.closingLine, CATCH_LIMITS.closingLine),
+      durationMs: clampDuration(b.durationMs),
+      password: str(b.password, CATCH_LIMITS.password),
     });
 
     res.status(201).json({ success: true, data: page });
@@ -111,21 +173,17 @@ export const updateCatchPage = async (req: Request, res: Response): Promise<void
     const page = await CatchPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.senderName       !== undefined) page.senderName       = str(b.senderName, 80);
-    if (b.recipientName    !== undefined) page.recipientName    = str(b.recipientName, 80);
-    if (b.gateTitle        !== undefined) page.gateTitle        = str(b.gateTitle, 160);
-    if (b.gateButtonLabel  !== undefined) page.gateButtonLabel  = str(b.gateButtonLabel, 60);
-    if (b.memoryLaneTitle  !== undefined) page.memoryLaneTitle  = str(b.memoryLaneTitle, 160);
-    if (b.memories         !== undefined) page.memories         = sanitizeMemories(b.memories);
-    if (b.askHeadline      !== undefined) page.askHeadline      = str(b.askHeadline, 200);
-    if (b.heroArt          !== undefined) page.heroArt          = sanitizeHeroArt(b.heroArt);
-    if (b.yesLabel         !== undefined) page.yesLabel         = str(b.yesLabel, 60);
-    if (b.celebrationTitle !== undefined) page.celebrationTitle = str(b.celebrationTitle, 200);
-    if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
-    if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
-    if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.recipientName !== undefined) page.recipientName = str(b.recipientName, CATCH_LIMITS.name);
+    if (b.senderName    !== undefined) page.senderName    = str(b.senderName, CATCH_LIMITS.name);
+    if (b.faceUrl       !== undefined) page.faceUrl       = await resolveFaceUrl(b.faceUrl, req.userId);
+    if (b.goodItems     !== undefined) page.goodItems     = sanitizeGoodItems(b.goodItems);
+    if (b.badItems      !== undefined) page.badItems      = sanitizeBadItems(b.badItems);
+    if (b.closingLine   !== undefined) page.closingLine   = str(b.closingLine, CATCH_LIMITS.closingLine);
+    if (b.durationMs    !== undefined) page.durationMs    = clampDuration(b.durationMs);
     // Empty password on update means "unchanged", not "remove the gate".
-    if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
+    if (b.password !== undefined && str(b.password, CATCH_LIMITS.password) !== "") {
+      page.password = str(b.password, CATCH_LIMITS.password);
+    }
 
     await page.save();
     res.json({ success: true, data: page });
