@@ -77,8 +77,10 @@ const sanitizePerson = (raw: unknown): { name: string; city: string } => {
  * gets exactly the keys its `kind` calls for and no others — a voice segment
  * with a stray empty `youtubeId` would not narrow cleanly on the client.
  *
- * A voice segment with no playable audio and a song segment with no id are both
- * dropped: a dead segment is a stall, and a radio that stalls is off.
+ * A song segment with no valid id is dropped, because a dead player mid-show is
+ * a stall and a radio that stalls is off. A voice segment is kept if it has
+ * EITHER audio or a caption — see the note at the voice branch for why treating
+ * missing audio alone as fatal quietly destroyed the mic-denial fallback.
  */
 const sanitizeSegments = async (raw: unknown, userId: unknown): Promise<ISegment[]> => {
   if (!Array.isArray(raw)) return [];
@@ -89,13 +91,28 @@ const sanitizeSegments = async (raw: unknown, userId: unknown): Promise<ISegment
 
     if (src.kind === "voice") {
       const audioUrl = await resolveAudioUrl(src.audioUrl, userId);
-      if (!audioUrl) continue;
+      const caption = str(src.caption, DEDICATION_LIMITS.caption).trim();
+
+      // A voice segment survives on EITHER audio or a caption.
+      //
+      // Dropping it whenever `audioUrl` is empty deleted the mic-denial
+      // fallback outright: the sender who cannot record types their dedication
+      // as text, is shown "Saved!", publishes, and that segment is simply gone
+      // with nothing said. The show is meant to read the caption aloud on
+      // screen in exactly that case, so a caption alone is a real segment.
+      //
+      // It also silently swallowed upload failures, since resolveAudioUrl
+      // catches, logs server-side, and returns "". Those are now distinguished:
+      // a caption keeps the segment alive as a card, and a segment with neither
+      // audio nor caption is the only one still dropped, because that one
+      // genuinely has nothing to play or show.
+      if (!audioUrl && !caption) continue;
+
       const segment: ISegment = {
         kind: "voice",
         audioUrl,
         durationMs: num(src.durationMs, 0, DEDICATION_LIMITS.maxDurationMs) ?? 0,
       };
-      const caption = str(src.caption, DEDICATION_LIMITS.caption).trim();
       if (caption) segment.caption = caption;
       out.push(segment);
       continue;
