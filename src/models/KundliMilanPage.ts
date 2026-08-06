@@ -2,53 +2,54 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-/** One polaroid on the memory lane wall. */
-export interface IMemory {
-  /**
-   * Either a bundled asset path (`/templates/kundli-milan/…`) or a base64 data URL the
-   * sender uploaded in the EditSheet. Deliberately unbounded — an uploaded photo
-   * arrives inline and a maxlength would silently truncate it into a broken image.
-   */
-  imageUrl: string;
-  /** The line written under the polaroid. Kept short — it sits on one or two lines. */
-  caption: string;
+/**
+ * One of the two people being matched.
+ *
+ * `dob` and `tob` are STRINGS, deliberately — the client treats them as
+ * timezone-free calendar/clock values (`YYYY-MM-DD` and `HH:mm`) and feeds them
+ * verbatim into a deterministic seed. Storing them as `Date` would shift them by
+ * the server's UTC offset and silently change every generated report.
+ */
+export interface IPerson {
+  name: string;
+  /** ISO `YYYY-MM-DD`. */
+  dob: string;
+  /** `HH:mm`, 24h. Empty string = time of birth not stated. */
+  tob: string;
+  /** Free text, decorative. */
+  pob: string;
 }
 
-/** Which bundled animation headlines the kundliMilan moment. */
-export type HeroArt = "ring" | "rose" | "bouquet";
+/** The eight kootas of Ashtakoota Milan, in canonical order. */
+export const KOOTA_NAMES = [
+  "varna", "vashya", "tara", "yoni", "grahaMaitri", "gana", "bhakoot", "nadi",
+] as const;
+
+export type KootaName = (typeof KOOTA_NAMES)[number];
+
+/**
+ * Sender-written one-liners that override the generated reading for a koota.
+ * Every key is optional; an absent or empty key means "use the generated line".
+ * Modelled as a fixed sub-document rather than a `Map` because `toObject()` on a
+ * Mongoose Map yields a real `Map`, which `JSON.stringify` serialises to `{}` —
+ * the shared GET would silently drop every custom reading.
+ */
+export type ICustomReadings = Partial<Record<KootaName, string>>;
 
 export interface IKundliMilanPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
-  /** Who is asking. Signs the secret note. */
-  senderName: string;
-  /** Who is being asked. Drives every second-person line in the template. */
-  recipientName: string;
-  /** Section 1 — the audio gate. */
-  gateTitle: string;
-  gateButtonLabel: string;
-  /** Section 2 — the scrapbook. */
-  memoryLaneTitle: string;
-  memories: IMemory[];
-  /** Section 3 — the ask. */
-  askHeadline: string;
-  heroArt: HeroArt;
-  yesLabel: string;
-  /** Section 4 — the payoff. */
-  celebrationTitle: string;
-  secretNote: string;
-  /**
-   * ISO `YYYY-MM-DD` of the day they met. Stored as a string rather than a Date
-   * so it round-trips through JSON untouched and never shifts across timezones.
-   * Empty string hides the day counter.
-   */
-  metDate: string;
-  /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
-   */
-  musicUrl: string;
-  // Security & meta
+  // ── Content ───────────────────────────────────────────────────────────────
+  groom: IPerson;
+  bride: IPerson;
+  /** ISO `YYYY-MM-DD`. Fixes the report year; stored as a string, never a Date. */
+  issuedOn: string;
+  customReadings: ICustomReadings;
+  /** 2-4 upayas, rendered verbatim and in order. */
+  remedies: string[];
+  /** Invented, comic. Never a real astrologer. */
+  astrologerName: string;
+  // ── Security & meta ───────────────────────────────────────────────────────
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -58,10 +59,26 @@ export interface IKundliMilanPage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
-const memorySchema = new Schema<IMemory>(
+const personSchema = new Schema<IPerson>(
   {
-    imageUrl: { type: String, default: "" },
-    caption: { type: String, default: "", maxlength: 140 },
+    name: { type: String, default: "", maxlength: 80 },
+    dob: { type: String, default: "", maxlength: 24 },
+    tob: { type: String, default: "", maxlength: 8 },
+    pob: { type: String, default: "", maxlength: 120 },
+  },
+  { _id: false }
+);
+
+const customReadingsSchema = new Schema<ICustomReadings>(
+  {
+    varna: { type: String, maxlength: 240 },
+    vashya: { type: String, maxlength: 240 },
+    tara: { type: String, maxlength: 240 },
+    yoni: { type: String, maxlength: 240 },
+    grahaMaitri: { type: String, maxlength: 240 },
+    gana: { type: String, maxlength: 240 },
+    bhakoot: { type: String, maxlength: 240 },
+    nadi: { type: String, maxlength: 240 },
   },
   { _id: false }
 );
@@ -70,19 +87,13 @@ const kundliMilanPageSchema = new Schema<IKundliMilanPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
-    senderName: { type: String, default: "", maxlength: 80 },
-    recipientName: { type: String, default: "", maxlength: 80 },
-    gateTitle: { type: String, default: "", maxlength: 160 },
-    gateButtonLabel: { type: String, default: "", maxlength: 60 },
-    memoryLaneTitle: { type: String, default: "", maxlength: 160 },
-    memories: { type: [memorySchema], default: [] },
-    askHeadline: { type: String, default: "", maxlength: 200 },
-    heroArt: { type: String, enum: ["ring", "rose", "bouquet"], default: "ring" },
-    yesLabel: { type: String, default: "", maxlength: 60 },
-    celebrationTitle: { type: String, default: "", maxlength: 200 },
-    secretNote: { type: String, default: "", maxlength: 3000 },
-    metDate: { type: String, default: "", maxlength: 24 },
-    musicUrl: { type: String, default: "", maxlength: 2000 },
+    // Content
+    groom: { type: personSchema, default: () => ({}) },
+    bride: { type: personSchema, default: () => ({}) },
+    issuedOn: { type: String, default: "", maxlength: 24 },
+    customReadings: { type: customReadingsSchema, default: () => ({}) },
+    remedies: { type: [String], default: [] },
+    astrologerName: { type: String, default: "", maxlength: 80 },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
