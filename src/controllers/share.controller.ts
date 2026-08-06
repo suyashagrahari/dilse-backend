@@ -23,6 +23,10 @@ import KundliMilanPage from "../models/KundliMilanPage";
 import VendingMachinePage from "../models/VendingMachinePage";
 import CatchPage from "../models/CatchPage";
 import FlagsPage from "../models/FlagsPage";
+import DateInvitationPage from "../models/DateInvitationPage";
+import PhotoPuzzlePage from "../models/PhotoPuzzlePage";
+import LoveflixPage from "../models/LoveflixPage";
+import RewindPage from "../models/RewindPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -65,6 +69,10 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: VendingMachinePage as mongoose.Model<unknown>, templateType: "vending-machine", editorRoute: "/vending-machine" },
   { model: CatchPage as mongoose.Model<unknown>, templateType: "catch", editorRoute: "/catch" },
   { model: FlagsPage as mongoose.Model<unknown>, templateType: "flags", editorRoute: "/flags" },
+  { model: DateInvitationPage as mongoose.Model<unknown>, templateType: "date-invitation", editorRoute: "/date-invitation" },
+  { model: PhotoPuzzlePage as mongoose.Model<unknown>, templateType: "photo-puzzle", editorRoute: "/photo-puzzle" },
+  { model: LoveflixPage as mongoose.Model<unknown>, templateType: "loveflix", editorRoute: "/loveflix" },
+  { model: RewindPage as mongoose.Model<unknown>, templateType: "rewind", editorRoute: "/rewind" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
@@ -78,7 +86,11 @@ export const getSharedPage = async (req: Request, res: Response): Promise<void> 
         { new: true }
       );
       if (page) {
-        const pageObj = (page as { toObject: () => Record<string, unknown> }).toObject();
+        // flattenMaps: rewind stores `answers` as a Map, and `JSON.stringify`
+        // of a Map is `{}`. A no-op for every other model — none store a Map.
+        const pageObj = (
+          page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
+        ).toObject({ flattenMaps: true });
         const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
         const hasPassword = !!pageObj.password;
 
@@ -356,7 +368,11 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
         { new: true }
       );
       if (page) {
-        const pageObj = (page as { toObject: () => Record<string, unknown> }).toObject();
+        // flattenMaps: rewind stores `answers` as a Map, and `JSON.stringify`
+        // of a Map is `{}`. A no-op for every other model — none store a Map.
+        const pageObj = (
+          page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
+        ).toObject({ flattenMaps: true });
         const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
         const hasPassword = !!pageObj.password;
         res.json({
