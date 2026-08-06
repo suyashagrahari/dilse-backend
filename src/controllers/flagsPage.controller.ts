@@ -1,51 +1,105 @@
 import { Request, Response } from "express";
-import FlagsPage, { IMemory, HeroArt } from "../models/FlagsPage";
+import FlagsPage, {
+  CARD_KINDS,
+  FLAGS_LIMITS,
+  SWIPE_CHOICES,
+  type CardKind,
+  type IFlagCard,
+  type IFlagsSender,
+  type SwipeChoice,
+} from "../models/FlagsPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 
-const MAX_MEMORIES = 6;
-const HERO_ART: HeroArt[] = ["ring", "rose", "bouquet"];
+// ── Sanitisers ───────────────────────────────────────────────────────────────
+// Every value that reaches the document goes through one of these. The client
+// validates the same rules for UX, but the client is not a security boundary:
+// the 70-char statement cap and the two enums are re-applied here, and the
+// update payload is assembled from an explicit allow-list rather than req.body.
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
 /**
- * `imageUrl` is left uncapped on purpose: an uploaded photo arrives as an inline
- * base64 data URL, and slicing it would produce a silently broken image.
+ * The sender's photo arrives either as an already-hosted URL or as an inline
+ * `data:` URL straight from the file picker. Base64 must never reach the
+ * document: it would bloat the page, count against Mongo's 16MB ceiling, and be
+ * re-sent verbatim in every shared-page response. Push it to S3 and keep the
+ * link.
+ *
+ * Failure yields "" rather than a 500 — the photo is optional and the deck
+ * falls back to an initial card, so a bad upload must not block publishing.
  */
-const sanitizeMemories = (raw: unknown): IMemory[] => {
+const resolvePhotoUrl = async (v: unknown, userId?: string): Promise<string> => {
+  if (typeof v !== "string" || !v) return "";
+  if (!v.startsWith("data:")) return v.slice(0, FLAGS_LIMITS.photoUrl);
+  try {
+    const uploaded = await uploadImageDataUrl(v, `flags/users/${String(userId || "anonymous")}/sender`);
+    return uploaded.url.slice(0, FLAGS_LIMITS.photoUrl);
+  } catch (err) {
+    console.error("flags: sender photo upload failed", err);
+    return "";
+  }
+};
+
+const clampAge = (v: unknown): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return FLAGS_LIMITS.minAge;
+  return Math.min(FLAGS_LIMITS.maxAge, Math.max(FLAGS_LIMITS.minAge, Math.round(n)));
+};
+
+const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
+  typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+
+const sanitizeSender = async (raw: unknown, userId?: string): Promise<IFlagsSender> => {
+  const s = (raw ?? {}) as Record<string, unknown>;
+  return {
+    name: str(s.name, FLAGS_LIMITS.senderName),
+    age: clampAge(s.age),
+    photoUrl: await resolvePhotoUrl(s.photoUrl, userId),
+    tagline: str(s.tagline, FLAGS_LIMITS.senderTagline),
+  };
+};
+
+/**
+ * A card with no statement renders as a blank white card in the deck, so it is
+ * dropped rather than stored — this mirrors `dbToFlagsData` on the client, which
+ * returns null for the same case.
+ */
+const sanitizeCards = (raw: unknown): IFlagCard[] => {
   if (!Array.isArray(raw)) return [];
   return raw
-    .slice(0, MAX_MEMORIES)
-    .map((m) => {
-      const src = (m ?? {}) as Record<string, unknown>;
+    .slice(0, FLAGS_LIMITS.maxCards)
+    .map((c, i): IFlagCard => {
+      const src = (c ?? {}) as Record<string, unknown>;
+      const r = (src.responses ?? {}) as Record<string, unknown>;
       return {
-        imageUrl: typeof src.imageUrl === "string" ? src.imageUrl : "",
-        caption: str(src.caption, 140),
+        id: str(src.id, FLAGS_LIMITS.cardId) || `c${i + 1}`,
+        statement: str(src.statement, FLAGS_LIMITS.statement),
+        truth: oneOf<SwipeChoice>(src.truth, SWIPE_CHOICES, "red"),
+        kind: oneOf<CardKind>(src.kind, CARD_KINDS, "flag"),
+        // All three directions always exist. Empty is legal (sincere cards have
+        // no comeback); missing is not, because the flip would show nothing.
+        responses: {
+          red: str(r.red, FLAGS_LIMITS.response),
+          green: str(r.green, FLAGS_LIMITS.response),
+          complicated: str(r.complicated, FLAGS_LIMITS.response),
+        },
       };
     })
-    // A polaroid with no picture would render an empty white card — drop it.
-    .filter((m) => m.imageUrl.trim().length > 0);
+    .filter((c) => c.statement.trim().length > 0);
 };
 
-const sanitizeHeroArt = (raw: unknown): HeroArt =>
-  typeof raw === "string" && HERO_ART.includes(raw as HeroArt) ? (raw as HeroArt) : "ring";
-
+/** The explicit allow-list. Nothing outside these keys is ever read. */
 type FlagsBody = {
-  senderName?: unknown;
+  sender?: unknown;
   recipientName?: unknown;
-  gateTitle?: unknown;
-  gateButtonLabel?: unknown;
-  memoryLaneTitle?: unknown;
-  memories?: unknown;
-  askHeadline?: unknown;
-  heroArt?: unknown;
-  yesLabel?: unknown;
-  celebrationTitle?: unknown;
-  secretNote?: unknown;
-  metDate?: unknown;
-  musicUrl?: unknown;
+  cards?: unknown;
+  finalCard?: unknown;
   password?: unknown;
 };
+
+// ── Handlers ─────────────────────────────────────────────────────────────────
 
 export const createFlagsPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -53,20 +107,11 @@ export const createFlagsPage = async (req: Request, res: Response): Promise<void
 
     const page = await FlagsPage.create({
       userId: req.userId,
-      senderName: str(b.senderName, 80),
-      recipientName: str(b.recipientName, 80),
-      gateTitle: str(b.gateTitle, 160),
-      gateButtonLabel: str(b.gateButtonLabel, 60),
-      memoryLaneTitle: str(b.memoryLaneTitle, 160),
-      memories: sanitizeMemories(b.memories),
-      askHeadline: str(b.askHeadline, 200),
-      heroArt: sanitizeHeroArt(b.heroArt),
-      yesLabel: str(b.yesLabel, 60),
-      celebrationTitle: str(b.celebrationTitle, 200),
-      secretNote: str(b.secretNote, 3000),
-      metDate: str(b.metDate, 24),
-      musicUrl: str(b.musicUrl, 2000),
-      password: str(b.password, 128),
+      sender: await sanitizeSender(b.sender, req.userId),
+      recipientName: str(b.recipientName, FLAGS_LIMITS.recipientName),
+      cards: sanitizeCards(b.cards),
+      finalCard: str(b.finalCard, FLAGS_LIMITS.finalCard),
+      password: str(b.password, FLAGS_LIMITS.password),
     });
 
     res.status(201).json({ success: true, data: page });
@@ -111,21 +156,15 @@ export const updateFlagsPage = async (req: Request, res: Response): Promise<void
     const page = await FlagsPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.senderName       !== undefined) page.senderName       = str(b.senderName, 80);
-    if (b.recipientName    !== undefined) page.recipientName    = str(b.recipientName, 80);
-    if (b.gateTitle        !== undefined) page.gateTitle        = str(b.gateTitle, 160);
-    if (b.gateButtonLabel  !== undefined) page.gateButtonLabel  = str(b.gateButtonLabel, 60);
-    if (b.memoryLaneTitle  !== undefined) page.memoryLaneTitle  = str(b.memoryLaneTitle, 160);
-    if (b.memories         !== undefined) page.memories         = sanitizeMemories(b.memories);
-    if (b.askHeadline      !== undefined) page.askHeadline      = str(b.askHeadline, 200);
-    if (b.heroArt          !== undefined) page.heroArt          = sanitizeHeroArt(b.heroArt);
-    if (b.yesLabel         !== undefined) page.yesLabel         = str(b.yesLabel, 60);
-    if (b.celebrationTitle !== undefined) page.celebrationTitle = str(b.celebrationTitle, 200);
-    if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
-    if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
-    if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.sender        !== undefined) page.sender        = await sanitizeSender(b.sender, req.userId);
+    if (b.recipientName !== undefined) page.recipientName = str(b.recipientName, FLAGS_LIMITS.recipientName);
+    if (b.cards         !== undefined) page.cards         = sanitizeCards(b.cards);
+    if (b.finalCard     !== undefined) page.finalCard     = str(b.finalCard, FLAGS_LIMITS.finalCard);
     // Empty password on update means "unchanged", not "remove the gate".
-    if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
+    if (b.password !== undefined) {
+      const next = str(b.password, FLAGS_LIMITS.password);
+      if (next !== "") page.password = next;
+    }
 
     await page.save();
     res.json({ success: true, data: page });
