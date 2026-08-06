@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import LegalNoticePage, {
   IDemand,
   DemandResponse,
@@ -20,6 +20,31 @@ const MAX_FINE_PRINT = 8;
  */
 const DEMAND_TEXT_MAX = 60;
 const GROUNDS_MAX = 80;
+
+/**
+ * Proof that the caller cleared the password gate.
+ *
+ * `respond` has to be public — the addressee records accept/contest without an
+ * account, that is the whole mechanic — but "public" must not mean "unguarded".
+ * Without this, knowing the share link was enough to mutate a password-protected
+ * notice, which quietly defeats the gate: the sender set a password, and someone
+ * who never entered it could still tick and contest their demands.
+ *
+ * So `verify` hands back an opaque token and `respond` demands it. Derived by
+ * HMAC over the shareId and the stored password hash, which means it is
+ * stateless (no schema change, no session store) and self-invalidating — change
+ * the password and every previously issued token stops matching.
+ */
+const unlockToken = (shareId: string, passwordHash: string): string =>
+  createHmac("sha256", process.env.JWT_SECRET || "legal-notice-unlock")
+    .update(`${shareId}:${passwordHash}`)
+    .digest("hex");
+
+/** Constant-time compare that cannot throw on a length mismatch. */
+const tokenMatches = (expected: string, given: unknown): boolean => {
+  if (typeof given !== "string" || given.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+};
 
 /** The line the fine print must always carry, whatever the sender typed. */
 const REQUIRED_FINE_PRINT =
@@ -293,10 +318,15 @@ export const verifyLegalNoticePagePassword = async (req: Request, res: Response)
     const { password } = req.body;
     const page = await LegalNoticePage.findOne({ shareId: req.params.shareId, isPublished: true });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
-    if (!page.password) { res.json({ success: true, verified: true }); return; }
+    if (!page.password) { res.json({ success: true, verified: true, unlockToken: "" }); return; }
     const match = await page.comparePassword(typeof password === "string" ? password : "");
     if (match) {
-      res.json({ success: true, verified: true });
+      // The token is what lets the addressee POST /respond afterwards.
+      res.json({
+        success: true,
+        verified: true,
+        unlockToken: unlockToken(String(req.params.shareId), page.password),
+      });
     } else {
       res.status(401).json({ success: false, verified: false, error: "Wrong password" });
     }
@@ -333,6 +363,13 @@ export const recordLegalNoticeResponse = async (req: Request, res: Response): Pr
       isPublished: true,
     })) as ILegalNoticePage | null;
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    // A password-protected notice may only be responded to by someone who
+    // actually cleared the gate. Knowing the share link is not enough.
+    if (page.password && !tokenMatches(unlockToken(String(req.params.shareId), page.password), b.unlockToken)) {
+      res.status(401).json({ success: false, error: "Notice is locked" });
+      return;
+    }
 
     const list: IDemand[] = target === "counter" ? page.counterNotice.demands : page.demands;
     const demand = list.find((d) => d.id === demandId);
