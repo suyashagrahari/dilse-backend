@@ -2,52 +2,58 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-/** One polaroid on the memory lane wall. */
-export interface IMemory {
-  /**
-   * Either a bundled asset path (`/templates/vending-machine/…`) or a base64 data URL the
-   * sender uploaded in the EditSheet. Deliberately unbounded — an uploaded photo
-   * arrives inline and a maxlength would silently truncate it into a broken image.
-   */
-  imageUrl: string;
-  /** The line written under the polaroid. Kept short — it sits on one or two lines. */
-  caption: string;
+/** What a slot dispenses. Mirrors `SlotKind` in the client contract. */
+export type SlotKind = "compliment" | "memory" | "voucher" | "empty";
+export const SLOT_KINDS: SlotKind[] = ["compliment", "memory", "voucher", "empty"];
+
+/** One tray position on the 3×6 grid. */
+export interface ISlot {
+  /** "A1".."C6". */
+  code: string;
+  kind: SlotKind;
+  /** Shelf-tag text. The client truncates it for display; the full string lives here. */
+  label: string;
+  /** The full text revealed on the coupon. */
+  payload: string;
+  /** In credits. Almost always 1. */
+  price: number;
+  soldOut: boolean;
+  /** Exactly one slot jams. Normalised client-side and re-checked in the controller. */
+  sticks: boolean;
 }
 
-/** Which bundled animation headlines the vendingMachine moment. */
-export type HeroArt = "ring" | "rose" | "bouquet";
+/**
+ * What the recipient typed to earn a credit.
+ *
+ * PRIVACY — these are personal lines written by someone who never signed up for
+ * anything. They belong to the SENDER only. The path is `select: false` so that
+ * no query returns it unless it explicitly asks: that includes the FROZEN
+ * generic `GET /share/:shareId` dispatcher in `share.controller.ts`, which
+ * strips only `password`/`passwordRaw` and would otherwise hand every answer
+ * straight back to the next visitor.
+ */
+export interface ICreditAnswer {
+  prompt: string;
+  answer: string;
+  createdAt: Date;
+}
 
 export interface IVendingMachinePage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
-  /** Who is asking. Signs the secret note. */
+  /** Stencilled across the machine's header. */
+  machineName: string;
+  /** Who stocked the machine. */
   senderName: string;
-  /** Who is being asked. Drives every second-person line in the template. */
+  /** Who is standing in front of it. */
   recipientName: string;
-  /** Section 1 — the audio gate. */
-  gateTitle: string;
-  gateButtonLabel: string;
-  /** Section 2 — the scrapbook. */
-  memoryLaneTitle: string;
-  memories: IMemory[];
-  /** Section 3 — the ask. */
-  askHeadline: string;
-  heroArt: HeroArt;
-  yesLabel: string;
-  /** Section 4 — the payoff. */
-  celebrationTitle: string;
-  secretNote: string;
-  /**
-   * ISO `YYYY-MM-DD` of the day they met. Stored as a string rather than a Date
-   * so it round-trips through JSON untouched and never shifts across timezones.
-   * Empty string hides the day counter.
-   */
-  metDate: string;
-  /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
-   */
-  musicUrl: string;
+  slots: ISlot[];
+  /** Questions the machine asks to earn credit. */
+  creditPrompts: string[];
+  /** Scrolling LED copy. */
+  displayIdleMessages: string[];
+  /** Sender-only. `select: false` — see ICreditAnswer. */
+  creditAnswers: ICreditAnswer[];
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -58,10 +64,24 @@ export interface IVendingMachinePage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
-const memorySchema = new Schema<IMemory>(
+const slotSchema = new Schema<ISlot>(
   {
-    imageUrl: { type: String, default: "" },
-    caption: { type: String, default: "", maxlength: 140 },
+    code: { type: String, default: "", maxlength: 4 },
+    kind: { type: String, enum: SLOT_KINDS, default: "compliment" },
+    label: { type: String, default: "", maxlength: 60 },
+    payload: { type: String, default: "", maxlength: 600 },
+    price: { type: Number, default: 1, min: 0, max: 9 },
+    soldOut: { type: Boolean, default: false },
+    sticks: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
+const creditAnswerSchema = new Schema<ICreditAnswer>(
+  {
+    prompt: { type: String, default: "", maxlength: 200 },
+    answer: { type: String, default: "", maxlength: 100 },
+    createdAt: { type: Date, default: Date.now },
   },
   { _id: false }
 );
@@ -70,19 +90,14 @@ const vendingMachinePageSchema = new Schema<IVendingMachinePage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
+    machineName: { type: String, default: "", maxlength: 60 },
     senderName: { type: String, default: "", maxlength: 80 },
     recipientName: { type: String, default: "", maxlength: 80 },
-    gateTitle: { type: String, default: "", maxlength: 160 },
-    gateButtonLabel: { type: String, default: "", maxlength: 60 },
-    memoryLaneTitle: { type: String, default: "", maxlength: 160 },
-    memories: { type: [memorySchema], default: [] },
-    askHeadline: { type: String, default: "", maxlength: 200 },
-    heroArt: { type: String, enum: ["ring", "rose", "bouquet"], default: "ring" },
-    yesLabel: { type: String, default: "", maxlength: 60 },
-    celebrationTitle: { type: String, default: "", maxlength: 200 },
-    secretNote: { type: String, default: "", maxlength: 3000 },
-    metDate: { type: String, default: "", maxlength: 24 },
-    musicUrl: { type: String, default: "", maxlength: 2000 },
+    slots: { type: [slotSchema], default: [] },
+    creditPrompts: { type: [String], default: [] },
+    displayIdleMessages: { type: [String], default: [] },
+    // Sender-only. Never selected by default — the public reader must not see it.
+    creditAnswers: { type: [creditAnswerSchema], default: [], select: false },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

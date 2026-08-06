@@ -8,14 +8,19 @@ import {
   publishVendingMachinePage,
   getSharedVendingMachinePage,
   verifyVendingMachinePagePassword,
+  recordVendingMachineAnswer,
   deleteVendingMachinePage,
 } from "../controllers/vendingMachinePage.controller";
 
 const router = Router();
 
-// Public — the recipient's two entry points. Must stay above `protect`.
+// Public — the recipient's entry points. Must stay above `protect`.
+// `answer` is public by design: the recipient earns a credit by typing, without
+// an account. It is guarded by the unlockToken issued by `verify` whenever the
+// page carries a password — see the controller.
 router.get("/share/:shareId", getSharedVendingMachinePage);
 router.post("/share/:shareId/verify", verifyVendingMachinePagePassword);
+router.post("/share/:shareId/answer", recordVendingMachineAnswer);
 
 router.use(protect);
 router.post("/", createVendingMachinePage);
