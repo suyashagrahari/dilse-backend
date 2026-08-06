@@ -27,10 +27,17 @@ import DateInvitationPage from "../models/DateInvitationPage";
 import PhotoPuzzlePage from "../models/PhotoPuzzlePage";
 import LoveflixPage from "../models/LoveflixPage";
 import RewindPage from "../models/RewindPage";
+import StreakPage from "../models/StreakPage";
+import DedicationPage from "../models/DedicationPage";
+import SearchedPage from "../models/SearchedPage";
+import CapsulePage from "../models/CapsulePage";
+import UsPage from "../models/UsPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
 import mongoose from "mongoose";
+import { projectSharedCapsuleData } from "./capsulePage.controller";
+import { projectSharedStreakData } from "./streakPage.controller";
 
 function detectDevice(ua: string): "mobile" | "desktop" | "tablet" {
   if (/tablet|ipad|playbook|silk/i.test(ua)) return "tablet";
@@ -42,6 +49,19 @@ interface TemplateLookup {
   model: mongoose.Model<unknown>;
   templateType: string;
   editorRoute: string;
+  /**
+   * Optional per-template narrowing of what a share response may contain.
+   *
+   * Two templates withhold content that they hold in the same document as the
+   * content they show — capsule's sealed predictions and streak's sealed notes.
+   * Their own `/share/:shareId` routes enforce that, but this generic resolver
+   * walks every model and would otherwise hand the whole document over through
+   * a different URL. The hook runs on the already-password-stripped object.
+   */
+  projectShared?: (
+    data: Record<string, unknown>,
+    req: Request
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
 }
 
 const TEMPLATE_LOOKUPS: TemplateLookup[] = [
@@ -73,25 +93,45 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: PhotoPuzzlePage as mongoose.Model<unknown>, templateType: "photo-puzzle", editorRoute: "/photo-puzzle" },
   { model: LoveflixPage as mongoose.Model<unknown>, templateType: "loveflix", editorRoute: "/loveflix" },
   { model: RewindPage as mongoose.Model<unknown>, templateType: "rewind", editorRoute: "/rewind" },
+  {
+    model: StreakPage as mongoose.Model<unknown>,
+    templateType: "streak",
+    editorRoute: "/streak",
+    // Today's sealed note stays out of the body until the viewer checks in.
+    // The reader's side is resolved from the `?k=` token, not asserted.
+    projectShared: (data, req) => projectSharedStreakData(data, req),
+  },
+  { model: DedicationPage as mongoose.Model<unknown>, templateType: "dedication", editorRoute: "/dedication" },
+  { model: SearchedPage as mongoose.Model<unknown>, templateType: "searched", editorRoute: "/searched" },
+  {
+    model: CapsulePage as mongoose.Model<unknown>,
+    templateType: "capsule",
+    editorRoute: "/capsule",
+    // Counts and authorship only until server time passes `opensOn`.
+    projectShared: (data) => projectSharedCapsuleData(data),
+  },
+  { model: UsPage as mongoose.Model<unknown>, templateType: "us", editorRoute: "/us" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareId } = req.params;
 
-    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
+    for (const { model, templateType, editorRoute, projectShared } of TEMPLATE_LOOKUPS) {
       const page = await model.findOneAndUpdate(
         { shareId, isPublished: true },
         { $inc: { viewCount: 1 } },
         { new: true }
       );
       if (page) {
-        // flattenMaps: rewind stores `answers` as a Map, and `JSON.stringify`
-        // of a Map is `{}`. A no-op for every other model — none store a Map.
+        // flattenMaps: rewind stores `answers` and searched stores
+        // `alternateResults` as Maps, and `JSON.stringify` of a Map is `{}`.
+        // A no-op for every other model — none store a Map.
         const pageObj = (
           page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
         ).toObject({ flattenMaps: true });
-        const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
+        const { password: _pw, passwordRaw: _pr, ...stripped } = pageObj;
+        const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
 
         // Track page view for analytics (fire-and-forget)
@@ -361,19 +401,21 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
       res.status(404).json({ success: false, error: "User not found" });
       return;
     }
-    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
+    for (const { model, templateType, editorRoute, projectShared } of TEMPLATE_LOOKUPS) {
       const page = await model.findOneAndUpdate(
         { shareId, isPublished: true, userId: user._id },
         { $inc: { viewCount: 1 } },
         { new: true }
       );
       if (page) {
-        // flattenMaps: rewind stores `answers` as a Map, and `JSON.stringify`
-        // of a Map is `{}`. A no-op for every other model — none store a Map.
+        // flattenMaps: rewind stores `answers` and searched stores
+        // `alternateResults` as Maps, and `JSON.stringify` of a Map is `{}`.
+        // A no-op for every other model — none store a Map.
         const pageObj = (
           page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
         ).toObject({ flattenMaps: true });
-        const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
+        const { password: _pw, passwordRaw: _pr, ...stripped } = pageObj;
+        const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
         res.json({
           success: true,
