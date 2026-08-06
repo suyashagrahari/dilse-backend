@@ -1,49 +1,67 @@
 import { Request, Response } from "express";
-import KundliMilanPage, { IMemory, HeroArt } from "../models/KundliMilanPage";
+import KundliMilanPage, {
+  ICustomReadings,
+  IPerson,
+  KOOTA_NAMES,
+} from "../models/KundliMilanPage";
 import { checkPublishAccess } from "../services/publishGate.service";
 
-const MAX_MEMORIES = 6;
-const HERO_ART: HeroArt[] = ["ring", "rose", "bouquet"];
+/** The client renders at most four upayas; anything beyond that is dropped. */
+const MAX_REMEDIES = 4;
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
 /**
- * `imageUrl` is left uncapped on purpose: an uploaded photo arrives as an inline
- * base64 data URL, and slicing it would produce a silently broken image.
+ * Birth dates/times stay strings end to end. Only the *shape* is enforced here —
+ * a malformed value is kept verbatim rather than coerced, because the client's
+ * engine already falls back to noon for an unparseable `tob` and the report must
+ * stay deterministic for whatever the sender actually typed.
  */
-const sanitizeMemories = (raw: unknown): IMemory[] => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .slice(0, MAX_MEMORIES)
-    .map((m) => {
-      const src = (m ?? {}) as Record<string, unknown>;
-      return {
-        imageUrl: typeof src.imageUrl === "string" ? src.imageUrl : "",
-        caption: str(src.caption, 140),
-      };
-    })
-    // A polaroid with no picture would render an empty white card — drop it.
-    .filter((m) => m.imageUrl.trim().length > 0);
+const sanitizePerson = (raw: unknown): IPerson => {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  return {
+    name: str(src.name, 80),
+    dob: str(src.dob, 24),
+    tob: str(src.tob, 8),
+    pob: str(src.pob, 120),
+  };
 };
 
-const sanitizeHeroArt = (raw: unknown): HeroArt =>
-  typeof raw === "string" && HERO_ART.includes(raw as HeroArt) ? (raw as HeroArt) : "ring";
+/**
+ * Only the eight known koota keys survive. An unknown key in the payload would
+ * otherwise become a stray path on the sub-document.
+ */
+const sanitizeCustomReadings = (raw: unknown): ICustomReadings => {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  const out: ICustomReadings = {};
+  for (const k of KOOTA_NAMES) {
+    const v = src[k];
+    if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, 240);
+  }
+  return out;
+};
 
+const sanitizeRemedies = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => str(r, 200).trim())
+    .filter((r) => r.length > 0)
+    .slice(0, MAX_REMEDIES);
+};
+
+/**
+ * The explicit allow-list. Nothing outside these keys is ever read off
+ * `req.body`, so `isPublished`, `viewCount`, `userId`, `shareId` and
+ * `passwordRaw` cannot be mass-assigned.
+ */
 type KundliMilanBody = {
-  senderName?: unknown;
-  recipientName?: unknown;
-  gateTitle?: unknown;
-  gateButtonLabel?: unknown;
-  memoryLaneTitle?: unknown;
-  memories?: unknown;
-  askHeadline?: unknown;
-  heroArt?: unknown;
-  yesLabel?: unknown;
-  celebrationTitle?: unknown;
-  secretNote?: unknown;
-  metDate?: unknown;
-  musicUrl?: unknown;
+  groom?: unknown;
+  bride?: unknown;
+  issuedOn?: unknown;
+  customReadings?: unknown;
+  remedies?: unknown;
+  astrologerName?: unknown;
   password?: unknown;
 };
 
@@ -53,19 +71,12 @@ export const createKundliMilanPage = async (req: Request, res: Response): Promis
 
     const page = await KundliMilanPage.create({
       userId: req.userId,
-      senderName: str(b.senderName, 80),
-      recipientName: str(b.recipientName, 80),
-      gateTitle: str(b.gateTitle, 160),
-      gateButtonLabel: str(b.gateButtonLabel, 60),
-      memoryLaneTitle: str(b.memoryLaneTitle, 160),
-      memories: sanitizeMemories(b.memories),
-      askHeadline: str(b.askHeadline, 200),
-      heroArt: sanitizeHeroArt(b.heroArt),
-      yesLabel: str(b.yesLabel, 60),
-      celebrationTitle: str(b.celebrationTitle, 200),
-      secretNote: str(b.secretNote, 3000),
-      metDate: str(b.metDate, 24),
-      musicUrl: str(b.musicUrl, 2000),
+      groom: sanitizePerson(b.groom),
+      bride: sanitizePerson(b.bride),
+      issuedOn: str(b.issuedOn, 24),
+      customReadings: sanitizeCustomReadings(b.customReadings),
+      remedies: sanitizeRemedies(b.remedies),
+      astrologerName: str(b.astrologerName, 80),
       password: str(b.password, 128),
     });
 
@@ -111,19 +122,12 @@ export const updateKundliMilanPage = async (req: Request, res: Response): Promis
     const page = await KundliMilanPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.senderName       !== undefined) page.senderName       = str(b.senderName, 80);
-    if (b.recipientName    !== undefined) page.recipientName    = str(b.recipientName, 80);
-    if (b.gateTitle        !== undefined) page.gateTitle        = str(b.gateTitle, 160);
-    if (b.gateButtonLabel  !== undefined) page.gateButtonLabel  = str(b.gateButtonLabel, 60);
-    if (b.memoryLaneTitle  !== undefined) page.memoryLaneTitle  = str(b.memoryLaneTitle, 160);
-    if (b.memories         !== undefined) page.memories         = sanitizeMemories(b.memories);
-    if (b.askHeadline      !== undefined) page.askHeadline      = str(b.askHeadline, 200);
-    if (b.heroArt          !== undefined) page.heroArt          = sanitizeHeroArt(b.heroArt);
-    if (b.yesLabel         !== undefined) page.yesLabel         = str(b.yesLabel, 60);
-    if (b.celebrationTitle !== undefined) page.celebrationTitle = str(b.celebrationTitle, 200);
-    if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
-    if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
-    if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.groom          !== undefined) page.groom          = sanitizePerson(b.groom);
+    if (b.bride          !== undefined) page.bride          = sanitizePerson(b.bride);
+    if (b.issuedOn       !== undefined) page.issuedOn       = str(b.issuedOn, 24);
+    if (b.customReadings !== undefined) page.customReadings = sanitizeCustomReadings(b.customReadings);
+    if (b.remedies       !== undefined) page.remedies       = sanitizeRemedies(b.remedies);
+    if (b.astrologerName !== undefined) page.astrologerName = str(b.astrologerName, 80);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
