@@ -2,53 +2,63 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-/** One polaroid on the memory lane wall. */
-export interface IMemory {
-  /**
-   * Either a bundled asset path (`/templates/flags/…`) or a base64 data URL the
-   * sender uploaded in the EditSheet. Deliberately unbounded — an uploaded photo
-   * arrives inline and a maxlength would silently truncate it into a broken image.
-   */
-  imageUrl: string;
-  /** The line written under the polaroid. Kept short — it sits on one or two lines. */
-  caption: string;
+/** LEFT = red flag, RIGHT = green flag, UP = it's complicated. */
+export type SwipeChoice = "red" | "green" | "complicated";
+export const SWIPE_CHOICES: SwipeChoice[] = ["red", "green", "complicated"];
+
+/** 'sincere' cards are drag-locked in the viewer and break the comedy rhythm. */
+export type CardKind = "flag" | "sincere";
+export const CARD_KINDS: CardKind[] = ["flag", "sincere"];
+
+/**
+ * One authored response per swipe direction.
+ *
+ * This is the whole mechanic: the direction the recipient swipes selects which
+ * of these three strings is revealed on the flip. Modelled as a fixed nested
+ * schema rather than a Map so the three paths are guaranteed to exist on every
+ * card — a missing key would flip to a blank card back and read as a bug.
+ * Empty strings are legal (a `sincere` card has no comeback for any direction).
+ */
+export interface IFlagResponses {
+  red: string;
+  green: string;
+  complicated: string;
 }
 
-/** Which bundled animation headlines the flags moment. */
-export type HeroArt = "ring" | "rose" | "bouquet";
+export interface IFlagCard {
+  /** Stable client-side id. Used to key swipe results back to the card. */
+  id: string;
+  /** About the SENDER. Hard-capped at 70 chars so it never wraps off the card. */
+  statement: string;
+  responses: IFlagResponses;
+  /** The sender's actual verdict. Drives the "HE SAYS" strip and OVERRULED. */
+  truth: SwipeChoice;
+  kind: CardKind;
+}
+
+/** The profile header the deck is judging. */
+export interface IFlagsSender {
+  name: string;
+  age: number;
+  /**
+   * Either an https URL or an inline base64 data URL uploaded in the EditSheet.
+   * Deliberately uncapped — a maxlength would silently truncate a data URL into
+   * a broken image. Empty string means the viewer draws its initials fallback.
+   */
+  photoUrl: string;
+  tagline: string;
+}
 
 export interface IFlagsPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
-  /** Who is asking. Signs the secret note. */
-  senderName: string;
-  /** Who is being asked. Drives every second-person line in the template. */
+  // ── Content ──────────────────────────────────────────────────────────────
+  sender: IFlagsSender;
   recipientName: string;
-  /** Section 1 — the audio gate. */
-  gateTitle: string;
-  gateButtonLabel: string;
-  /** Section 2 — the scrapbook. */
-  memoryLaneTitle: string;
-  memories: IMemory[];
-  /** Section 3 — the ask. */
-  askHeadline: string;
-  heroArt: HeroArt;
-  yesLabel: string;
-  /** Section 4 — the payoff. */
-  celebrationTitle: string;
-  secretNote: string;
-  /**
-   * ISO `YYYY-MM-DD` of the day they met. Stored as a string rather than a Date
-   * so it round-trips through JSON untouched and never shifts across timezones.
-   * Empty string hides the day counter.
-   */
-  metDate: string;
-  /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
-   */
-  musicUrl: string;
-  // Security & meta
+  cards: IFlagCard[];
+  /** The closing sentence. Not a game. */
+  finalCard: string;
+  // ── Security & meta ──────────────────────────────────────────────────────
   password: string;
   passwordRaw: string;
   viewCount: number;
@@ -58,10 +68,53 @@ export interface IFlagsPage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
-const memorySchema = new Schema<IMemory>(
+// Field caps. Exported so the controller sanitiser and the schema validators
+// can never drift apart.
+export const FLAGS_LIMITS = {
+  senderName: 80,
+  senderTagline: 240,
+  recipientName: 80,
+  cardId: 64,
+  /** The spec's hard limit — the card is a fixed-width artifact. */
+  statement: 70,
+  response: 400,
+  finalCard: 1000,
+  password: 128,
+  maxCards: 24,
+  minAge: 13,
+  maxAge: 120,
+} as const;
+
+const responsesSchema = new Schema<IFlagResponses>(
   {
-    imageUrl: { type: String, default: "" },
-    caption: { type: String, default: "", maxlength: 140 },
+    red: { type: String, default: "", maxlength: FLAGS_LIMITS.response },
+    green: { type: String, default: "", maxlength: FLAGS_LIMITS.response },
+    complicated: { type: String, default: "", maxlength: FLAGS_LIMITS.response },
+  },
+  { _id: false }
+);
+
+const cardSchema = new Schema<IFlagCard>(
+  {
+    id: { type: String, default: "", maxlength: FLAGS_LIMITS.cardId },
+    statement: { type: String, default: "", maxlength: FLAGS_LIMITS.statement },
+    responses: {
+      type: responsesSchema,
+      required: true,
+      default: () => ({ red: "", green: "", complicated: "" }),
+    },
+    truth: { type: String, enum: SWIPE_CHOICES, default: "red" },
+    kind: { type: String, enum: CARD_KINDS, default: "flag" },
+  },
+  { _id: false }
+);
+
+const senderSchema = new Schema<IFlagsSender>(
+  {
+    name: { type: String, default: "", maxlength: FLAGS_LIMITS.senderName },
+    age: { type: Number, default: FLAGS_LIMITS.minAge, min: FLAGS_LIMITS.minAge, max: FLAGS_LIMITS.maxAge },
+    photoUrl: { type: String, default: "" },
+    tagline: { type: String, default: "", maxlength: FLAGS_LIMITS.senderTagline },
   },
   { _id: false }
 );
@@ -70,19 +123,15 @@ const flagsPageSchema = new Schema<IFlagsPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
-    senderName: { type: String, default: "", maxlength: 80 },
-    recipientName: { type: String, default: "", maxlength: 80 },
-    gateTitle: { type: String, default: "", maxlength: 160 },
-    gateButtonLabel: { type: String, default: "", maxlength: 60 },
-    memoryLaneTitle: { type: String, default: "", maxlength: 160 },
-    memories: { type: [memorySchema], default: [] },
-    askHeadline: { type: String, default: "", maxlength: 200 },
-    heroArt: { type: String, enum: ["ring", "rose", "bouquet"], default: "ring" },
-    yesLabel: { type: String, default: "", maxlength: 60 },
-    celebrationTitle: { type: String, default: "", maxlength: 200 },
-    secretNote: { type: String, default: "", maxlength: 3000 },
-    metDate: { type: String, default: "", maxlength: 24 },
-    musicUrl: { type: String, default: "", maxlength: 2000 },
+    // Content
+    sender: {
+      type: senderSchema,
+      required: true,
+      default: () => ({ name: "", age: FLAGS_LIMITS.minAge, photoUrl: "", tagline: "" }),
+    },
+    recipientName: { type: String, default: "", maxlength: FLAGS_LIMITS.recipientName },
+    cards: { type: [cardSchema], default: [] },
+    finalCard: { type: String, default: "", maxlength: FLAGS_LIMITS.finalCard },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
