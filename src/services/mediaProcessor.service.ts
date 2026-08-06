@@ -107,7 +107,9 @@ export const uploadImageDataUrl = async (dataUrl: string, folder: string): Promi
 export const uploadAudioDataUrl = async (dataUrl: string, folder: string): Promise<UploadedMediaResult> => {
   const parsed = parseDataUrl(dataUrl);
   if (!parsed || !ALLOWED_AUDIO_MIMES.has(parsed.mimeType)) {
-    throw new Error("Unsupported audio format. Use mp3 or wav.");
+    throw new Error(
+      "Unsupported audio format. Accepted: mp3, wav, webm, ogg, mp4, aac, m4a."
+    );
   }
   if (parsed.buffer.length > MAX_AUDIO_BYTES) {
     throw new Error("Audio file is too large. Max supported size is 20MB.");
@@ -151,7 +153,9 @@ export const uploadAudioBuffer = async (
 ): Promise<UploadedMediaResult> => {
   const normalizedMime = mimeType.toLowerCase();
   if (!ALLOWED_AUDIO_MIMES.has(normalizedMime)) {
-    throw new Error("Unsupported audio format. Use mp3 or wav.");
+    throw new Error(
+      "Unsupported audio format. Accepted: mp3, wav, webm, ogg, mp4, aac, m4a."
+    );
   }
   if (buffer.length > MAX_AUDIO_BYTES) {
     throw new Error("Audio file is too large. Max supported size is 20MB.");
