@@ -19,6 +19,10 @@ import CourtMarriagePage from "../models/CourtMarriagePage";
 import HoldMyHandPage from "../models/HoldMyHandPage";
 import TrainTicketPage from "../models/TrainTicketPage";
 import LegalNoticePage from "../models/LegalNoticePage";
+import KundliMilanPage from "../models/KundliMilanPage";
+import VendingMachinePage from "../models/VendingMachinePage";
+import CatchPage from "../models/CatchPage";
+import FlagsPage from "../models/FlagsPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -57,6 +61,10 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: HoldMyHandPage as mongoose.Model<unknown>, templateType: "hold-my-hand", editorRoute: "/hold-my-hand" },
   { model: TrainTicketPage as mongoose.Model<unknown>, templateType: "train-ticket", editorRoute: "/train-ticket" },
   { model: LegalNoticePage as mongoose.Model<unknown>, templateType: "legal-notice", editorRoute: "/legal-notice" },
+  { model: KundliMilanPage as mongoose.Model<unknown>, templateType: "kundli-milan", editorRoute: "/kundli-milan" },
+  { model: VendingMachinePage as mongoose.Model<unknown>, templateType: "vending-machine", editorRoute: "/vending-machine" },
+  { model: CatchPage as mongoose.Model<unknown>, templateType: "catch", editorRoute: "/catch" },
+  { model: FlagsPage as mongoose.Model<unknown>, templateType: "flags", editorRoute: "/flags" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {

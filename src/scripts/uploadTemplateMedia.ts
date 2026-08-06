@@ -28,10 +28,21 @@ import { env } from "../config/env";
 const DRY = process.argv.includes("--dry");
 const ONLY = (process.argv.find((a) => a.startsWith("--only=")) || "").split("=")[1] || "";
 
-const SLUGS = ["court-marriage", "hold-my-hand", "train-ticket", "legal-notice"];
-
 /** Source of truth, intentionally outside the repos. */
 const MEDIA_SRC = path.resolve(process.cwd(), "../media-src/templates");
+
+/**
+ * Discovered from the filesystem rather than hardcoded — adding a template
+ * means creating media-src/templates/<slug>/, nothing else.
+ */
+function discoverSlugs(): string[] {
+  if (!fs.existsSync(MEDIA_SRC)) return [];
+  return fs
+    .readdirSync(MEDIA_SRC, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .map((e) => e.name)
+    .sort();
+}
 const KEY_ROOT = `${(env.S3_UPLOAD_PREFIX || "gifts-media").replace(/\/+$/, "")}/templates`;
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -61,8 +72,9 @@ async function main() {
     process.exit(1);
   }
 
-  const slugs = ONLY ? SLUGS.filter((s) => s === ONLY) : SLUGS;
-  if (slugs.length === 0) { console.error(`❌ Unknown --only=${ONLY}. Known: ${SLUGS.join(", ")}`); process.exit(1); }
+  const known = discoverSlugs();
+  const slugs = ONLY ? known.filter((s) => s === ONLY) : known;
+  if (slugs.length === 0) { console.error(`❌ Unknown --only=${ONLY}. Found: ${known.join(", ") || "(none)"}`); process.exit(1); }
 
   const s3 = new S3Client({
     region: env.S3_REGION,
