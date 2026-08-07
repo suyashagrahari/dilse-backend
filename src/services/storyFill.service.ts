@@ -33,6 +33,48 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 // up catching a *different* AiUnavailableError than the one that was thrown.
 export { AiRefusedError, AiUnavailableError, sanitizeStory };
 
+/** The model ran out of room before finishing its JSON. Retryable. */
+export class AiTruncatedError extends Error {}
+
+/**
+ * How many output tokens this template's answer actually needs.
+ *
+ * The old formula was 180 tokens per field with a 4000 ceiling, and it was
+ * wrong in the way that matters: it counted FIELDS, not the characters those
+ * fields are allowed to hold. A fifteen-field form of long prose needs far more
+ * room than a thirty-field form of one-line labels, and `court-marriage` duly
+ * blew through it and came back as truncated, unparseable JSON.
+ *
+ * Budgeting on the declared limits fixes that. The chars-per-token divisor is
+ * deliberately 1 rather than the ~4 that holds for English: these stories come
+ * back in Hindi, Tamil, Bengali and Urdu as often as not, and Devanagari costs
+ * roughly one token per character. Budgeting for English and then answering in
+ * Hindi is exactly how the truncation happened.
+ *
+ * Over-budgeting is free — `max_tokens` is a ceiling, not a reservation, and
+ * nothing is billed for room left unused.
+ */
+export function outputBudget(schema: AiFillTemplateSchema): number {
+  let chars = 0;
+  for (const field of schema.fields) {
+    chars += field.kind === "list"
+      ? effectiveMax(field) * effectiveItemMax(field)
+      : effectiveMax(field);
+    // The path is echoed back as a JSON key, plus quoting and punctuation.
+    chars += field.path.length + 8;
+  }
+  // Two floors, because the declared limits alone are not a safe budget.
+  //
+  // `court-marriage` declares ~1450 characters across 15 fields, so a pure
+  // limits-based budget lands UNDER the ceiling it actually blew through. The
+  // model does not always respect the stated maximums, and a form that asks
+  // for fifteen short lines still needs room for fifteen slightly-too-long
+  // ones plus its keys.
+  const fromLimits = Math.ceil(chars) + 900;
+  const fromFieldCount = schema.fields.length * 250 + 800;
+  return Math.min(16000, Math.max(1200, fromLimits, fromFieldCount));
+}
+
 export interface FillPeople {
   userName?: string;
   partnerName?: string;
@@ -288,17 +330,66 @@ const STOPWORDS = new Set([
  * already terms and are kept whole. Anything under three characters goes —
  * a two-letter fragment matches half the page.
  */
-function buildBannedTerms(modelKeywords: unknown[], avoid: string[]): string[] {
+export function buildBannedTerms(
+  modelKeywords: unknown[],
+  avoid: string[],
+  /**
+   * The people the page is about. NEVER banned, however they appear in an
+   * avoid sentence.
+   *
+   * Splitting "Meera's exam results" into words yields `meera's`, and with
+   * prefix matching that silently drops every field containing "Meera's
+   * favourite coffee" — most of the page, for a sender whose only request was
+   * to leave one subject out. The excluded subject is the thing, never the
+   * person the gift is for.
+   */
+  names: (string | undefined)[] = []
+): string[] {
   const out = new Set<string>();
 
+  const protectedNames = new Set<string>();
+  for (const n of names) {
+    const t = (n ?? "").trim().toLowerCase();
+    if (!t) continue;
+    for (const part of t.split(/\s+/)) {
+      if (!part) continue;
+      protectedNames.add(part);
+      protectedNames.add(`${part}'s`);
+      protectedNames.add(`${part}'`);
+      protectedNames.add(`${part}s`);
+    }
+  }
+  const isProtected = (t: string) =>
+    protectedNames.has(t) || protectedNames.has(t.replace(/'s?$/, ""));
+
+  /**
+   * Add a term and its singular stem.
+   *
+   * Prefix matching in `mentionsBanned` gets plurals for free — `exam` covers
+   * "exams" — but only in that direction. The stored term is whatever the
+   * sender happened to write, and "Meera's exam results" yields the PLURAL
+   * `results`, which no amount of prefix matching turns into "result". So the
+   * stem is added too, and the two together cover both directions.
+   */
+  const add = (raw: string, minLength: number) => {
+    const t = raw.trim().toLowerCase();
+    if (t.length < minLength || STOPWORDS.has(t) || isProtected(t)) return;
+    out.add(t);
+
+    const stem = t.endsWith("es") && t.length >= 6
+      ? t.slice(0, -2)
+      : t.endsWith("s") && !t.endsWith("ss") && t.length >= 5
+        ? t.slice(0, -1)
+        : null;
+    if (stem && stem.length >= 4 && !STOPWORDS.has(stem) && !isProtected(stem)) out.add(stem);
+  };
+
   for (const k of modelKeywords) {
-    if (typeof k !== "string") continue;
-    const t = k.trim().toLowerCase();
-    if (t.length >= 3 && !STOPWORDS.has(t)) out.add(t);
+    if (typeof k === "string") add(k, 3);
   }
   for (const sentence of avoid) {
     for (const word of String(sentence).toLowerCase().split(/[^\p{L}\p{N}']+/u)) {
-      if (word.length >= 4 && !STOPWORDS.has(word)) out.add(word);
+      add(word, 4);
     }
   }
   return [...out];
@@ -312,7 +403,7 @@ function buildBannedTerms(modelKeywords: unknown[], avoid: string[]): string[] {
  * boundary-only check would pass every Hindi term straight through, which is
  * the language most of these stories are written in.
  */
-function mentionsBanned(value: unknown, banned: string[]): boolean {
+export function mentionsBanned(value: unknown, banned: string[]): boolean {
   if (banned.length === 0) return false;
   const text = (typeof value === "string" ? value : JSON.stringify(value ?? "")).toLowerCase();
   if (!text) return false;
@@ -320,8 +411,31 @@ function mentionsBanned(value: unknown, banned: string[]): boolean {
   for (const term of banned) {
     if (/^[\p{Script=Latin}\p{N}\s'-]+$/u.test(term)) {
       const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "iu").test(text)) return true;
+      // Match the term as the START of a word, not as a whole word.
+      //
+      // Whole-word matching leaked. The stored `avoid` sentence was "Meera's
+      // exam results", which yields the terms `exam` and `results` — and
+      // `\bexam\b` does not match "exams". A page then went out saying "open
+      // when exams are stressful", which is exactly the sentence the sender
+      // asked never to see.
+      //
+      // Prefix matching catches every inflection (exams, examination, marked,
+      // scoring) without needing a stemmer or a word list per language. It also
+      // over-matches — `exam` will flag "example" — and that is the trade being
+      // made deliberately: a false positive blanks one field, which the sender
+      // fills in themselves and never notices, while a false negative puts the
+      // forbidden subject on a page someone is about to send.
+      //
+      // Only terms of 4+ characters get prefix treatment; below that the
+      // over-matching stops being worth it.
+      const pattern =
+        term.length >= 4
+          ? `(^|[^\\p{L}\\p{N}])${escaped}\\p{L}*`
+          : `(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`;
+      if (new RegExp(pattern, "iu").test(text)) return true;
     } else if (text.includes(term)) {
+      // Non-Latin scripts: `\b` is meaningless in Devanagari and most Indic
+      // scripts, so a substring test is both the only option and the safer one.
       return true;
     }
   }
@@ -512,37 +626,67 @@ export async function fillFromStory(opts: {
         "The sender has not written a new story this time. Fill the fields from the context above, in the same language and script the context is written in."
   );
 
-  const completion = await openai.chat.completions.create({
-    model: MODEL,
-    // Warm enough to sound like a person, low enough to stay on-language,
-    // on-schema and inside the stated limits.
-    temperature: 0.75,
-    // Scales with the form: a 4-field page and a 30-field page are not the same
-    // request, and a fixed ceiling would truncate the big ones into invalid JSON.
-    max_tokens: Math.min(4000, 500 + schema.fields.length * 180),
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "ai_fill_result",
-        strict: true,
-        schema: buildResponseSchema(schema),
+  const budget = outputBudget(schema);
+  const responseSchema = buildResponseSchema(schema);
+
+  const ask = (maxTokens: number, temperature: number) =>
+    openai.chat.completions.create({
+      model: MODEL,
+      // Warm enough to sound like a person, low enough to stay on-language,
+      // on-schema and inside the stated limits.
+      temperature,
+      max_tokens: maxTokens,
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "ai_fill_result", strict: true, schema: responseSchema },
       },
-    },
-    messages: [
-      { role: "system", content: buildSystemPrompt(schema) },
-      { role: "user", content: userParts.join("\n\n") },
-    ],
-  });
+      messages: [
+        { role: "system", content: buildSystemPrompt(schema) },
+        { role: "user", content: userParts.join("\n\n") },
+      ],
+    });
+
+  // One retry, and it is not about the ceiling being too low.
+  //
+  // The failure this exists for was a runaway: the model emitted ~4,400 lines
+  // of repetition for a fifteen-field form and was cut off mid-string, which
+  // reached the sender as a 500. That is a stochastic decoding accident, not a
+  // form that needs more room, so the retry drops the temperature — the thing
+  // that actually makes repetition loops less likely — and raises the ceiling
+  // only enough to cover a genuinely long honest answer.
+  let completion = await ask(budget, 0.75);
+  if (completion.choices[0]?.finish_reason === "length") {
+    console.warn(`[storyFill] "${schema.slug}": hit ${budget}-token ceiling, retrying cooler`);
+    completion = await ask(Math.min(16000, Math.ceil(budget * 1.5)), 0.4);
+  }
 
   const choice = completion.choices[0];
   if (choice?.message?.refusal) {
     throw new AiRefusedError(choice.message.refusal);
   }
 
+  // A truncated response is not a malformed one, and the two need different
+  // handling. `court-marriage` hit the old token ceiling and JSON.parse threw a
+  // SyntaxError from position 9670 — which surfaced to the sender as a 500 with
+  // no clue what went wrong. Checking the finish reason first turns that into a
+  // named, retryable condition.
+  if (choice?.finish_reason === "length") {
+    throw new AiTruncatedError(`Response for "${schema.slug}" was cut off twice`);
+  }
+
   const content = choice?.message?.content;
   if (!content) throw new Error("Empty response from the model");
 
-  const parsed = JSON.parse(content) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch (error) {
+    // Structured Outputs makes this close to impossible once truncation is
+    // ruled out above, but "close to impossible" still reaches someone
+    // eventually, and a raw SyntaxError tells them nothing.
+    console.error(`[storyFill] unparseable response for "${schema.slug}":`, error);
+    throw new Error("The model returned something we could not read");
+  }
   const rawFields = (parsed.fields ?? {}) as Record<string, unknown>;
 
   const patch: Record<string, unknown> = {};
@@ -555,7 +699,8 @@ export async function fillFromStory(opts: {
   // that leaked.
   const banned = buildBannedTerms(
     Array.isArray(parsed.excludedKeywords) ? parsed.excludedKeywords : [],
-    context?.avoid ?? []
+    context?.avoid ?? [],
+    [opts.people?.userName, opts.people?.partnerName, opts.people?.bestFriendName]
   );
 
   const suppressed: string[] = [];

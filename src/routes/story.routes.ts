@@ -67,12 +67,24 @@ router.post("/fill", optionalProtect, anonymousFillLimiter, authedFillLimiter, p
 const profileRouter = Router();
 profileRouter.use(protect);
 
+// Each mutation answers to BOTH PATCH and PUT.
+//
+// Not indecision — this shipped broken. The server registered PATCH, the client
+// was written against a contract that said PUT, both sides typechecked, every
+// unit test passed, and the two never met until the whole stack was run
+// together. The result would have been three silent 404s in the profile:
+// editing your names, editing a story, and the auto-fill master switch — the
+// last of which is the one control a sender has for turning this feature off.
+//
+// The handlers already treat every field as optional, which is exactly PATCH
+// semantics, and accepting PUT as well costs nothing and closes the whole class
+// of drift.
 profileRouter.get("/", getProfile);
-profileRouter.patch("/people", updatePeople);
-profileRouter.patch("/settings", updateSettings);
+profileRouter.route("/people").patch(updatePeople).put(updatePeople);
+profileRouter.route("/settings").patch(updateSettings).put(updateSettings);
 profileRouter.post("/stories", addStory);
 profileRouter.get("/stories/:id", getStory);
-profileRouter.patch("/stories/:id", updateStory);
+profileRouter.route("/stories/:id").patch(updateStory).put(updateStory);
 profileRouter.delete("/stories/:id", deleteStory);
 profileRouter.post("/context/rebuild", rebuildContext);
 

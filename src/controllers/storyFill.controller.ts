@@ -6,6 +6,7 @@ import StoryProfile from "../models/StoryProfile";
 import type { IStoryContext } from "../models/StoryProfile";
 import {
   AiRefusedError,
+  AiTruncatedError,
   AiUnavailableError,
   fillFromStory,
   sanitizeStory,
@@ -131,6 +132,18 @@ export const postFill = async (
       res.status(422).json({
         success: false,
         error: "The AI couldn't work with that story. Try rephrasing it, or fill the form yourself.",
+      });
+      return;
+    }
+
+    // The model ran long and got cut off, twice. Nothing the sender did caused
+    // it and nothing they can change will fix it, so the copy says "try again"
+    // rather than blaming their story — and 503 marks it retryable instead of
+    // the flat 500 this used to surface as.
+    if (error instanceof AiTruncatedError) {
+      res.status(503).json({
+        success: false,
+        error: "That took longer than expected to write. Try again, or fill the form yourself.",
       });
       return;
     }
