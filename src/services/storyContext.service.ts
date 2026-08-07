@@ -102,7 +102,7 @@ const CONTEXT_SCHEMA = {
       type: "array",
       items: { type: "string" },
       description:
-        "Anything the sender has asked never to be mentioned, plus anything the stories treat as a wound: a phrase like 'don't mention the breakup', 'please leave her ex out of this', 'never bring up the hospital'. Capture BOTH the explicit requests and the obviously painful subjects. Each entry names the subject plainly enough that a later writer can recognise and steer around it. Empty array if there is genuinely nothing.",
+        "Anything the sender has asked never to be mentioned, plus anything the stories treat as a wound. Capture BOTH the explicit requests and the obviously painful subjects. Empty array if there is genuinely nothing.\n\nWrite each entry as the SUBJECT ALONE, in as few words as possible, and DO NOT include anybody's name or the words of the request. 'Please kabhi bhi Meera ke exam results ke baare me mat likhna' becomes 'exam results' — not 'Meera's exam results' and not the whole sentence. This matters: these entries are matched against generated text word by word, so a name left inside one gets treated as a forbidden word and every mention of that person is stripped from the page.",
     },
   },
 } as const;

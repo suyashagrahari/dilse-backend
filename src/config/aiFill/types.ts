@@ -244,8 +244,41 @@ export function assertNoMediaPaths(schema: AiFillTemplateSchema): string[] {
  * and every one of them is a mistake that would otherwise surface as a
  * confusing model response rather than as an obvious error.
  */
+/**
+ * Property names the response envelope owns.
+ *
+ * A template must not declare a top-level key equal to any of these. The
+ * failure it prevents is not a clash that throws — it is far quieter and much
+ * worse. `court-marriage` addresses a certificate whose form holds a `fields`
+ * array, so its paths read `fields[0].label`; the envelope of the day also
+ * called its answers object `fields`, and the model was handed a request for
+ * `fields[0].label` INSIDE `fields`. It read that as recursion and emitted
+ * ~4,400 lines of repetition for a form whose real answer is 400 characters,
+ * every time, arriving as a 500 and then as a permanent 503 for that one
+ * template.
+ *
+ * Nothing about that was visible in the schema, the types, or any unit test.
+ * So the rule is enforced here, at boot, over every registered template.
+ */
+export const RESERVED_ENVELOPE_KEYS: readonly string[] = [
+  "language",
+  "languageName",
+  "excludedKeywords",
+  "filled_values",
+];
+
 export function validateSchema(schema: AiFillTemplateSchema): string[] {
   const problems: string[] = [...assertNoMediaPaths(schema)];
+
+  for (const f of schema.fields) {
+    const first = parsePath(f.path)?.[0];
+    if (first?.kind === "key" && RESERVED_ENVELOPE_KEYS.includes(first.key)) {
+      problems.push(
+        `${f.path}: top-level key "${first.key}" collides with a response-envelope key — ` +
+          `this makes the model recurse and run away (see RESERVED_ENVELOPE_KEYS)`
+      );
+    }
+  }
 
   if (!schema.slug) problems.push("missing slug");
   if (!schema.premise || schema.premise.length < 20) {

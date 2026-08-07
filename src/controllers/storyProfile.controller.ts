@@ -125,11 +125,28 @@ export const updatePeople = async (
     const profile = await loadOrCreate(userId, "");
 
     const body = req.body as Record<string, unknown>;
+
+    // Accept BOTH `{userName, …}` and `{people: {userName, …}}`.
+    //
+    // This shipped broken and failed silently, which is the worst way for it to
+    // fail. The client posts the nested form; this handler read the flat one,
+    // so every name came back as "" and the handler cheerfully answered 200
+    // with an empty `people` object. Nobody saw an error — the names simply
+    // never saved.
+    //
+    // And it was not only cosmetic. These names are the list the exclusion
+    // sweep must never ban: an `avoid` entry reads "Meera ke exam results ke
+    // baare me mat likhna", the sweep splits it into words, and with no stored
+    // names to protect, "Meera" went on the ban list and every field mentioning
+    // her was dropped from the page. A silently-empty save turned into a
+    // silently-blanked gift.
+    const src = (body.people && typeof body.people === "object" ? body.people : body) as Record<string, unknown>;
+
     profile.people = {
-      userName: str(body.userName, FILL_LIMITS.name),
-      partnerName: str(body.partnerName, FILL_LIMITS.name),
-      bestFriendName: str(body.bestFriendName, FILL_LIMITS.name),
-      partnerPronouns: str(body.partnerPronouns, 32),
+      userName: str(src.userName, FILL_LIMITS.name),
+      partnerName: str(src.partnerName, FILL_LIMITS.name),
+      bestFriendName: str(src.bestFriendName, FILL_LIMITS.name),
+      partnerPronouns: str(src.partnerPronouns, 32),
     };
 
     await profile.save();

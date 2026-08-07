@@ -37,6 +37,25 @@ export { AiRefusedError, AiUnavailableError, sanitizeStory };
 export class AiTruncatedError extends Error {}
 
 /**
+ * The envelope property the per-field answers live under.
+ *
+ * It used to be `fields`, and that name COLLIDED. `court-marriage` addresses a
+ * certificate whose form holds a `fields` array, so its paths are
+ * `fields[0].label`, `fields[1].value` and so on — which meant the request
+ * asked for a property called `fields[0].label` inside a property called
+ * `fields`. The model read that as recursion and ran away: ~6,800 tokens and
+ * 4,400 lines of repetition for a form whose honest answer is about 400
+ * characters, truncated into unparseable JSON every time. It surfaced first as
+ * a 500, then — once truncation was handled — as a reliable 503.
+ *
+ * More output room was never the fix; the shape was wrong. This name is
+ * reserved instead, and `validateSchema` rejects at boot any template that
+ * declares a top-level key colliding with it or with the other envelope keys,
+ * so the next template with a `fields` array cannot quietly reintroduce this.
+ */
+const VALUES_KEY = "filled_values";
+
+/**
  * How many output tokens this template's answer actually needs.
  *
  * The old formula was 180 tokens per field with a 4000 ceiling, and it was
@@ -221,7 +240,7 @@ function buildResponseSchema(schema: AiFillTemplateSchema): JsonSchemaNode {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["language", "languageName", "excludedKeywords", "fields"],
+    required: ["language", "languageName", "excludedKeywords", VALUES_KEY],
     properties: {
       language: {
         type: "string",
@@ -243,7 +262,7 @@ function buildResponseSchema(schema: AiFillTemplateSchema): JsonSchemaNode {
         description:
           "Every word or short phrase whose presence would mean you had written about a subject the sender asked you to leave out. Include the words as they appear in the sender's own language AND their plain English equivalents, plus obvious inflections (exam, exams, result, results, marks). If the sender asked for nothing to be left out, return an empty array. Be generous here: a term listed by mistake costs one blank field, a term missed costs the whole gift.",
       },
-      fields: {
+      [VALUES_KEY]: {
         type: "object",
         additionalProperties: false,
         required,
@@ -687,7 +706,7 @@ export async function fillFromStory(opts: {
     console.error(`[storyFill] unparseable response for "${schema.slug}":`, error);
     throw new Error("The model returned something we could not read");
   }
-  const rawFields = (parsed.fields ?? {}) as Record<string, unknown>;
+  const rawFields = (parsed[VALUES_KEY] ?? {}) as Record<string, unknown>;
 
   const patch: Record<string, unknown> = {};
   const filled: string[] = [];

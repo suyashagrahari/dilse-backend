@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { getSchema as lookupSchema } from "../config/aiFill";
 import { FILL_LIMITS, type WireSchema } from "../config/aiFill/types";
 import StoryProfile from "../models/StoryProfile";
-import type { IStoryContext } from "../models/StoryProfile";
+import type { IStoryContext, IStoryPeople } from "../models/StoryProfile";
 import {
   AiRefusedError,
   AiTruncatedError,
@@ -85,11 +85,18 @@ export const postFill = async (
     const story = sanitizeStory(body.story);
 
     let context: IStoryContext | null = null;
-    if (req.userId && body.useContext === true) {
+    let profilePeople: IStoryPeople | undefined;
+
+    if (req.userId) {
+      // Loaded whenever there is a session, not only when `useContext` is set:
+      // the names are needed by the exclusion sweep either way, and a sender
+      // who typed a story into the box still deserves their own names honoured.
       const profile = await StoryProfile.findOne({ userId: req.userId }).select("+context");
+      profilePeople = profile?.people;
+
       // autoFillEnabled is the sender's own switch: off means nothing of theirs
       // is ever reused, so it beats whatever the client happened to ask for.
-      if (profile?.autoFillEnabled && profile.context) {
+      if (body.useContext === true && profile?.autoFillEnabled && profile.context) {
         context = profile.context;
       }
     }
@@ -106,11 +113,29 @@ export const postFill = async (
     }
 
     const rawPeople = (body.people ?? {}) as Record<string, unknown>;
+
+    // Fall back to the names already on the profile.
+    //
+    // These are not only used to address the reader — they are the list the
+    // exclusion sweep must never ban. An `avoid` entry a sender writes reads
+    // like "Meera's exam results", and the sweep splits that into words, so
+    // without knowing that "Meera" is the recipient it would ban her name and
+    // silently drop every field that mentions her. Requiring the CLIENT to send
+    // the names for that to work makes a safety property depend on a request
+    // body: the auto-fill path sends whatever the sender happened to type into
+    // their profile, which is often nothing at all.
+    //
+    // The profile is already loaded here whenever a context is in play, which
+    // is exactly the case that matters, so the fallback costs nothing.
+    const fallback: Partial<IStoryPeople> = profilePeople ?? {};
+    const pick = (fromBody: unknown, fromProfile: string | undefined): string =>
+      str(fromBody, FILL_LIMITS.name) || str(fromProfile, FILL_LIMITS.name);
+
     const people: FillPeople = {
-      userName: str(rawPeople.userName, FILL_LIMITS.name),
-      partnerName: str(rawPeople.partnerName, FILL_LIMITS.name),
-      bestFriendName: str(rawPeople.bestFriendName, FILL_LIMITS.name),
-      partnerPronouns: str(rawPeople.partnerPronouns, 32),
+      userName: pick(rawPeople.userName, fallback.userName),
+      partnerName: pick(rawPeople.partnerName, fallback.partnerName),
+      bestFriendName: pick(rawPeople.bestFriendName, fallback.bestFriendName),
+      partnerPronouns: str(rawPeople.partnerPronouns, 32) || str(fallback.partnerPronouns, 32),
     };
 
     const result = await fillFromStory({ schema, story, people, context });
