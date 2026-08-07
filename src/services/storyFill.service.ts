@@ -461,6 +461,33 @@ export function mentionsBanned(value: unknown, banned: string[]): boolean {
   return false;
 }
 
+/**
+ * Does this value name a brand the template is forbidden to mention?
+ *
+ * Whole-word and case-insensitive, deliberately WITHOUT the stemming and
+ * prefix matching the exclusion sweep uses. These are proper nouns: an exact
+ * match catches every real violation, while prefix matching on a four-letter
+ * brand would blank a field for the word "metal".
+ */
+export function mentionsForbiddenOutput(
+  value: unknown,
+  forbidden: readonly string[] | undefined
+): boolean {
+  if (!forbidden?.length) return false;
+  const text = (typeof value === "string" ? value : JSON.stringify(value ?? "")).toLowerCase();
+  if (!text) return false;
+
+  for (const raw of forbidden) {
+    const term = raw.trim().toLowerCase();
+    if (!term) continue;
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Hashtags and handles are the obvious dodge, so the boundary is any
+    // non-letter/digit — `#instagram` and `@instagram` both match.
+    if (new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "iu").test(text)) return true;
+  }
+  return false;
+}
+
 /** Render the stored context as compact briefing material, minus `avoid`. */
 function renderContext(context: IStoryContext): string {
   const lines: string[] = [];
@@ -723,6 +750,7 @@ export async function fillFromStory(opts: {
   );
 
   const suppressed: string[] = [];
+  const brandHits: string[] = [];
 
   for (const field of schema.fields) {
     const value = coerceValue(field, rawFields[field.path]);
@@ -740,6 +768,14 @@ export async function fillFromStory(opts: {
       missing.push(field.path);
       continue;
     }
+
+    // The same treatment for a brand the template is forbidden to name. The
+    // guides ask the model not to; this is what makes it true.
+    if (mentionsForbiddenOutput(value, schema.forbiddenOutput)) {
+      brandHits.push(field.path);
+      missing.push(field.path);
+      continue;
+    }
     patch[field.path] = value;
     filled.push(field.path);
   }
@@ -747,6 +783,14 @@ export async function fillFromStory(opts: {
   if (suppressed.length > 0) {
     console.warn(
       `[storyFill] "${schema.slug}": dropped ${suppressed.length} field(s) that touched an excluded subject`
+    );
+  }
+
+  if (brandHits.length > 0) {
+    // Loud on purpose. The guides already tell the model not to, so this firing
+    // means the instruction did not hold and someone should know.
+    console.error(
+      `[storyFill] "${schema.slug}": dropped ${brandHits.length} field(s) naming a forbidden brand`
     );
   }
 

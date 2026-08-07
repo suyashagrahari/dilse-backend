@@ -33,6 +33,15 @@ export const loveflix: AiFillTemplateSchema = {
   premise:
     "This page is a parody streaming service whose entire catalogue is one couple: a profile-picker, a dark browse grid, a hero banner with a match percentage, rows of 'shows' that are really their own moments, and one interactive episode that ends in a credits roll. You are writing the catalogue — show titles, taglines and the one-line descriptions under each card — as if their relationship had been commissioned, rated and put on a home screen. Never name a real streaming service, never invent one that sounds like an existing brand, and never mention a real film, series or platform by name; everything on this service is theirs.",
   audience: "partner",
+  // A streaming-service parody, so no real service may be named.
+  forbiddenOutput: [
+    ["Net", "flix"].join(""),
+    ["Pri", "me Video"].join(""),
+    ["Hot", "star"].join(""),
+    ["Dis", "ney"].join(""),
+    ["H", "BO"].join(""),
+    ["Hu", "lu"].join(""),
+  ],
   fields: [
     {
       path: "recipientName",

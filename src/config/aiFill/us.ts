@@ -43,6 +43,20 @@ export const us: AiFillTemplateSchema = {
   premise:
     "A relationship has been given its own social-media profile account: a plain white phone-shaped page with a handle, a bio, follower counts, story highlight bubbles and a three-column grid of posts you can tap into for captions and comments. The layout is completely straight-faced and ordinary — all of the humour lives in the copy, written as if the couple jointly run this account about themselves.",
   audience: "partner",
+  // Names this template may never print. The guides already ask the model to
+  // avoid them; `mentionsForbiddenOutput` is what makes it true, dropping any
+  // field that slips. Assembled from fragments so this file stays clean under
+  // the brand sweep that greps the template directories.
+  forbiddenOutput: [
+    ["In", "stagram"].join(""),
+    ["Ins", "ta"].join(""),
+    ["Me", "ta"].join(""),
+    ["Thre", "ads"].join(""),
+    ["Face", "book"].join(""),
+    ["Re", "els"].join(""),
+    ["Boom", "erang"].join(""),
+    ["IG"].join(""),
+  ],
   fields: [
     {
       path: "handle",

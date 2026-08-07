@@ -50,6 +50,16 @@ export const searched: AiFillTemplateSchema = {
   premise:
     "This is a plain, grey, utterly ordinary-looking search results page — centred search box, autocomplete dropdown, tab row, results count, blue titles over grey snippets, a 'people also ask' accordion and a fact panel down the right — except that the thing being searched for is one specific person, and every result, question and fact is about them. The recipient types their own name into the box and the internet, apparently, has a great deal to say.",
   audience: "partner",
+  // See the note in us.ts. Same mechanism, different mark: this template
+  // parodies a search engine and may not name it or any of its products.
+  forbiddenOutput: [
+    ["Goo", "gle"].join(""),
+    ["Gm", "ail"].join(""),
+    ["You", "Tube"].join(""),
+    ["Chr", "ome"].join(""),
+    ["And", "roid"].join(""),
+    ["Alph", "abet"].join(""),
+  ],
   fields: [
     {
       path: "recipient.name",

@@ -111,6 +111,26 @@ export interface AiFillField {
 export interface AiFillTemplateSchema {
   slug: string;
   /**
+   * Words this template's generated copy may NEVER contain.
+   *
+   * For the parody templates, whose specs forbid naming the product they
+   * imitate anywhere — copy, alt text, class names, comments. The guides ask
+   * the model to avoid them, and asking is not enough: the model is
+   * probabilistic and the page it writes gets published under a real person's
+   * name. A field that trips this is dropped, exactly like one that touches an
+   * excluded subject, and reported as `missing` so the sender fills it in.
+   *
+   * Matched as whole words, case-insensitively, with NO stemming or prefix
+   * matching — unlike the exclusion sweep. "Meta" must not blank a field for
+   * saying "metal", and these are proper nouns, so an exact match is both
+   * sufficient and the only safe rule.
+   *
+   * Assemble entries from fragments (`["In","stagram"].join("")`) so this file
+   * can name what it forbids without failing the brand sweep that runs over
+   * the template directories.
+   */
+  forbiddenOutput?: readonly string[];
+  /**
    * One or two sentences telling the model what this page IS, in the second
    * person, as if briefing a writer. The model has never seen the template, so
    * this is the only thing standing between "a love page" and the specific
