@@ -45,6 +45,11 @@ import contactRoutes from "./contact.routes";
 import referralRoutes from "./referral.routes";
 import paymentRoutes from "./payment.routes";
 import adminRoutes from "./admin.routes";
+import productPageRoutes from "./productPage.routes";
+import watchPageRoutes from "./watchPage.routes";
+import callPageRoutes from "./callPage.routes";
+import rechargePageRoutes from "./rechargePage.routes";
+import contributionRoutes from "./contribution.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
 
@@ -88,6 +93,13 @@ router.use("/dedication-pages", dedicationPageRoutes);
 router.use("/searched-pages", searchedPageRoutes);
 router.use("/capsule-pages", capsulePageRoutes);
 router.use("/us-pages", usPageRoutes);
+router.use("/product-pages", productPageRoutes);
+router.use("/watch-pages", watchPageRoutes);
+router.use("/call-pages", callPageRoutes);
+router.use("/recharge-pages", rechargePageRoutes);
+// Anonymous friends post here, addressed only by shareId. Everything it can
+// reach is gated by config/contributionTemplates.ts.
+router.use("/contributions", contributionRoutes);
 router.use("/story", storyRoutes);
 router.use("/share", shareRoutes);
 router.use("/media", mediaRoutes);

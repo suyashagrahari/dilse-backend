@@ -1,5 +1,9 @@
 import { Request, Response } from "express";
 import BirthdayPage from "../models/BirthdayPage";
+import ProductPage from "../models/ProductPage";
+import WatchPage from "../models/WatchPage";
+import CallPage from "../models/CallPage";
+import RechargePage from "../models/RechargePage";
 import ValentinePage from "../models/ValentinePage";
 import HoliPage from "../models/HoliPage";
 import EidPage from "../models/EidPage";
@@ -66,6 +70,10 @@ interface TemplateLookup {
 
 const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: BirthdayPage as mongoose.Model<unknown>, templateType: "birthday", editorRoute: "/birthday-gf" },
+  { model: ProductPage as mongoose.Model<unknown>, templateType: "product", editorRoute: "/product" },
+  { model: WatchPage as mongoose.Model<unknown>, templateType: "watch", editorRoute: "/watch" },
+  { model: CallPage as mongoose.Model<unknown>, templateType: "call", editorRoute: "/call" },
+  { model: RechargePage as mongoose.Model<unknown>, templateType: "recharge", editorRoute: "/recharge" },
   { model: ValentinePage as mongoose.Model<unknown>, templateType: "valentine", editorRoute: "/valentine-gf" },
   { model: HoliPage as mongoose.Model<unknown>, templateType: "holi", editorRoute: "/holi" },
   { model: EidPage as mongoose.Model<unknown>, templateType: "eid", editorRoute: "/eid-mubarak" },
@@ -130,7 +138,12 @@ export const getSharedPage = async (req: Request, res: Response): Promise<void> 
         const pageObj = (
           page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
         ).toObject({ flattenMaps: true });
-        const { password: _pw, passwordRaw: _pr, ...stripped } = pageObj;
+        // `contribToken` is the friends' WRITE link and must never ride along on
+        // the recipient's READ response. This resolver is the one place every
+        // template's document passes through generically, so stripping it here
+        // also covers templates that do not exist yet — the alternative is
+        // trusting each of them to remember, and share links get forwarded.
+        const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...stripped } = pageObj;
         const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
 
@@ -414,7 +427,12 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
         const pageObj = (
           page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
         ).toObject({ flattenMaps: true });
-        const { password: _pw, passwordRaw: _pr, ...stripped } = pageObj;
+        // `contribToken` is the friends' WRITE link and must never ride along on
+        // the recipient's READ response. This resolver is the one place every
+        // template's document passes through generically, so stripping it here
+        // also covers templates that do not exist yet — the alternative is
+        // trusting each of them to remember, and share links get forwarded.
+        const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...stripped } = pageObj;
         const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
         res.json({
