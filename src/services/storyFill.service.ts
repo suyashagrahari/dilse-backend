@@ -461,6 +461,77 @@ export function mentionsBanned(value: unknown, banned: string[]): boolean {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Script fidelity — checked, not merely requested
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type TextScript = "latin" | "indic" | "other";
+
+/**
+ * Which script is this text mostly written in?
+ *
+ * Only the distinction that actually goes wrong is modelled: romanised vs
+ * native. Devanagari, Bengali, Tamil, Telugu, Gujarati, Kannada, Malayalam,
+ * Gurmukhi, Odia and Arabic all count as "indic" here — not linguistically
+ * true of Arabic, but the decision this feeds is binary and the grouping keeps
+ * it honest for every language these senders actually write in.
+ */
+export function dominantScript(text: string): TextScript {
+  const latin = (text.match(/\p{Script=Latin}/gu) ?? []).length;
+  const native = (
+    text.match(
+      /[\p{Script=Devanagari}\p{Script=Bengali}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Gujarati}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Gurmukhi}\p{Script=Oriya}\p{Script=Arabic}]/gu
+    ) ?? []
+  ).length;
+
+  if (native > latin) return "indic";
+  if (latin > 0) return "latin";
+  return "other";
+}
+
+/**
+ * Did the model answer in a different script from the one it was written to in?
+ *
+ * ── WHY THIS IS A HARD CHECK AND NOT A PROMPT LINE ──────────────────────────
+ *
+ * The system prompt already states the rule at length, and it holds most of
+ * the time — which is exactly what makes it dangerous. A Hinglish story
+ * ("hum pehli baar library me mile the") came back as
+ * "मेरी प्यारी मीरा, जबसे हम पहली बार मिले थे…" — correct Hindi, wrong script,
+ * and unreadable-feeling to someone who writes in Latin letters. It is the one
+ * failure the language rule exists to prevent, it does not fail loudly, and no
+ * API-level test caught it because it does not happen every run.
+ *
+ * A 15% threshold, not any-native-character: senders mix a word or two of
+ * script into romanised text all the time and that is theirs to do.
+ */
+export function scriptMismatch(reference: string, output: string): boolean {
+  const want = dominantScript(reference);
+  if (want === "other" || !output) return false;
+
+  const got = dominantScript(output);
+  if (got === want || got === "other") return false;
+
+  // Count letters AND combining marks, because the offending count below is a
+  // Script match and Script matches marks too. Counting only `\p{L}` here made
+  // the denominator smaller than the numerator — Tamil vowel signs are marks,
+  // so 67 offending characters divided by 38 "letters" gave a ratio of 1.76,
+  // and the length guard then skipped the text as too short to judge. Real
+  // Tamil output sailed through unchecked.
+  const total = (output.match(/[\p{L}\p{M}]/gu) ?? []).length;
+  if (total < 40) return false;
+
+  const offending = (
+    want === "latin"
+      ? output.match(
+          /[\p{Script=Devanagari}\p{Script=Bengali}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Gujarati}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Gurmukhi}\p{Script=Oriya}\p{Script=Arabic}]/gu
+        )
+      : output.match(/\p{Script=Latin}/gu)
+  ) ?? [];
+
+  return offending.length / total > 0.15;
+}
+
 /**
  * Does this value name a brand the template is forbidden to mention?
  *
@@ -675,7 +746,7 @@ export async function fillFromStory(opts: {
   const budget = outputBudget(schema);
   const responseSchema = buildResponseSchema(schema);
 
-  const ask = (maxTokens: number, temperature: number) =>
+  const ask = (maxTokens: number, temperature: number, extraUser: string[] = []) =>
     openai.chat.completions.create({
       model: MODEL,
       // Warm enough to sound like a person, low enough to stay on-language,
@@ -689,6 +760,10 @@ export async function fillFromStory(opts: {
       messages: [
         { role: "system", content: buildSystemPrompt(schema) },
         { role: "user", content: userParts.join("\n\n") },
+        // Corrections go LAST, after the story, so they are the most recent
+        // thing the model read. A correction buried above 4,000 characters of
+        // someone's relationship is a correction that loses.
+        ...extraUser.map((content) => ({ role: "user" as const, content })),
       ],
     });
 
@@ -704,6 +779,26 @@ export async function fillFromStory(opts: {
   if (completion.choices[0]?.finish_reason === "length") {
     console.warn(`[storyFill] "${schema.slug}": hit ${budget}-token ceiling, retrying cooler`);
     completion = await ask(Math.min(16000, Math.ceil(budget * 1.5)), 0.4);
+  }
+
+  // Script fidelity, enforced. See `scriptMismatch`: a Hinglish story coming
+  // back in Devanagari is the one failure the language rule exists to prevent,
+  // and asking nicely was not holding. The reference is the sender's own words
+  // where they wrote any, and their remembered summary otherwise.
+  const scriptReference = story || context?.summary || "";
+  if (scriptReference) {
+    const firstText = completion.choices[0]?.message?.content ?? "";
+    if (scriptMismatch(scriptReference, firstText)) {
+      const want = dominantScript(scriptReference);
+      console.warn(
+        `[storyFill] "${schema.slug}": answered in the wrong script (wanted ${want}), retrying`
+      );
+      completion = await ask(budget, 0.4, [
+        want === "latin"
+          ? "CORRECTION — you just answered in the wrong script. The sender wrote to you in LATIN LETTERS (romanised, e.g. \"hum pehli baar mile the\"). Write every single value in Latin letters too. Do NOT use Devanagari or any other native script anywhere, not even for names. Keep the same language and the same words a person would say — only the letters change."
+          : "CORRECTION — you just answered in the wrong script. The sender wrote to you in their own native script. Write every single value in that same script, not in romanised Latin letters.",
+      ]);
+    }
   }
 
   const choice = completion.choices[0];
