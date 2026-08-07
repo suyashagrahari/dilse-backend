@@ -119,6 +119,8 @@ export interface IWatchChannel {
 export interface IWatchPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
+  /** The friends' write link. A different secret from shareId, on purpose. */
+  contribToken: string;
   video: IWatchVideo;
   channel: IWatchChannel;
   description: IWatchDescription;
@@ -223,6 +225,7 @@ const watchPageSchema = new Schema<IWatchPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
+    contribToken: { type: String, unique: true, sparse: true, index: true },
     video: { type: videoSchema, default: () => ({}) },
     channel: { type: channelSchema, default: () => ({}) },
     description: { type: descriptionSchema, default: () => ({}) },
@@ -244,6 +247,7 @@ const watchPageSchema = new Schema<IWatchPage>(
 
 watchPageSchema.pre("save", async function (next) {
   if (!this.shareId) this.shareId = randomUUID();
+  if (!this.contribToken) this.contribToken = randomUUID();
   if (this.isModified("password") && this.password) {
     this.passwordRaw = this.password;
     const salt = await bcrypt.genSalt(10);

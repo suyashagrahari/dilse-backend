@@ -1,7 +1,12 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Contribution, { SUBMITTER_NAME_MAX, type ContributionStatus, type IContribution } from "../models/Contribution";
-import { getPageSource, listPageSources, type ContributionPageSource } from "../config/contributionTemplates";
+import {
+  getPageSource,
+  listPageSources,
+  type ContributionPageSource,
+  type PageFilter,
+} from "../config/contributionTemplates";
 import { isProfane } from "../utils/profanity";
 import type { ApiResponse } from "../types";
 
@@ -114,19 +119,34 @@ interface ResolvedPage {
   pageType: string;
   pageId: mongoose.Types.ObjectId;
   ownerId: mongoose.Types.ObjectId;
+  /** Read off the document, never off the request. */
+  shareId: string;
 }
 
-/** Ask one registered source whether it owns this shareId. */
-async function lookupIn(source: ContributionPageSource, shareId: string): Promise<ResolvedPage | null> {
-  const page = await source.model.findOne({ shareId }).select("_id userId").lean();
+/** Ask one registered source whether it owns this address. */
+async function lookupIn(
+  source: ContributionPageSource,
+  filter: PageFilter
+): Promise<ResolvedPage | null> {
+  const page = await source.model.findOne(filter).select("_id userId shareId").lean();
   // A page with no owner cannot be moderated by anyone, so it cannot be
   // contributed to either. Better a 404 than an orphan row.
   if (!page?.userId) return null;
-  return { pageType: source.pageType, pageId: page._id, ownerId: page.userId };
+  return {
+    pageType: source.pageType,
+    pageId: page._id,
+    ownerId: page.userId,
+    shareId: page.shareId ?? "",
+  };
 }
 
 /**
- * shareId → page → owner, across every registered template.
+ * address → page → owner, across every registered template.
+ *
+ * The address is either the recipient's `shareId` or the friends' `contribToken`
+ * — see the note on ContributablePage for why those are separate secrets. Either
+ * way the resolved `shareId` comes back off the document, never off the request,
+ * so a contribution is always filed against the page that actually exists.
  *
  * `pageTypeHint` comes from the request body and is treated as exactly that: a
  * hint that saves a query or two by trying the right collection first. It is
@@ -134,16 +154,19 @@ async function lookupIn(source: ContributionPageSource, shareId: string): Promis
  * document that was actually found, so a client lying about pageType only makes
  * its own request slower.
  */
-async function resolvePage(shareId: string, pageTypeHint: string): Promise<ResolvedPage | null> {
+async function resolvePage(
+  filter: PageFilter,
+  pageTypeHint: string
+): Promise<ResolvedPage | null> {
   const hinted = pageTypeHint ? getPageSource(pageTypeHint) : undefined;
   if (hinted) {
-    const found = await lookupIn(hinted, shareId);
+    const found = await lookupIn(hinted, filter);
     if (found) return found;
   }
 
   for (const source of listPageSources()) {
     if (source === hinted) continue;
-    const found = await lookupIn(source, shareId);
+    const found = await lookupIn(source, filter);
     if (found) return found;
   }
 
@@ -190,21 +213,26 @@ const isDuplicateKeyError = (error: unknown): boolean =>
 // ─── Public ──────────────────────────────────────────────────────────────────
 
 /**
- * POST /:shareId — a friend submits a contribution.
+ * POST /submit/:contribToken — a friend submits a contribution.
  *
- * The link that got them here is REUSABLE and is meant to be: one link goes out,
- * twenty friends open it. So there is no token to consume and no "already used"
- * state. Deduping is per submission instead, on { shareId, idempotencyKey },
- * and a repeat of a key returns the ORIGINAL row with 200 — not a 409, and never
- * a second row. A retry after a timeout has to be safe, because on a phone on
- * the train it is going to happen.
+ * Addressed by `contribToken`, NOT by the recipient's `shareId`. The friend
+ * holding this link is being given a write capability and nothing else: it does
+ * not let them read the gift, and the sender can stop collecting without
+ * breaking the recipient's link.
+ *
+ * The link is REUSABLE and is meant to be: one link goes out, twenty friends
+ * open it. So there is no token to consume and no "already used" state. Deduping
+ * is per submission instead, on { shareId, idempotencyKey }, and a repeat of a
+ * key returns the ORIGINAL row with 200 — not a 409, and never a second row. A
+ * retry after a timeout has to be safe, because on a phone on the train it is
+ * going to happen.
  */
 export const submitContribution = async (
   req: Request,
   res: Response<ApiResponse>
 ): Promise<void> => {
   try {
-    const shareId = param(req.params.shareId);
+    const contribToken = param(req.params.contribToken);
     const body = req.body as Record<string, unknown>;
 
     const idempotencyKey = str(body.idempotencyKey, LIMITS.idempotencyKey);
@@ -232,17 +260,20 @@ export const submitContribution = async (
       return;
     }
 
-    // Dedupe before doing any work. The common repeat is a retry of a request
-    // that actually succeeded, and that path should cost one indexed read.
+    // Resolve first, because the token the friend holds is not the id the
+    // contribution is filed under — only the document knows its own shareId.
+    const page = await resolvePage({ contribToken }, str(body.pageType, LIMITS.pageType));
+    if (!page) {
+      res.status(404).json({ success: false, error: "That page isn't accepting anything right now." });
+      return;
+    }
+    const shareId = page.shareId;
+
+    // Dedupe before doing any further work. The common repeat is a retry of a
+    // request that actually succeeded, and that path should stay cheap.
     const already = await Contribution.findOne({ shareId, idempotencyKey });
     if (already) {
       res.json({ success: true, data: contributorView(already) });
-      return;
-    }
-
-    const page = await resolvePage(shareId, str(body.pageType, LIMITS.pageType));
-    if (!page) {
-      res.status(404).json({ success: false, error: "That page isn't accepting anything right now." });
       return;
     }
 

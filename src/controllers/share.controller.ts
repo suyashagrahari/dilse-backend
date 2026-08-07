@@ -138,7 +138,12 @@ export const getSharedPage = async (req: Request, res: Response): Promise<void> 
         const pageObj = (
           page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
         ).toObject({ flattenMaps: true });
-        const { password: _pw, passwordRaw: _pr, ...stripped } = pageObj;
+        // `contribToken` is the friends' WRITE link and must never ride along on
+        // the recipient's READ response. This resolver is the one place every
+        // template's document passes through generically, so stripping it here
+        // also covers templates that do not exist yet — the alternative is
+        // trusting each of them to remember, and share links get forwarded.
+        const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...stripped } = pageObj;
         const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
 
@@ -422,7 +427,12 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
         const pageObj = (
           page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
         ).toObject({ flattenMaps: true });
-        const { password: _pw, passwordRaw: _pr, ...stripped } = pageObj;
+        // `contribToken` is the friends' WRITE link and must never ride along on
+        // the recipient's READ response. This resolver is the one place every
+        // template's document passes through generically, so stripping it here
+        // also covers templates that do not exist yet — the alternative is
+        // trusting each of them to remember, and share links get forwarded.
+        const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...stripped } = pageObj;
         const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
         res.json({

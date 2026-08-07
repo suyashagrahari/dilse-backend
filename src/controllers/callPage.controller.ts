@@ -282,7 +282,8 @@ export const getSharedCallPage = async (req: Request, res: Response): Promise<vo
     await page.save();
 
     const pageObj = page.toObject({ flattenMaps: true });
-    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
+    // contribToken is the friends' WRITE link — never on the recipient's read.
+    const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...safeData } = pageObj as unknown as Record<string, unknown>;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "call" });
   } catch (error) {
     console.error("Get shared call page error:", error);

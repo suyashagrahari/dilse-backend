@@ -129,6 +129,8 @@ export interface IAboutSection {
 export interface IProductPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
+  /** The friends' write link. A different secret from shareId, on purpose. */
+  contribToken: string;
   subject: IProductSubject;
   sender: IProductSender;
   /** The listing title. Long on purpose — real ones are. */
@@ -248,6 +250,7 @@ const productPageSchema = new Schema<IProductPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
+    contribToken: { type: String, unique: true, sparse: true, index: true },
     subject: { type: subjectSchema, default: () => ({}) },
     sender: { type: senderSchema, default: () => ({}) },
     title: { type: String, default: "", maxlength: PRODUCT_LIMITS.title },
@@ -284,6 +287,7 @@ const productPageSchema = new Schema<IProductPage>(
 
 productPageSchema.pre("save", async function (next) {
   if (!this.shareId) this.shareId = randomUUID();
+  if (!this.contribToken) this.contribToken = randomUUID();
   if (this.isModified("password") && this.password) {
     this.passwordRaw = this.password;
     const salt = await bcrypt.genSalt(10);

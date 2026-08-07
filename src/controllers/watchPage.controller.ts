@@ -365,7 +365,8 @@ export const getSharedWatchPage = async (req: Request, res: Response): Promise<v
     await page.save();
 
     const pageObj = page.toObject();
-    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
+    // contribToken is the friends' WRITE link — never on the recipient's read.
+    const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...safeData } = pageObj as unknown as Record<string, unknown>;
     res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: "watch" });
   } catch (error) {
     console.error("Get shared watch page error:", error);

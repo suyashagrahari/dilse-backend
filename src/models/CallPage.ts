@@ -71,6 +71,8 @@ export interface ICaller {
 export interface ICallPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
+  /** The friends' write link. A different secret from shareId, on purpose. */
+  contribToken: string;
   caller: ICaller;
   /** Whose phone this is. Shown on the lock screen above the call. */
   recipient: { name: string };
@@ -158,6 +160,7 @@ const callPageSchema = new Schema<ICallPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
+    contribToken: { type: String, unique: true, sparse: true, index: true },
     caller: {
       type: callerSchema,
       default: () => ({ name: "", photoUrl: "", number: "", location: "", carrier: "" }),
@@ -188,6 +191,7 @@ const callPageSchema = new Schema<ICallPage>(
 
 callPageSchema.pre("save", async function (next) {
   if (!this.shareId) this.shareId = randomUUID();
+  if (!this.contribToken) this.contribToken = randomUUID();
   // Denormalise the dashboard names in ONE place. Doing it in the create and
   // update handlers instead means two copies of the same rule, and update is the
   // one someone forgets — a renamed caller would keep its old dashboard row

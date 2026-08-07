@@ -28,7 +28,26 @@ import CallPage from "../models/CallPage";
 export interface ContributablePage {
   _id: mongoose.Types.ObjectId;
   userId?: mongoose.Types.ObjectId;
+  /**
+   * The recipient's link. Contributions are stored against it so the published
+   * page can read its own back, but a friend is never addressed by it.
+   */
+  shareId?: string;
+  /**
+   * The friends' link, and a DIFFERENT secret from `shareId` on purpose.
+   *
+   * `shareId` is a read capability handed to the one person the page is for.
+   * `contribToken` is a write capability handed to a group chat. Conflating them
+   * would mean anyone who can write can also read the gift, and that the sender
+   * could never stop collecting reviews without also breaking the recipient's
+   * link — one of those is a privacy question and the other is a moderation
+   * question, and they should not share a kill switch.
+   */
+  contribToken?: string;
 }
+
+/** How a page is addressed. Exactly one of these is set. */
+export type PageFilter = { shareId: string } | { contribToken: string };
 
 /**
  * The slice of a Mongoose model this registry actually calls.
@@ -40,7 +59,7 @@ export interface ContributablePage {
  * plain one-liner with no `as` in sight.
  */
 export interface ContributablePageModel {
-  findOne(filter: { shareId: string }): {
+  findOne(filter: PageFilter): {
     select(fields: string): {
       lean(): PromiseLike<ContributablePage | null>;
     };

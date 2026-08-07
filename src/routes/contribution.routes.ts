@@ -61,7 +61,11 @@ const readLimiter = rateLimit({
 // Nothing here trusts the caller: the payload is rebuilt field by field, the
 // status is forced to "pending", and the read is published-only with an
 // allowlisted projection.
-router.post("/:shareId", submitLimiter, submitContribution);
+// Submitting is addressed by `contribToken` (the friends' write link) and
+// reading by `shareId` (the recipient's read link). Two different secrets for
+// two different audiences — see ContributablePage for why. The literal "/submit"
+// prefix also keeps this from ever shadowing "/:shareId/published".
+router.post("/submit/:contribToken", submitLimiter, submitContribution);
 router.get("/:shareId/published", readLimiter, getPublishedContributions);
 
 // ── Owner — moderation ───────────────────────────────────────────────────────
