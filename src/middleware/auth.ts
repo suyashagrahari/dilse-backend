@@ -60,3 +60,18 @@ export const optionalAuth = (
 
   next();
 };
+
+/**
+ * Optional auth for routes that must work for signed-out visitors.
+ *
+ * Same token parsing as `protect`, but a missing or invalid token is not an
+ * error — the request simply continues with no `req.userId`, and the handler
+ * decides what an anonymous caller gets. Used by the AI fill route, where
+ * publishing is auth-deferred: the sender builds and fills the whole page
+ * before they ever log in, so the anonymous path is the normal one.
+ *
+ * Deliberately an alias rather than a second copy of the same eight lines —
+ * two independent implementations of "is this request authenticated" is exactly
+ * the kind of thing that drifts apart and then diverges on a security fix.
+ */
+export const optionalProtect = optionalAuth;
