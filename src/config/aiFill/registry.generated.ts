@@ -28,7 +28,9 @@ import { loveflix } from "./loveflix";
 import { missyouBestfriend } from "./missyou-bestfriend";
 import { missyouGf } from "./missyou-gf";
 import { photoPuzzle } from "./photo-puzzle";
+import { product } from "./product";
 import { proposal } from "./proposal";
+import { recharge } from "./recharge";
 import { rewind } from "./rewind";
 import { searched } from "./searched";
 import { sorryFriend } from "./sorry-friend";
@@ -39,6 +41,8 @@ import { us } from "./us";
 import { valentineBestfriend } from "./valentine-bestfriend";
 import { valentineGf } from "./valentine-gf";
 import { vendingMachine } from "./vending-machine";
+import { watch } from "./watch";
+import { call } from "./call";
 
 export const SCHEMAS: AiFillTemplateSchema[] = [
   anniversaryGf,
@@ -60,7 +64,9 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   missyouBestfriend,
   missyouGf,
   photoPuzzle,
+  product,
   proposal,
+  recharge,
   rewind,
   searched,
   sorryFriend,
@@ -71,4 +77,6 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   valentineBestfriend,
   valentineGf,
   vendingMachine,
+  watch,
+  call,
 ];
