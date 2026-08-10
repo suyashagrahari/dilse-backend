@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import ProductPage from "../models/ProductPage";
 import WatchPage from "../models/WatchPage";
 import CallPage from "../models/CallPage";
+import AppPage from "../models/AppPage";
+import ProfileProPage from "../models/ProfileProPage";
 
 /**
  * SINGLE SOURCE OF TRUTH for which templates accept contributions.
@@ -79,15 +81,22 @@ export interface ContributionPageSource {
  * exactly one line here. `pageType` is the template slug; the model needs a
  * `shareId` field and a `userId` owner field, and nothing else.
  *
- * `recharge` is deliberately absent. It is the one template in this batch with
- * no contributor loop — the joke is a plan grid and a payment flow, and there is
- * nothing for a friend to add. Registering it would open an anonymous write
- * endpoint against a page that will never read from it.
+ * `recharge`, `challan` and `nutrition` are deliberately absent. They are the
+ * templates with no contributor loop — a plan grid and a payment flow, a notice
+ * you settle, a label you read — and there is nothing for a friend to add to any
+ * of them. Registering one would open an anonymous write endpoint against a page
+ * that will never read from it.
+ *
+ * `profile-pro` appears once even though it collects TWO kinds (`endorsement`
+ * and `recommendation`). The registry resolves a page, not a kind; the kind is
+ * part of the request and is validated by the contribution controller.
  */
 export const CONTRIBUTION_PAGE_SOURCES: ContributionPageSource[] = [
   { pageType: "product", model: ProductPage },
   { pageType: "watch", model: WatchPage },
   { pageType: "call", model: CallPage },
+  { pageType: "app", model: AppPage },
+  { pageType: "profile-pro", model: ProfileProPage },
 ];
 
 /** The registered source for a template slug, or undefined if it takes no contributions. */

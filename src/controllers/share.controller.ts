@@ -4,6 +4,10 @@ import ProductPage from "../models/ProductPage";
 import WatchPage from "../models/WatchPage";
 import CallPage from "../models/CallPage";
 import RechargePage from "../models/RechargePage";
+import ChallanPage from "../models/ChallanPage";
+import NutritionPage from "../models/NutritionPage";
+import AppPage from "../models/AppPage";
+import ProfileProPage from "../models/ProfileProPage";
 import ValentinePage from "../models/ValentinePage";
 import HoliPage from "../models/HoliPage";
 import EidPage from "../models/EidPage";
@@ -74,6 +78,10 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: WatchPage as mongoose.Model<unknown>, templateType: "watch", editorRoute: "/watch" },
   { model: CallPage as mongoose.Model<unknown>, templateType: "call", editorRoute: "/call" },
   { model: RechargePage as mongoose.Model<unknown>, templateType: "recharge", editorRoute: "/recharge" },
+  { model: ChallanPage as mongoose.Model<unknown>, templateType: "challan", editorRoute: "/challan" },
+  { model: NutritionPage as mongoose.Model<unknown>, templateType: "nutrition", editorRoute: "/nutrition" },
+  { model: AppPage as mongoose.Model<unknown>, templateType: "app", editorRoute: "/app" },
+  { model: ProfileProPage as mongoose.Model<unknown>, templateType: "profile-pro", editorRoute: "/profile-pro" },
   { model: ValentinePage as mongoose.Model<unknown>, templateType: "valentine", editorRoute: "/valentine-gf" },
   { model: HoliPage as mongoose.Model<unknown>, templateType: "holi", editorRoute: "/holi" },
   { model: EidPage as mongoose.Model<unknown>, templateType: "eid", editorRoute: "/eid-mubarak" },

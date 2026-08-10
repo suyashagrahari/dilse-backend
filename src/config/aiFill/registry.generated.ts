@@ -43,6 +43,10 @@ import { valentineGf } from "./valentine-gf";
 import { vendingMachine } from "./vending-machine";
 import { watch } from "./watch";
 import { call } from "./call";
+import { challan } from "./challan";
+import { nutrition } from "./nutrition";
+import { app } from "./app";
+import { profilePro } from "./profile-pro";
 
 export const SCHEMAS: AiFillTemplateSchema[] = [
   anniversaryGf,
@@ -79,4 +83,8 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   vendingMachine,
   watch,
   call,
+  challan,
+  nutrition,
+  app,
+  profilePro,
 ];
