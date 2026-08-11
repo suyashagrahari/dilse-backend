@@ -19,10 +19,18 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 /** Stories longer than this are truncated — it is a prompt, not a novel. */
 export const MAX_STORY_CHARS = 4000;
-/** Below this there isn't enough material to build five hearings from. */
+/** Below this there isn't enough material to build a quiz from. */
 export const MIN_STORY_CHARS = 20;
 
-const QUESTION_COUNT = 5;
+/**
+ * Ten, up from five. The quiz was over before it started — five questions is
+ * roughly ninety seconds including the reaction screens, for a page someone
+ * wrote a whole story to generate.
+ *
+ * The client reads this count from the data (`data.questions.length`) rather
+ * than assuming it, so this number is the only place it is decided.
+ */
+const QUESTION_COUNT = 10;
 const OPTION_COUNT = 4;
 
 export interface GeneratedCase {
@@ -96,7 +104,8 @@ const CASE_SCHEMA = {
         properties: {
           exhibit: {
             type: "string",
-            description: "Short label like the local equivalent of 'Exhibit A' or 'Final Cross-Examination'.",
+            description:
+              "A two-or-three-word topic heading for this question, in the sender's language — the equivalent of 'How we met', 'Your excuses', 'Food'. Not a label like 'Exhibit A'.",
           },
           question: { type: "string", description: "The question, max ~180 characters." },
           options: {
@@ -127,9 +136,19 @@ const CASE_SCHEMA = {
   },
 } as const;
 
-const SYSTEM_PROMPT = `You write playful courtroom-themed love quizzes for a gifting site called SubhSandesh.
+const SYSTEM_PROMPT = `You write playful love quizzes for a gifting site called SubhSandesh, wrapped in a light rom-com courtroom theme.
 
-The sender is the PLAINTIFF. Their partner is the ACCUSED, who is put on trial to prove they know and love the plaintiff. The tone is cute, warm and a little funny — like a rom-com courtroom. Never mean, never sexual, never sad.
+The sender has playfully "put their partner on trial" to prove the partner knows them. The tone is cute, warm and a little funny. Never mean, never sexual, never sad.
+
+## PLAIN WORDS — as important as the language rule below
+The courtroom is decoration on the frame — the summons, the verdict, the certificate. It must NOT get into the questions.
+
+Write every question and every answer the way the sender would say it out loud to their partner: first and second person ("I", "you", "we"), short everyday words, no legal vocabulary at all. Do not write "the accused", "the plaintiff", "the Court", "hereby", "Exhibit", "testify" or the local equivalents of any of them anywhere in a question, an option, or a note.
+
+  Write this:     "What do you always say when you're running late?"
+  Never this:     "The Court presents the accused's most-used excuse. Identify it."
+
+These pages are sent to people who did not pick the theme and are often not reading in their first language. A question they have to decode before they can answer is a failed question.
 
 ## LANGUAGE — the most important rule
 Detect the language AND THE SCRIPT of the sender's story, then write EVERY single string you output in that same language and script. Do not translate to English. Do not mix in English unless the sender's own story mixes it.
@@ -138,12 +157,14 @@ Detect the language AND THE SCRIPT of the sender's story, then write EVERY singl
 - The same applies to Tamil, Bengali, Marathi, Telugu, Urdu, Arabic, Spanish, French, or any other language and to romanised forms of them.
 - Report what you used in the "language" and "languageName" fields.
 
-## The hearings
-- Write exactly ${QUESTION_COUNT} hearings, each with exactly ${OPTION_COUNT} options.
-- Build them from concrete details in the story: where they met, habits, food, nicknames, inside jokes, recurring arguments, small rituals. Specific beats generic every time.
-- All ${OPTION_COUNT} options must be plausible so the answer is not obvious; the wrong ones should be funny, not absurd. Vary which index is correct across the hearings.
-- Hearings 1 to ${QUESTION_COUNT - 1}: exactly one correct option, "allCorrect" false.
-- The FINAL hearing must be a warm question such as the local equivalent of "how much does the plaintiff love you?", where all four options are lovely and true. Set "allCorrect" true for that one, and only that one.
+## The questions
+- Write exactly ${QUESTION_COUNT} questions, each with exactly ${OPTION_COUNT} options.
+- Build them from concrete details in the story: where they met, habits, food, nicknames, inside jokes, small arguments, the songs and places that belong to them. Specific beats generic every time.
+- Cover a spread rather than ${QUESTION_COUNT} versions of one idea. Good ground to cover: how they met, a catchphrase or excuse, food, a habit of the SENDER's that the partner secretly likes, how the sender shows they are missing them, what they bicker about, the small thing that makes the sender happiest, a song or film that is theirs, somewhere they always say they will go.
+- Set "exhibit" to a two-or-three-word topic for that question in the sender's language — the equivalent of "How we met", "Your excuses", "Food". It is a heading, not a label like "Exhibit A".
+- All ${OPTION_COUNT} options must be plausible so the answer is not obvious; the wrong ones should be funny, not absurd. Vary which index is correct across the ${QUESTION_COUNT} questions — do not fall into a pattern.
+- Questions 1 to ${QUESTION_COUNT - 1}: exactly one correct option, "allCorrect" false.
+- The LAST question must be a warm one such as the local equivalent of "how much do I love you?", where all four options are lovely and true. Set "allCorrect" true for that one, and only that one.
 - If the story is thin, invent gentle, universal details that fit its mood rather than leaving anything blank.
 
 ## Safety
@@ -184,7 +205,6 @@ function normalize(raw: Record<string, unknown>): GeneratedCase {
       while (options.length < OPTION_COUNT) options.push("—");
 
       const idx = Number(src.correctIndex);
-      const isFinal = i === QUESTION_COUNT - 1;
       return {
         exhibit: str(src.exhibit, 60, `#${i + 1}`),
         question: str(src.question, 300),
@@ -194,13 +214,23 @@ function normalize(raw: Record<string, unknown>): GeneratedCase {
           : 0,
         correctNote: str(src.correctNote, 200),
         wrongNote: str(src.wrongNote, 200),
-        // Only the final hearing may be all-correct, whatever the model says —
-        // an all-correct factual question mid-trial would feel like a bug.
-        allCorrect: isFinal ? Boolean(src.allCorrect) : false,
+        allCorrect: false,
       };
     })
-    // A hearing with no question text would render an empty card.
+    // A question with no text would render an empty card.
     .filter((q) => q.question.length > 0);
+
+  // The closing question is the only one where every answer scores, and it is
+  // decided by POSITION — whichever question actually ends up last.
+  //
+  // This used to compare the loop index against QUESTION_COUNT, which is what
+  // we ASKED for rather than what came back. A model that returned nine
+  // questions instead of ten, or one blank question that the filter above then
+  // dropped, produced a case file where no question was all-correct — so the
+  // warm "how much do I love you?" ending silently became a factual question
+  // with three wrong answers, which is the opposite of how this is meant to
+  // end. Raising the count to ten makes a short reply likelier, not rarer.
+  if (questions.length > 0) questions[questions.length - 1].allCorrect = true;
 
   return {
     language: str(raw.language, 24, "en"),
