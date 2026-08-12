@@ -72,7 +72,13 @@ interface TemplateLookup {
   ) => Record<string, unknown> | Promise<Record<string, unknown>>;
 }
 
-const TEMPLATE_LOOKUPS: TemplateLookup[] = [
+/**
+ * Exported so the activity feed can count real creations without a second copy
+ * of this list. A duplicate registry would drift the moment a template is added
+ * to one and not the other, and the symptom — a template quietly missing from
+ * the homepage — is invisible.
+ */
+export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: BirthdayPage as mongoose.Model<unknown>, templateType: "birthday", editorRoute: "/birthday-gf" },
   { model: ProductPage as mongoose.Model<unknown>, templateType: "product", editorRoute: "/product" },
   { model: WatchPage as mongoose.Model<unknown>, templateType: "watch", editorRoute: "/watch" },

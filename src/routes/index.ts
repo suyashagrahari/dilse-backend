@@ -54,6 +54,7 @@ import nutritionPageRoutes from "./nutritionPage.routes";
 import appPageRoutes from "./appPage.routes";
 import profileProPageRoutes from "./profileProPage.routes";
 import contributionRoutes from "./contribution.routes";
+import activityRoutes from "./activity.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
 
@@ -108,6 +109,8 @@ router.use("/profile-pro-pages", profileProPageRoutes);
 // Anonymous friends post here, addressed only by shareId. Everything it can
 // reach is gated by config/contributionTemplates.ts.
 router.use("/contributions", contributionRoutes);
+// Real, aggregate creation counts for the homepage ticker.
+router.use("/activity", activityRoutes);
 router.use("/story", storyRoutes);
 router.use("/share", shareRoutes);
 router.use("/media", mediaRoutes);
