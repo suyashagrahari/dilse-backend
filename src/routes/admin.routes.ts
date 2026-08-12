@@ -16,6 +16,7 @@ import {
   deleteContactInquiry,
   replyToContact,
 } from "../controllers/admin.controller";
+import { getWallQueue, moderateWallEntry } from "../controllers/wall.controller";
 
 const router = Router();
 
@@ -32,6 +33,10 @@ router.get("/users", getAllUsers);
 router.get("/users/:userId", getUserDetail);
 router.patch("/users/:userId/role", changeUserRole);
 router.delete("/pages/:pageId", deleteUserPage);
+
+// Wall moderation. Nothing reaches the public gallery without passing here.
+router.get("/wall", getWallQueue);
+router.patch("/wall/:id", moderateWallEntry);
 
 // Contact inquiries
 router.get("/contacts", getContactInquiries);
