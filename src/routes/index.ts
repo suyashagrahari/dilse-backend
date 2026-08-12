@@ -54,7 +54,6 @@ import nutritionPageRoutes from "./nutritionPage.routes";
 import appPageRoutes from "./appPage.routes";
 import profileProPageRoutes from "./profileProPage.routes";
 import contributionRoutes from "./contribution.routes";
-import wallRoutes from "./wall.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
 
@@ -109,9 +108,6 @@ router.use("/profile-pro-pages", profileProPageRoutes);
 // Anonymous friends post here, addressed only by shareId. Everything it can
 // reach is gated by config/contributionTemplates.ts.
 router.use("/contributions", contributionRoutes);
-// The public gallery. Read is open; consent and revoke are behind `protect`
-// inside the router, because the sender's own page must stay reachable.
-router.use("/wall", wallRoutes);
 router.use("/story", storyRoutes);
 router.use("/share", shareRoutes);
 router.use("/media", mediaRoutes);

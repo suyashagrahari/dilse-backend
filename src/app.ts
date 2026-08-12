@@ -8,7 +8,6 @@ import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import routes from "./routes";
 import { notFound, errorHandler } from "./middleware/errorHandler";
-import { wallCascade } from "./middleware/wallCascade";
 
 const app = express();
 
@@ -156,9 +155,6 @@ app.use("/api/generate", generateLimiter);
 // profile as /api/generate, so it gets the same per-minute cap.
 app.use("/api/court-of-love-pages/generate", generateLimiter);
 app.use("/api/auth", authLimiter);
-// Deleting a creation takes its Wall entry with it. Registered before the
-// router so it can attach its finish-hook to the delete that is about to run.
-app.use(wallCascade);
 app.use("/api", apiLimiter, routes);
 
 // ── 404 + global error handler ─────────────────────────────────────────────
