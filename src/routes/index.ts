@@ -55,6 +55,7 @@ import appPageRoutes from "./appPage.routes";
 import profileProPageRoutes from "./profileProPage.routes";
 import contributionRoutes from "./contribution.routes";
 import activityRoutes from "./activity.routes";
+import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
 
@@ -106,6 +107,7 @@ router.use("/challan-pages", challanPageRoutes);
 router.use("/nutrition-pages", nutritionPageRoutes);
 router.use("/app-pages", appPageRoutes);
 router.use("/profile-pro-pages", profileProPageRoutes);
+router.use("/raksha-bandhan-pages", rakshaBandhanPageRoutes);
 // Anonymous friends post here, addressed only by shareId. Everything it can
 // reach is gated by config/contributionTemplates.ts.
 router.use("/contributions", contributionRoutes);

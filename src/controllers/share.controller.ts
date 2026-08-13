@@ -40,6 +40,7 @@ import DedicationPage from "../models/DedicationPage";
 import SearchedPage from "../models/SearchedPage";
 import CapsulePage from "../models/CapsulePage";
 import UsPage from "../models/UsPage";
+import RakshaBandhanPage from "../models/RakshaBandhanPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -133,6 +134,7 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
     projectShared: (data) => projectSharedCapsuleData(data),
   },
   { model: UsPage as mongoose.Model<unknown>, templateType: "us", editorRoute: "/us" },
+  { model: RakshaBandhanPage as mongoose.Model<unknown>, templateType: "raksha-bandhan", editorRoute: "/happy-rakshabandhan-to-brother" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
