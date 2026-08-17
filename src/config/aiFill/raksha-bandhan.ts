@@ -75,20 +75,22 @@ export const rakshaBandhan: AiFillTemplateSchema = {
         "The sender's own name — the sister writing this. It is printed as 'from <name>' at the bottom of the first screen. One or two words, as she signs off.",
       example: "Meera",
     },
-    {
-      path: "city",
-      label: "Where you are",
-      kind: "text",
-      max: 60,
-      // Measured failure, twice: for a story saying her brother had moved to
-      // Bangalore this returned Bangalore, and for one saying they grew up in
-      // Leeds it returned Leeds. Both print as "from <her name>, <his city>" —
-      // a wrong fact about HER, in her own signature. The guide now says whose
-      // city it is and what to do when the story never says.
-      guide:
-        "The city the SENDER — the sister writing this — lives in now. It prints directly after her own name, as 'from Meera, Pune', so it must be HER city: not her brother's, not the city they grew up in, not anywhere the story merely mentions. Fill it only if the story actually says where she is now, and return null otherwise. City name alone — no state, no country, no address.",
-      example: "Pune",
-    },
+    // ── `city` IS NOT ON THIS SCHEMA, AND THAT IS THE FIX ────────────────────
+    //
+    // It was, and it was wrong three times out of three against the live model.
+    // The field prints immediately after her own name — "from Ananya,
+    // Bangalore" — so it has to be HER city. Every test story named a city
+    // belonging to someone else: her brother's new job in Bangalore, the town
+    // they grew up in. The model reached for the only city in the text.
+    //
+    // Rewriting the guide to say whose city it is, to name the near-misses, and
+    // to return null when the story does not place her did not fix it: the
+    // third attempt still returned Bangalore.
+    //
+    // A city is one word she can type in two seconds, and there is nothing in a
+    // story about a brother that reliably says where his sister lives. Weighed
+    // against publishing a false statement about her in her own signature, the
+    // slot is not worth filling, so the model is no longer offered it.
     {
       path: "greeting",
       label: "What you want to say",
@@ -111,7 +113,7 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       // reason `example` is documented as tone-only. The rule is now stated
       // positively: fill it only from a name the story actually contains.
       guide:
-        "The word engraved on the little pendant at the centre of the rakhi. It must be a name or nickname that appears in the story itself — what he calls her, what she signs herself, or a private two-word joke between them. Under 16 characters, because the pendant is physically that small. Lower case unless it is a name. If the story contains no such nickname, return null: an empty pendant is correct, and a relationship word standing in for a name is not something either of them would have engraved.",
+        "The word engraved on the little pendant at the centre of the rakhi. Use the nickname the story gives you — if it says what he calls her, even in passing ('he calls me chhoti'), that is the word, and it goes on the pendant as-is. A name she signs herself or a private two-word joke works too. Under 16 characters, because the pendant is physically that small. Lower case unless it is a name. If the story names no such word at all, return null: an empty pendant is correct, and a bare relationship word standing in for a name is not something either of them would have engraved.",
       example: "didi",
     },
     {
@@ -159,25 +161,38 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       max: 18,
       required: true,
       guide:
-        "The amount in the right-hand column for row 1. Usually an absurdly precise number; occasionally words instead, which is where the joke lands. Under 18 characters, no currency symbols unless the row is literally about money.",
+        "The amount in the right-hand column for row 1. Usually an absurdly precise number, high enough to be funny — the joke is that someone has been keeping count for years. Occasionally words instead, where those land better. Never a bare '1': one of something is not a running tally and reads as an unfilled field. Under 18 characters, no currency symbols unless the row is literally about money.",
       example: "47",
     },
+    // ── ROWS 2-4 CARRY NO `example`, DELIBERATELY ────────────────────────────
+    //
+    // They did, and the examples came back as the answer. A test story with
+    // material for about three grievances produced a ledger whose row 2 was
+    // "times you tore my homework" and whose row 4 was "outstanding
+    // balance"/"unpayable" — my example strings, verbatim, for a family they
+    // had nothing to do with.
+    //
+    // The system prompt already says never to reuse an example's words. That
+    // holds while the model has its own material and breaks the moment it runs
+    // out: asked for four rows from a three-row story, the nearest phrasing to
+    // hand is the example. So these rows say what belongs in them and show
+    // nothing, and each one is explicitly allowed to come back empty. Three true
+    // rows beat four where the last is someone else's joke.
     {
       path: "ledger[1].label",
       label: "Ledger row 2 — what",
       kind: "text",
       max: 44,
       guide:
-        "Second ledger row, same register as the first — a different grievance, not a variation on the same one. Lower case, under 44 characters.",
-      example: "times you tore my homework",
+        "Second ledger row: a DIFFERENT grievance from the first, drawn from its own moment in the story rather than a rephrasing of row 1. Lower case, under 44 characters. If the story only really supports one entry, return null and leave this row empty — an invented grievance is one he will read and not recognise.",
     },
     {
       path: "ledger[1].value",
       label: "Ledger row 2 — how many",
       kind: "text",
       max: 18,
-      guide: "The amount for row 2. A number or a short phrase, under 18 characters.",
-      example: "12",
+      guide:
+        "The amount for row 2, in the right-hand column. A precise-sounding count, or a short phrase where a number would be less funny. Under 18 characters. Return null if row 2 is empty. Never a bare '1' — one of something is not a running tally and reads as a placeholder.",
     },
     {
       path: "ledger[2].label",
@@ -185,8 +200,7 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       kind: "text",
       max: 44,
       guide:
-        "Third ledger row. This is the one that should quietly turn — something he did FOR her, still counted as a debt, so the joke lands as affection. Lower case, under 44 characters.",
-      example: "times you covered for me",
+        "Third ledger row, and the one that turns: something he did FOR her, still entered as a debt, so the joke lands as affection rather than complaint. Take it from a moment in the story where he showed up for her. Lower case, under 44 characters. Return null if the story has no such moment.",
     },
     {
       path: "ledger[2].value",
@@ -194,8 +208,7 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The amount for row 3. Words rather than a number work best here — the point is that it is uncountable.",
-      example: "every time",
+        "The amount for row 3. Words work better than a number here, because the point of this row is that it cannot be counted. Under 18 characters. Return null if row 3 is empty.",
     },
     {
       path: "ledger[3].label",
@@ -203,8 +216,7 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       kind: "text",
       max: 44,
       guide:
-        "The closing row, written like a balance at the foot of an invoice rather than another grievance. Lower case, under 44 characters. Return null if three rows already say it.",
-      example: "outstanding balance",
+        "An optional closing row, phrased like the bottom line of an invoice rather than another grievance — it exists to end the section on a laugh. Lower case, under 44 characters. Return null unless the three rows above are all filled from real material AND this genuinely adds a joke; three rows is a complete ledger.",
     },
     {
       path: "ledger[3].value",
@@ -212,8 +224,7 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The amount for the closing row — a word, not a number, and the last laugh of the section.",
-      example: "unpayable",
+        "The closing amount — a word rather than a number, and the last laugh of the section. Under 18 characters. Return null if row 4 is empty.",
     },
   ],
 };
