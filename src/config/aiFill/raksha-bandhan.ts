@@ -80,8 +80,13 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       label: "Where you are",
       kind: "text",
       max: 60,
+      // Measured failure, twice: for a story saying her brother had moved to
+      // Bangalore this returned Bangalore, and for one saying they grew up in
+      // Leeds it returned Leeds. Both print as "from <her name>, <his city>" —
+      // a wrong fact about HER, in her own signature. The guide now says whose
+      // city it is and what to do when the story never says.
       guide:
-        "The city or town the sister is writing from, only if the story names it. Printed after her name as 'from Meera, Pune'. City name alone — no state, no country, no address.",
+        "The city the SENDER — the sister writing this — lives in now. It prints directly after her own name, as 'from Meera, Pune', so it must be HER city: not her brother's, not the city they grew up in, not anywhere the story merely mentions. Fill it only if the story actually says where she is now, and return null otherwise. City name alone — no state, no country, no address.",
       example: "Pune",
     },
     {
@@ -100,8 +105,13 @@ export const rakshaBandhan: AiFillTemplateSchema = {
       label: "On the pendant",
       kind: "text",
       max: 16,
+      // The first version of this guide ended "…return null rather than a
+      // generic word like 'sister'", and the model returned exactly "sister".
+      // Naming the word you do not want raises its probability — the same
+      // reason `example` is documented as tone-only. The rule is now stated
+      // positively: fill it only from a name the story actually contains.
       guide:
-        "The word engraved on the little pendant at the centre of the rakhi, on the thread itself. What he calls her, or what she signs herself — 'didi', 'chhoti', a two-word private joke. Under 16 characters because the physical space is that small. Lower case unless it is a name. If the story gives you nothing that short and specific, return null rather than a generic word like 'sister'.",
+        "The word engraved on the little pendant at the centre of the rakhi. It must be a name or nickname that appears in the story itself — what he calls her, what she signs herself, or a private two-word joke between them. Under 16 characters, because the pendant is physically that small. Lower case unless it is a name. If the story contains no such nickname, return null: an empty pendant is correct, and a relationship word standing in for a name is not something either of them would have engraved.",
       example: "didi",
     },
     {
