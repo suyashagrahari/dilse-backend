@@ -200,9 +200,32 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       max: 18,
       required: true,
       guide:
-        "The figure in the right of the first column for row 1. Usually an absurdly precise number, high enough to be funny — the joke is that somebody has been keeping this tally for years — or a short phrase where that lands better ('too many', 'beyond counting'). Keep any number at 2 or above, or use words instead: a figure of one is not a running tally and reads as a field nobody filled in. Under 18 characters, no currency symbols unless the row is literally about money.",
+        "The figure in the right of the first column for row 1. Usually an absurdly precise number, high enough to be funny — the joke is that somebody has been keeping this tally for years — or a short phrase where that lands better ('too many', 'beyond counting'). A count here is only ever plural — several, dozens, or a phrase like 'too many'. When the story supports only ONE instance of the thing, do not count it at all: write the phrase instead, such as 'again', 'still', or 'yet to be returned'. A tally kept for years is never a single item. Under 18 characters, no currency symbols unless the row is literally about money.",
       example: "9",
     },
+    // ── A KNOWN RESIDUAL: THE BARE COUNT ─────────────────────────────────────
+    //
+    // A value of exactly "1" in the petty column reads as a field nobody filled
+    // in rather than as a tally. Measured against the live model on the same
+    // story, four runs: it appeared in roughly one run in four after three
+    // rounds of guide work, down from nearly every run.
+    //
+    // What moved the number was NOT prohibition. The first two attempts said
+    // "keep any number at 2 or above" and "a bare '1' reads as an unfilled
+    // field" — both of which print the token they are trying to suppress, which
+    // is the same mistake that made the brother schema return the word "sister"
+    // verbatim. What worked was offering a concrete substitute: "when the story
+    // supports only ONE instance, write 'again' or 'still' instead of counting
+    // it". The model now reaches for those.
+    //
+    // It is not fixed, and it is being left. A deterministic post-filter is the
+    // obvious answer, but the only place to hang one is the frozen contract in
+    // `types.ts`, which is lead-owned and must not be extended for one
+    // template's cosmetic nit. The residual costs one ledger row occasionally
+    // reading "1" instead of "once", on a form where every field is editable —
+    // which is the whole promise of the feature. Do not spend a fourth round on
+    // it without measuring first.
+    //
     // ── EVERY ROW AFTER THE FIRST CARRIES NO `example`, DELIBERATELY ──────────
     //
     // The brother schema shipped examples on all four of its ledger rows and got
@@ -231,7 +254,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The figure for row 2 of the petty column. A precise-sounding count, or a short phrase where a number would be less funny. Under 18 characters. Keep any number at 2 or above — a figure of one reads as a placeholder rather than a tally. Return null if row 2 is empty.",
+        "The figure for row 2 of the petty column. A precise-sounding count, or a short phrase where a number would be less funny. Under 18 characters. A count here is only ever plural. When the story supports only ONE instance, write a phrase instead of counting it — 'again', 'still', 'ongoing'. A single item counted reads as a placeholder rather than a tally. Return null if row 2 is empty.",
     },
     {
       path: "account.heOwes[0].label",
@@ -240,7 +263,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       max: 44,
       required: true,
       guide:
-        "The first line of the SECOND column, and the register changes completely here. This column is what SHE did for HIM, and it is not funny — not once, not in a single row. It arrives after the reader has laughed at the first column, and the whole screen exists so that this side stops the laugh: the times she covered for him, the nights she waited up, the things she never told anyone. State it flat and short, in the same lower-case ledger phrasing as the other column, under 44 characters, with no adjective doing the work and no twist at the end. If it could be read as a joke, it is the wrong line. Take it from the plainest true thing the story gives you about what she did.",
+        "The first line of the SECOND column, and the register changes completely here. This column is what SHE did for HIM, and it is not funny — not once, not in a single row. It arrives after the reader has laughed at the first column, and the whole screen exists so that this side stops the laugh: the times she covered for him, the nights she waited up, the things she never told anyone. State it flat and short, in the same lower-case ledger phrasing as the other column, under 44 characters, with no adjective doing the work and no twist at the end. If it could be read as a joke, it is the wrong line. Two hard rules, because this column is printed as fact and she will read it as one. FIRST: take it only from something the story actually says she did. If the story does not name anything, return null — an invented entry hands her a memory she does not have and presents it as hers, in her brother's name, and there is no version of that which is better than a blank row he fills in himself. SECOND: name it at the size she actually did it. A sister who delayed her own wedding by two years did not 'help with the wedding'; a sister who raised the household did not 'assist at home'. If the true version will not fit in 44 characters, use a different row rather than a shrunken one — the shrunken version throws away the strongest thing you were given.",
     },
     {
       path: "account.heOwes[0].value",
@@ -249,7 +272,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       max: 18,
       required: true,
       guide:
-        "The figure for row 1 of the second column. This side of the statement cannot be counted, and that is its point, so the figure is almost always words rather than a number — the flat, total kind: 'every single one', 'all of them'. Under 18 characters. Keep it deadpan; a figure that reaches for a laugh here undoes the column. Any number is at 2 or above or written as words: a bare '1' reads as an unfilled field. Return null rather than inventing a number.",
+        "The figure for row 1 of the second column. This side of the statement cannot be counted, and that is its point, so the figure is almost always words rather than a number — the flat, total kind: 'every single one', 'all of them'. Under 18 characters. Keep it deadpan; a figure that reaches for a laugh here undoes the column. Prefer words over any numeral at all here. If you do use a count it is plural. Return null rather than inventing a figure.",
     },
     {
       path: "account.heOwes[1].label",
@@ -265,7 +288,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The figure for row 2 of the second column. Words, or an exact number the story actually states. Under 18 characters, deadpan, no punchline. Any number here is at 2 or above, or written as words instead — a figure of one is not a tally and reads as a field nobody filled in. Return null if row 2 is empty.",
+        "The figure for row 2 of the second column. Words, or an exact number the story actually states. Under 18 characters, deadpan, no punchline. Prefer words. Any count you use is plural and comes from the story itself. Return null if row 2 is empty.",
     },
     {
       path: "account.heOwes[2].label",
@@ -281,7 +304,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The closing figure of the statement. Words, short, and flat enough to end on — the reader should reach it and stop. Under 18 characters. Any number is at 2 or above or written as words; a bare '1' reads as an unfilled field. Return null if row 3 is empty.",
+        "The closing figure of the statement. Words, short, and flat enough to end on — the reader should reach it and stop. Under 18 characters. Prefer words here; any count is plural. Return null if row 3 is empty.",
     },
 
     {
