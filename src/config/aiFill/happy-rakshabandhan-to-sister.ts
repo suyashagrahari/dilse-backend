@@ -94,7 +94,7 @@ import type { AiFillTemplateSchema } from "./types";
 export const rakshaBandhanSister: AiFillTemplateSchema = {
   slug: "happy-rakshabandhan-to-sister",
   premise:
-    "This is a Raksha Bandhan page a BROTHER is making for his SISTER — they are siblings, and that is the only relationship in play. Whatever the surrounding context calls her, she is his sister: call her his sister, his behna or his didi, never his friend and never, under any circumstance, anything romantic. On this festival the sister ties a thread on her brother's wrist and he promises to look after her and gives her shagun — money, in a small envelope called a lifafa. So the page hands her the parts that are hers: it opens on her name and his greeting, she chooses a rakhi and presses and holds to wind it around his wrist until it is tied, then his promise appears as a signed certificate, then a two-sided statement of account — a short petty list of what she owes him, and then a longer flat list of what he owes her, which cannot be settled — then the lifafa she tears open, then old photographs, and last his letter, which she answers once. You are writing HIS words for all of that: funny first and tender second, the way an Indian brother actually talks to his sister — the borrowed hoodie that never came back, the tattling to Mummy, the last piece of mithai — with Hinglish left in wherever it is how he would really say it. Never greeting-card, never 'you are the light of my life', and never a single line he would be embarrassed to have said out loud.",
+    "This is a Raksha Bandhan page a BROTHER is making for his SISTER — they are siblings, and that is the only relationship in play. Whatever the surrounding context calls her, she is his sister: call her his sister, his behna or his didi, never his friend and never, under any circumstance, anything romantic. On this festival the sister ties a thread on her brother's wrist and he promises to look after her and gives her shagun — money, in a small envelope called a lifafa. So the page hands her the parts that are hers: it opens on her name and his greeting, she chooses a rakhi and presses and holds to wind it around his wrist until it is tied, then his promise appears as a signed certificate, then a two-sided statement of account — a short petty list of what she owes him, and then a longer flat list of what he owes her, which cannot be settled — then the lifafa she tears open, then old photographs, and last his letter, which she answers once. You are writing HIS words for all of that: funny first and tender second, the way an Indian brother actually talks to his sister — the borrowed hoodie that never came back, the tattling to Mummy, the last piece of mithai — with Hinglish left in wherever it is how he would really say it. Never greeting-card, never 'you are the light of my life', and never a single line he would be embarrassed to have said out loud. EVERY line you write is spoken BY THE BROTHER, TO HIS SISTER: he is 'I' and she is 'you', in every field, without exception. In Hindi and Hinglish the verb must agree with whoever is actually doing the thing. On this festival the SISTER ties the rakhi onto her BROTHER'S wrist: she is always the one tying, and he is always the one holding out his wrist and receiving it. So any line about the tying has HER doing it and HIM waiting — 'tu baandhegi', 'main haath aage kar raha hoon'. Getting this backwards does not read as a grammar slip; it describes the wrong ritual, in the largest text on the page.",
   audience: "bestfriend",
   fields: [
     {
@@ -249,7 +249,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       max: 18,
       required: true,
       guide:
-        "The figure for row 1 of the second column. This side of the statement cannot be counted, and that is its point, so the figure is almost always words rather than a number — the flat, total kind: 'every single one', 'all of them'. Under 18 characters. Keep it deadpan; a figure that reaches for a laugh here undoes the column. Return null rather than inventing a number.",
+        "The figure for row 1 of the second column. This side of the statement cannot be counted, and that is its point, so the figure is almost always words rather than a number — the flat, total kind: 'every single one', 'all of them'. Under 18 characters. Keep it deadpan; a figure that reaches for a laugh here undoes the column. Any number is at 2 or above or written as words: a bare '1' reads as an unfilled field. Return null rather than inventing a number.",
     },
     {
       path: "account.heOwes[1].label",
@@ -257,7 +257,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       kind: "text",
       max: 44,
       guide:
-        "Second line of what she did for him. A different kind of thing from row 1, and still with no joke in it: where row 1 was something she did repeatedly, let this one be a single occasion the story actually names — an exam she sat outside, a hospital she waited at, a fight she took his side in. Lower case, under 44 characters, flat. Return null if the story does not give you such a moment; two true lines in this column are worth more than three where one is guessed.",
+        "Second line of what she did for him. A different kind of thing from row 1, and still with no joke in it: where row 1 was something she did repeatedly, let this one be a single occasion the story actually names — an exam she sat outside, a hospital she waited at, a fight she took his side in. Lower case, under 44 characters, flat. Name the thing she actually did, at the size she actually did it: do not shrink it into a smaller, more manageable version of itself. A sister who delayed her own wedding by two years is not 'helped with the wedding', and turning it into that throws away the strongest fact you were given. If the sentence you are compressing will not fit in 44 characters at full size, choose a different row rather than a diminished one. Return null if the story does not give you such a moment; two true lines in this column are worth more than three where one is guessed.",
     },
     {
       path: "account.heOwes[1].value",
@@ -265,7 +265,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The figure for row 2 of the second column. Words or a small exact number the story supports. Under 18 characters, deadpan, no punchline. Return null if row 2 is empty.",
+        "The figure for row 2 of the second column. Words, or an exact number the story actually states. Under 18 characters, deadpan, no punchline. Any number here is at 2 or above, or written as words instead — a figure of one is not a tally and reads as a field nobody filled in. Return null if row 2 is empty.",
     },
     {
       path: "account.heOwes[2].label",
@@ -281,7 +281,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
       kind: "text",
       max: 18,
       guide:
-        "The closing figure of the statement. Words, short, and flat enough to end on — the reader should reach it and stop. Under 18 characters. Return null if row 3 is empty.",
+        "The closing figure of the statement. Words, short, and flat enough to end on — the reader should reach it and stop. Under 18 characters. Any number is at 2 or above or written as words; a bare '1' reads as an unfilled field. Return null if row 3 is empty.",
     },
 
     {
