@@ -56,6 +56,7 @@ import profileProPageRoutes from "./profileProPage.routes";
 import contributionRoutes from "./contribution.routes";
 import activityRoutes from "./activity.routes";
 import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
+import rakshaBandhanSisterPageRoutes from "./rakshaBandhanSisterPage.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
 
@@ -108,6 +109,11 @@ router.use("/nutrition-pages", nutritionPageRoutes);
 router.use("/app-pages", appPageRoutes);
 router.use("/profile-pro-pages", profileProPageRoutes);
 router.use("/raksha-bandhan-pages", rakshaBandhanPageRoutes);
+// The same festival read from the other side: a brother's page for his sister.
+// A separate mount and a separate collection, not a flag on the one above —
+// the two pages store different halves of the ritual and neither can render the
+// other's fields.
+router.use("/raksha-bandhan-sister-pages", rakshaBandhanSisterPageRoutes);
 // Anonymous friends post here, addressed only by shareId. Everything it can
 // reach is gated by config/contributionTemplates.ts.
 router.use("/contributions", contributionRoutes);

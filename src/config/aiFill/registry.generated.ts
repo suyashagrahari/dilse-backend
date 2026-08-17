@@ -48,6 +48,7 @@ import { nutrition } from "./nutrition";
 import { app } from "./app";
 import { profilePro } from "./profile-pro";
 import { rakshaBandhan } from "./raksha-bandhan";
+import { rakshaBandhanSister } from "./happy-rakshabandhan-to-sister";
 
 export const SCHEMAS: AiFillTemplateSchema[] = [
   anniversaryGf,
@@ -89,4 +90,5 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   app,
   profilePro,
   rakshaBandhan,
+  rakshaBandhanSister,
 ];
