@@ -93,6 +93,57 @@ import type { AiFillTemplateSchema } from "./types";
 
 export const rakshaBandhanSister: AiFillTemplateSchema = {
   slug: "happy-rakshabandhan-to-sister",
+  // ── BIRTH-ORDER WORDS ARE ENFORCED, NOT REQUESTED ──────────────────────────
+  //
+  // The guides ask the model to address her as "you" or by her name and to leave
+  // the relationship word to the template. Asking is not enough, and it is not
+  // close: measured over four runs against the live model on one elder-sister
+  // story, a birth-order word appeared inside a generated line in TWO of them.
+  // One was "Tu hamesha meri chhoti behan hai" — you are always my little sister
+  // — for a story whose first sentence says she is six years OLDER than him.
+  //
+  // That is not a style slip. `sisterIsElder` is a toggle the sender sets, and
+  // the template prints Didi or Behna from it in the largest type on the page.
+  // A contradicting word inside his own vow, two inches below, is the most
+  // visible error this template can produce, and it is inverted from the truth.
+  //
+  // The reason asking fails is structural rather than fixable by better
+  // phrasing: the sender's own story is usually full of "didi" or "behna", and a
+  // model reaches for the vocabulary in front of it. This is the same lesson as
+  // the brother schema's leaked "sister", one level up — the word cannot be
+  // prompted away, so it is removed afterwards instead.
+  //
+  // ── THE COST, STATED PLAINLY ────────────────────────────────────────────────
+  //
+  // This drops a field even when the word in it happened to be RIGHT. There is no
+  // way for a static list to know the toggle. So an elder-sister page whose
+  // greeting said "didi" correctly loses that greeting, and it comes back as
+  // `missing` for the sender to write himself.
+  //
+  // That trade is deliberate. A blank he fills in is a small cost paid visibly at
+  // build time; a page that calls his elder sister his little sister is an
+  // unrecoverable one paid by her, on the day.
+  //
+  // Excluded from the list on purpose: "di" (a standalone Hinglish verb — "kar
+  // di", "de di" — which would drop half the fields on every Hindi story) and
+  // "baji" (commonly the verb "rang", as in "ghanti baji"). Both are matched as
+  // whole words with no stemming, so a false positive costs a real field.
+  forbiddenOutput: [
+    "didi",
+    "deedee",
+    "jiji",
+    "behna",
+    "behen",
+    "behan",
+    "bahan",
+    "bahna",
+    "bahen",
+    "chhoti",
+    "choti",
+    "akka",
+    "chechi",
+    "tai",
+  ],
   premise:
     "This is a Raksha Bandhan page a BROTHER is making for his SISTER — they are siblings, and that is the only relationship in play. Whatever the surrounding context calls her, she is his sister: call her his sister, his behna or his didi, never his friend and never, under any circumstance, anything romantic. On this festival the sister ties a thread on her brother's wrist and he promises to look after her and gives her shagun — money, in a small envelope called a lifafa. So the page hands her the parts that are hers: it opens on her name and his greeting, she chooses a rakhi and presses and holds to wind it around his wrist until it is tied, then his promise appears as a signed certificate, then a two-sided statement of account — a short petty list of what she owes him, and then a longer flat list of what he owes her, which cannot be settled — then the lifafa she tears open, then old photographs, and last his letter, which she answers once. You are writing HIS words for all of that: funny first and tender second, the way an Indian brother actually talks to his sister — the borrowed hoodie that never came back, the tattling to Mummy, the last piece of mithai — with Hinglish left in wherever it is how he would really say it. Never greeting-card, never 'you are the light of my life', and never a single line he would be embarrassed to have said out loud. EVERY line you write is spoken BY THE BROTHER, TO HIS SISTER: he is 'I' and she is 'you', in every field, without exception. In Hindi and Hinglish the verb must agree with whoever is actually doing the thing. On this festival the SISTER ties the rakhi onto her BROTHER'S wrist: she is always the one tying, and he is always the one holding out his wrist and receiving it. So any line about the tying has HER doing it and HIM waiting — 'tu baandhegi', 'main haath aage kar raha hoon'. Getting this backwards does not read as a grammar slip; it describes the wrong ritual, in the largest text on the page.",
   audience: "bestfriend",
