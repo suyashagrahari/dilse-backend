@@ -51,6 +51,31 @@ export interface IRakshaBandhanPage extends Document {
 
   brotherName: string;
   sisterName: string;
+
+  /**
+   * Mirrors of `brotherName` / `sisterName` under the generic names the shared
+   * readers look for. Maintained by the `pre("save")` hook below; never set by
+   * hand.
+   *
+   * Two places consume them, and both were reading nothing before these existed:
+   *
+   *  • `share.controller` builds the forwarded link preview from
+   *    `recipientName` / `senderName` — one generic pair for all fifty-odd
+   *    templates — so the WhatsApp card read "Raksha Bandhan for You from
+   *    Someone Special" no matter whose page it was.
+   *  • `/share/me/creations` selects the same two fields, which is what the
+   *    profile's My Creations card prints. A page with neither is a card with
+   *    no names on it, and a sender scrolling for the rakhi she just sent has
+   *    nothing to recognise it by.
+   *
+   * The alternative — teaching those shared readers this template's field names
+   * — means editing a file every template depends on in order to fix one. This
+   * stays local, and the hook makes it impossible to forget on a later write
+   * path. The sister template carries the same pair for the same reason.
+   */
+  recipientName: string;
+  senderName: string;
+
   city: string;
   /** The two of them together — the hero of the shareable card. */
   photoUrl: string;
@@ -89,6 +114,10 @@ const rakshaBandhanPageSchema = new Schema<IRakshaBandhanPage>(
 
     brotherName: { type: String, default: "" },
     sisterName: { type: String, default: "" },
+    // Denormalised for the share preview and the profile card — see the
+    // interface above. Written by the pre-save hook, not by the controller.
+    recipientName: { type: String, default: "" },
+    senderName: { type: String, default: "" },
     city: { type: String, default: "" },
     photoUrl: { type: String, default: "" },
 
@@ -152,6 +181,15 @@ const rakshaBandhanPageSchema = new Schema<IRakshaBandhanPage>(
 
 rakshaBandhanPageSchema.pre("save", async function (next) {
   if (!this.shareId) this.shareId = randomUUID();
+
+  // Keep the share-preview mirrors in step with the real fields on EVERY write.
+  // In the hook rather than in the controller because there are four `.save()`
+  // call sites already and the next one added would be the one that forgot.
+  // This also repairs documents written before the fields existed: the next
+  // save of an old page — an edit, or pressing Send again — fills them in.
+  this.recipientName = this.brotherName;
+  this.senderName = this.sisterName;
+
   if (this.isModified("password") && this.password) {
     this.passwordRaw = this.password;
     const salt = await bcrypt.genSalt(10);
