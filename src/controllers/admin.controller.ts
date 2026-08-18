@@ -4,40 +4,26 @@ import User, { UserRole } from "../models/User";
 import PageView from "../models/PageView";
 import ContactInquiry from "../models/ContactInquiry";
 import { sendContactReplyEmail } from "../utils/mailer";
-import BirthdayPage from "../models/BirthdayPage";
-import ValentinePage from "../models/ValentinePage";
-import HoliPage from "../models/HoliPage";
-import EidPage from "../models/EidPage";
-import WeddingPage from "../models/WeddingPage";
-import ReceptionPage from "../models/ReceptionPage";
-import ShaadiCardPage from "../models/ShaadiCardPage";
-import ChristianWeddingPage from "../models/ChristianWeddingPage";
-import LoveGfPage from "../models/LoveGfPage";
-import DarlingPage from "../models/DarlingPage";
-import BirthdayGfPage from "../models/BirthdayGfPage";
-import ApologyDashboardPage from "../models/ApologyDashboardPage";
-import MissYouGfPage from "../models/MissYouGfPage";
-import BouquetGfPage from "../models/BouquetGfPage";
+import { TEMPLATE_LOOKUPS } from "./share.controller";
+import { templateLabel } from "../config/templateCatalog";
 
-// Must stay in sync with TEMPLATE_LOOKUPS in share.controller.ts — a template
-// missing here is invisible to the admin panel: its pages never show in the user
-// detail modal, aren't counted in analytics, and can't be deleted.
-const ALL_PAGE_MODELS = [
-  { model: BirthdayPage, type: "birthday", label: "Birthday" },
-  { model: ValentinePage, type: "valentine", label: "Valentine" },
-  { model: HoliPage, type: "holi", label: "Holi" },
-  { model: EidPage, type: "eid", label: "Eid" },
-  { model: WeddingPage, type: "wedding", label: "Wedding" },
-  { model: ReceptionPage, type: "reception", label: "Reception" },
-  { model: ShaadiCardPage, type: "shaadi", label: "Shaadi Card" },
-  { model: ChristianWeddingPage, type: "christian-wedding", label: "Christian Wedding" },
-  { model: LoveGfPage, type: "love-gf", label: "Love GF" },
-  { model: DarlingPage, type: "darling", label: "Darling" },
-  { model: BirthdayGfPage, type: "birthday-gf", label: "Birthday GF" },
-  { model: ApologyDashboardPage, type: "apology-dashboard", label: "Apology Dashboard" },
-  { model: MissYouGfPage, type: "missyou-gf", label: "Miss You GF" },
-  { model: BouquetGfPage, type: "bouquet-gf", label: "Bouquet GF" },
-];
+// Every template, derived from the one list that says which templates exist.
+//
+// This used to be a hand-written array of fourteen models with a comment asking
+// the next person to keep it in sync with TEMPLATE_LOOKUPS. It had drifted to
+// fourteen of forty-three: twenty-nine templates — the rakhi pair among them —
+// were invisible here. Their pages were missing from the user-detail list, they
+// contributed nothing to "Pages Created", they could not be deleted, and the
+// popularity chart showed their raw slug instead of a name. Nothing errored,
+// which is why nobody noticed.
+//
+// Deriving it means a template added to TEMPLATE_LOOKUPS is counted here on the
+// same commit, and there is no longer a list that can be out of date.
+const ALL_PAGE_MODELS = TEMPLATE_LOOKUPS.map(({ model, templateType }) => ({
+  model,
+  type: templateType,
+  label: templateLabel(templateType),
+}));
 
 // ─── ANALYTICS DASHBOARD ────────────────────────────────────────
 
@@ -74,6 +60,10 @@ export const getAnalyticsOverview = async (_req: Request, res: Response): Promis
         return { type, label, total, published };
       })
     );
+
+    // Busiest first. With every template present this table is 43 rows long,
+    // and registry order buries the ones that are actually being used.
+    templateStats.sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 
     const totalPagesCreated = templateStats.reduce((s, t) => s + t.total, 0);
     const totalPagesPublished = templateStats.reduce((s, t) => s + t.published, 0);
@@ -428,7 +418,16 @@ export const getRecentActivity = async (req: Request, res: Response): Promise<vo
 
     res.json({
       success: true,
-      data: { recentUsers, recentViews },
+      data: {
+        recentUsers,
+        // Named, not slugged. Every other admin surface resolves the label, and
+        // a feed that reads "raksha-bandhan-sister" next to tables that say
+        // "Rakhi for Behna" looks like two different things.
+        recentViews: recentViews.map((v) => ({
+          ...v,
+          templateLabel: templateLabel(String(v.templateType || "")),
+        })),
+      },
     });
   } catch (error) {
     console.error("Recent activity error:", error);

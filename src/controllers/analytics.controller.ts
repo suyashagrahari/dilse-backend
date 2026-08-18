@@ -1,13 +1,21 @@
 import { Request, Response } from "express";
-import BirthdayPage from "../models/BirthdayPage";
-import ValentinePage from "../models/ValentinePage";
-import HoliPage from "../models/HoliPage";
-import EidPage from "../models/EidPage";
-import WeddingPage from "../models/WeddingPage";
-import ReceptionPage from "../models/ReceptionPage";
 import PlatformAnalytics from "../models/PlatformAnalytics";
+import { TEMPLATE_LOOKUPS } from "./share.controller";
 
-const PAGE_MODELS = [BirthdayPage, ValentinePage, HoliPage, EidPage, WeddingPage, ReceptionPage];
+// Every template, not a hand-picked six.
+//
+// This list was BirthdayPage, ValentinePage, HoliPage, EidPage, WeddingPage and
+// ReceptionPage — six of the forty-three that exist — so the public totals
+// counted a seventh of the site and reported it as the whole. Deriving from
+// TEMPLATE_LOOKUPS (the one list of which templates exist) means a new template
+// is counted the day it ships.
+const PAGE_MODELS = TEMPLATE_LOOKUPS.map((t) => t.model);
+
+// Forty-three collections, two queries each, for numbers that move slowly and
+// are read from a public page. Cached for a minute, like the activity feed —
+// the alternative is 86 round trips per visitor.
+const TTL_MS = 60_000;
+let overviewCache: { at: number; payload: Record<string, unknown> } | null = null;
 
 const getBaseAnalytics = async () => {
   const baseDoc = await PlatformAnalytics.findOneAndUpdate(
@@ -32,8 +40,13 @@ const getBaseAnalytics = async () => {
 
 export const getPlatformOverview = async (_req: Request, res: Response): Promise<void> => {
   try {
+    const now = Date.now();
+    if (overviewCache && now - overviewCache.at < TTL_MS) {
+      res.json({ success: true, data: overviewCache.payload });
+      return;
+    }
+
     const base = await getBaseAnalytics();
-    console.log("base", base);
     const stats = await Promise.all(
       PAGE_MODELS.map(async (model) => {
         const [links, totals] = await Promise.all([
@@ -55,22 +68,22 @@ export const getPlatformOverview = async (_req: Request, res: Response): Promise
     const dynamicVisitors = stats.reduce((sum, s) => sum + s.views, 0);
     const dynamicInstalls = stats.reduce((sum, s) => sum + s.installs, 0);
 
-    res.json({
-      success: true,
-      data: {
-        totals: {
-          totalSharedLinks: base.sharedLinks + dynamicSharedLinks,
-          totalVisitors: base.visitors + dynamicVisitors,
-          totalInstalls: base.installs + dynamicInstalls,
-        },
-        base,
-        dynamic: {
-          sharedLinks: dynamicSharedLinks,
-          visitors: dynamicVisitors,
-          installs: dynamicInstalls,
-        },
+    const payload = {
+      totals: {
+        totalSharedLinks: base.sharedLinks + dynamicSharedLinks,
+        totalVisitors: base.visitors + dynamicVisitors,
+        totalInstalls: base.installs + dynamicInstalls,
       },
-    });
+      base,
+      dynamic: {
+        sharedLinks: dynamicSharedLinks,
+        visitors: dynamicVisitors,
+        installs: dynamicInstalls,
+      },
+    };
+
+    overviewCache = { at: now, payload };
+    res.json({ success: true, data: payload });
   } catch (error) {
     console.error("Get platform overview error:", error);
     res.status(500).json({ success: false, error: "Failed to get platform analytics" });

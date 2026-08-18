@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { templateLabel, templateApiBase } from "../config/templateCatalog";
 import BirthdayPage from "../models/BirthdayPage";
 import ProductPage from "../models/ProductPage";
 import WatchPage from "../models/WatchPage";
@@ -324,6 +325,10 @@ export const getReceivedPages = async (req: Request, res: Response): Promise<voi
       const entry: Record<string, unknown> = {
         shareId: access.shareId,
         templateType: access.templateType,
+        // Same reason as creations. No apiBase: a recipient does not own the
+        // page and has nothing to update or delete.
+        templateLabel: templateLabel(access.templateType),
+        editorRoute: lookup.editorRoute,
         recipientName: pageObj.recipientName,
         senderName: sender?.name || (pageObj.senderName as string) || "Someone",
         senderAvatar: sender?.avatar || null,
@@ -357,7 +362,7 @@ export const getMyCreations = async (req: Request, res: Response): Promise<void>
 
     const results: Record<string, unknown>[] = [];
 
-    for (const { model, templateType } of TEMPLATE_LOOKUPS) {
+    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
       const pages = await model.find({ userId }).select("+passwordRaw").sort({ updatedAt: -1 });
       for (const page of pages) {
         const obj = (page as { toObject: () => Record<string, unknown> }).toObject();
@@ -365,6 +370,18 @@ export const getMyCreations = async (req: Request, res: Response): Promise<void>
           _id: obj._id,
           shareId: obj.shareId,
           templateType,
+          // Name, builder route and REST base travel WITH the row.
+          //
+          // The profile used to hold its own map of templateType to all three,
+          // and it covered sixteen of forty-three: everything else rendered as
+          // "🎁 Gift", its Edit button went to the gallery instead of the
+          // builder, and Delete was disabled because there was no route to send
+          // it to. Answering it here means a template is complete in a user's
+          // profile the moment it exists, and the client cannot hold a stale
+          // copy of a mapping only the server knows.
+          templateLabel: templateLabel(templateType),
+          editorRoute,
+          apiBase: templateApiBase(templateType),
           recipientName: obj.recipientName,
           senderName: obj.senderName,
           isPublished: obj.isPublished,
@@ -395,7 +412,7 @@ export const getPublicProfile = async (req: Request, res: Response): Promise<voi
       return;
     }
     const pages: Record<string, unknown>[] = [];
-    for (const { model, templateType } of TEMPLATE_LOOKUPS) {
+    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
       const found = await model
         .find({ userId: user._id, isPublished: true })
         .sort({ updatedAt: -1 })
@@ -405,6 +422,8 @@ export const getPublicProfile = async (req: Request, res: Response): Promise<voi
         pages.push({
           shareId: obj.shareId,
           templateType,
+          templateLabel: templateLabel(templateType),
+          editorRoute,
           recipientName: obj.recipientName,
           viewCount: (obj.viewCount as number) || 0,
           createdAt: obj.createdAt,
