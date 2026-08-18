@@ -77,6 +77,23 @@
 //       guide did not fix it. This template does not print a city at all, and
 //       it is named here so nobody adds one back thinking it was an oversight.
 //
+// ── SCRIPT MIXING IS PRE-EXISTING AND NOT FIXED HERE ────────────────────────
+//
+// The model sometimes returns a line with Devanagari and Latin inside one
+// sentence — "तेरे gulab jamun khane ki wajah se mai aaj bhi tang hoon." The
+// premise asks for one script per line, and that ask is worth keeping because it
+// states the intent, but it does not reliably deliver it.
+//
+// Measured on the brother template with the same English story, three runs each:
+// WITHOUT the instruction, 1 of 3 runs contained a mixed line; WITH it, also 1 of
+// 3. At that sample size there is no difference to claim, so nobody should read
+// the premise line as having solved this.
+//
+// The cause looks upstream of any one template: the language detector picks `hi`
+// for a story written in English, and the copy then comes back Devanagari with
+// English nouns left in. That is shared behaviour in `storyFill.service`, and
+// fixing it there — rather than in thirty-nine premises — is the real repair.
+//
 // ── ON `audience` ────────────────────────────────────────────────────────────
 //
 // The union is frozen at partner | bestfriend | friend, and a sister is none of
@@ -145,7 +162,7 @@ export const rakshaBandhanSister: AiFillTemplateSchema = {
     "tai",
   ],
   premise:
-    "This is a Raksha Bandhan page a BROTHER is making for his SISTER — they are siblings, and that is the only relationship in play. Whatever the surrounding context calls her, she is his sister: call her his sister, his behna or his didi, never his friend and never, under any circumstance, anything romantic. On this festival the sister ties a thread on her brother's wrist and he promises to look after her and gives her shagun — money, in a small envelope called a lifafa. So the page hands her the parts that are hers: it opens on her name and his greeting, she chooses a rakhi and presses and holds to wind it around his wrist until it is tied, then his promise appears as a signed certificate, then a two-sided statement of account — a short petty list of what she owes him, and then a longer flat list of what he owes her, which cannot be settled — then the lifafa she tears open, then old photographs, and last his letter, which she answers once. You are writing HIS words for all of that: funny first and tender second, the way an Indian brother actually talks to his sister — the borrowed hoodie that never came back, the tattling to Mummy, the last piece of mithai — with Hinglish left in wherever it is how he would really say it. Never greeting-card, never 'you are the light of my life', and never a single line he would be embarrassed to have said out loud. EVERY line you write is spoken BY THE BROTHER, TO HIS SISTER: he is 'I' and she is 'you', in every field, without exception. In Hindi and Hinglish the verb must agree with whoever is actually doing the thing. On this festival the SISTER ties the rakhi onto her BROTHER'S wrist: she is always the one tying, and he is always the one holding out his wrist and receiving it. So any line about the tying has HER doing it and HIM waiting — 'tu baandhegi', 'main haath aage kar raha hoon'. Getting this backwards does not read as a grammar slip; it describes the wrong ritual, in the largest text on the page. Keep every line you write in ONE script from start to finish: if you are writing Hinglish, write it in Latin letters all the way through, and if you are writing Hindi, write the whole line in Devanagari. A sentence with Devanagari words dropped into a Latin one reads as a rendering fault rather than as a choice.",
+    "This is a Raksha Bandhan page a BROTHER is making for his SISTER — they are siblings, and that is the only relationship in play. Whatever the surrounding context calls her, she is his sister: call her his sister, his behna or his didi, never his friend and never, under any circumstance, anything romantic. On this festival the sister ties a thread on her brother's wrist and he promises to look after her and gives her shagun — money, in a small envelope called a lifafa. So the page hands her the parts that are hers: it opens on her name and his greeting, she chooses a rakhi and presses and holds to wind it around his wrist until it is tied, then his promise appears as a signed certificate, then a two-sided statement of account — a short petty list of what she owes him, and then a longer flat list of what he owes her, which cannot be settled — then the lifafa she tears open, then old photographs, and last his letter, which she answers once. You are writing HIS words for all of that: funny first and tender second, the way an Indian brother actually talks to his sister — the borrowed hoodie that never came back, the tattling to Mummy, the last piece of mithai — with Hinglish left in wherever it is how he would really say it. Never greeting-card, never 'you are the light of my life', and never a single line he would be embarrassed to have said out loud. EVERY line you write is spoken BY THE BROTHER, TO HIS SISTER: he is 'I' and she is 'you', in every field, without exception. In Hindi and Hinglish the verb must agree with whoever is actually doing the thing. On this festival the SISTER ties the rakhi onto her BROTHER'S wrist: she is always the one tying, and he is always the one holding out his wrist and receiving it. So any line about the tying has HER doing it and HIM waiting — 'tu baandhegi', 'main haath aage kar raha hoon'. Getting this backwards does not read as a grammar slip; it describes the wrong ritual, in the largest text on the page. Keep every line you write in ONE script from start to finish: if you are writing Hinglish, write it in Latin letters all the way through, and if you are writing Hindi, write the whole line in Devanagari. A sentence with Devanagari words dropped into a Latin one reads as a rendering fault rather than as a choice. The sender is her BROTHER, so when he speaks about himself the verb is masculine first person — karunga, aaunga, uthaunga, bhoolunga, raha hoon. When he speaks about her it is feminine second person — tu baandhegi, tu leti hai, tune bataya. Hindi and Hinglish mark this on the verb, so a masculine speaker with a feminine ending is not a small slip; it is a sentence in somebody else's voice.",
   audience: "bestfriend",
   fields: [
     {
