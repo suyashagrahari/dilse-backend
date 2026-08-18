@@ -121,3 +121,28 @@ export const env = {
   IS_PROD: APP_ENV === "production",
   IS_NGROK: APP_ENV === "ngrok",
 } as const;
+
+/**
+ * Is this deployment the real, public site — the apex domain — as opposed to
+ * staging, ngrok or a laptop?
+ *
+ * `IS_PROD` cannot answer that. Staging runs with `APP_ENV=production` and
+ * inherits `ROOT_DOMAIN` from the same secrets, so it reports itself as
+ * production too; the only thing that separates them is that production is
+ * SERVED FROM the root domain and staging from a subdomain of it.
+ *
+ * `utils/shareUrl.ts` has needed this distinction for a while — a
+ * `{user}.{ROOT_DOMAIN}` share link built on staging points at production's
+ * database and 404s — and now `config/templateVisibility.ts` needs it too, to
+ * hold a new template back on the public site without hiding it from the people
+ * testing it on staging. One copy, here, rather than two that can disagree.
+ */
+export function isApexDeployment(): boolean {
+  if (!env.ROOT_DOMAIN) return false;
+  try {
+    const host = new URL(env.SHARE_BASE_URL).hostname.toLowerCase();
+    return host === env.ROOT_DOMAIN || host === `www.${env.ROOT_DOMAIN}`;
+  } catch {
+    return false;
+  }
+}

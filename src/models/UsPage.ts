@@ -1,0 +1,240 @@
+import mongoose, { Schema, Document } from "mongoose";
+import { randomUUID } from "crypto";
+import bcrypt from "bcryptjs";
+
+/**
+ * Shared between the schema and the controller so the caps live in exactly one
+ * place. The client caps these too, but the client is not a security boundary.
+ *
+ * Note what is NOT stored: the formatted stat strings ("84.7K"), the
+ * "Followed by … and 2 others" line, or the pinned-first ordering. `formatStat`,
+ * `followedByLine` and `orderedPosts` derive all three from the raw numbers and
+ * arrays below. Storing "84.7K" would mean a profile whose follower count and
+ * its own label can disagree.
+ */
+export const US_LIMITS = {
+  handle: 40,
+  displayName: 80,
+  category: 80,
+  /** One line of the bio block. */
+  bioLine: 160,
+  maxBioLines: 6,
+  linkLabel: 80,
+  /** A plain https URL. Uploaded media is turned into one before it gets here. */
+  url: 2000,
+  caption: 2200,
+  /** "Liked by arjun and 847 others" */
+  likedByName: 120,
+  /** "3 days ago" */
+  postedAgo: 40,
+  location: 120,
+  postId: 64,
+  commentText: 600,
+  highlightTitle: 60,
+  slideCaption: 200,
+  /** Nothing on screen counts higher than this; it also bounds `formatStat`. */
+  maxStat: 1_000_000_000,
+  maxPosts: 60,
+  maxComments: 30,
+  maxHighlights: 10,
+  maxSlides: 20,
+  maxFollowedBy: 10,
+  /** "Up to 3. Rendered first with a pin glyph." */
+  maxPinned: 3,
+  /** Guard against a caller posting a 100k-element array before we ever slice. */
+  maxRawItems: 500,
+  password: 128,
+} as const;
+
+export interface IComment {
+  handle: string;
+  text: string;
+  likes?: number;
+}
+
+export interface IPost {
+  id: string;
+  imageUrl: string;
+  caption: string;
+  likes: number;
+  likedByName: string;
+  postedAgo: string;
+  location?: string;
+  isMultiple?: boolean;
+  isVideo?: boolean;
+  comments: IComment[];
+}
+
+export interface IHighlightSlide {
+  imageUrl: string;
+  caption?: string;
+}
+
+export interface IHighlight {
+  title: string;
+  coverUrl: string;
+  slides: IHighlightSlide[];
+}
+
+export interface IUsPage extends Document {
+  userId: mongoose.Types.ObjectId;
+  shareId: string;
+  handle: string;
+  displayName: string;
+  category: string;
+  bio: string[];
+  /** Optional in the contract; absent rather than "" when unused. */
+  link?: { label: string; url: string };
+  avatarUrl: string;
+  stats: { posts: number; followers: number; following: number };
+  /** Named handles render semibold inside the "Followed by …" line. */
+  followedBy: string[];
+  highlights: IHighlight[];
+  posts: IPost[];
+  /** Up to 3. Rendered first with a pin glyph. */
+  pinnedPostIds: string[];
+  /**
+   * Denormalised by the pre-save hook below, so this template appears on the
+   * dashboard alongside the others — `share.controller`'s `getMyCreations` and
+   * `getReceivedPages` read flat `senderName`/`recipientName` off every
+   * template model, and without these two a profile shows up as "Someone".
+   *
+   * BOTH ARE `displayName`, DELIBERATELY — this is not a copy-paste slip. Every
+   * other template has a sender addressing a recipient; this one is a single
+   * shared account that a couple owns jointly ("A relationship gets its own
+   * account"). There is no second party to name, so splitting `displayName`
+   * into a from/to pair would be inventing a distinction the contract does not
+   * have. The dashboard row reads "Us — Meera & Arjun" on both sides, which is
+   * the honest rendering of a joint profile.
+   */
+  senderName: string;
+  recipientName: string;
+  // Security & meta
+  password: string;
+  passwordRaw: string;
+  viewCount: number;
+  isPublished: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidate: string): Promise<boolean>;
+}
+
+const commentSchema = new Schema<IComment>(
+  {
+    handle: { type: String, default: "", maxlength: US_LIMITS.handle },
+    text: { type: String, default: "", maxlength: US_LIMITS.commentText },
+    likes: { type: Number, min: 0, max: US_LIMITS.maxStat },
+  },
+  { _id: false }
+);
+
+/**
+ * `location`, `isMultiple` and `isVideo` carry no default on purpose. They are
+ * optional in the contract and an absent one must stay absent — a stored
+ * `isVideo: false` would put a play glyph decision in the data instead of in
+ * the sender's hands.
+ */
+const postSchema = new Schema<IPost>(
+  {
+    id: { type: String, default: "", maxlength: US_LIMITS.postId },
+    imageUrl: { type: String, default: "", maxlength: US_LIMITS.url },
+    caption: { type: String, default: "", maxlength: US_LIMITS.caption },
+    likes: { type: Number, default: 0, min: 0, max: US_LIMITS.maxStat },
+    likedByName: { type: String, default: "", maxlength: US_LIMITS.likedByName },
+    postedAgo: { type: String, default: "", maxlength: US_LIMITS.postedAgo },
+    location: { type: String, maxlength: US_LIMITS.location },
+    isMultiple: { type: Boolean },
+    isVideo: { type: Boolean },
+    comments: { type: [commentSchema], default: [] },
+  },
+  { _id: false }
+);
+
+const highlightSlideSchema = new Schema<IHighlightSlide>(
+  {
+    imageUrl: { type: String, default: "", maxlength: US_LIMITS.url },
+    caption: { type: String, maxlength: US_LIMITS.slideCaption },
+  },
+  { _id: false }
+);
+
+const highlightSchema = new Schema<IHighlight>(
+  {
+    title: { type: String, default: "", maxlength: US_LIMITS.highlightTitle },
+    coverUrl: { type: String, default: "", maxlength: US_LIMITS.url },
+    slides: { type: [highlightSlideSchema], default: [] },
+  },
+  { _id: false }
+);
+
+const linkSchema = new Schema<{ label: string; url: string }>(
+  {
+    label: { type: String, default: "", maxlength: US_LIMITS.linkLabel },
+    url: { type: String, default: "", maxlength: US_LIMITS.url },
+  },
+  { _id: false }
+);
+
+const statsSchema = new Schema<{ posts: number; followers: number; following: number }>(
+  {
+    posts: { type: Number, default: 0, min: 0, max: US_LIMITS.maxStat },
+    followers: { type: Number, default: 0, min: 0, max: US_LIMITS.maxStat },
+    following: { type: Number, default: 0, min: 0, max: US_LIMITS.maxStat },
+  },
+  { _id: false }
+);
+
+const usPageSchema = new Schema<IUsPage>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    shareId: { type: String, unique: true, sparse: true, index: true },
+    handle: { type: String, default: "", maxlength: US_LIMITS.handle },
+    displayName: { type: String, default: "", maxlength: US_LIMITS.displayName },
+    category: { type: String, default: "", maxlength: US_LIMITS.category },
+    bio: { type: [String], default: [] },
+    link: { type: linkSchema },
+    avatarUrl: { type: String, default: "", maxlength: US_LIMITS.url },
+    stats: { type: statsSchema, default: () => ({ posts: 0, followers: 0, following: 0 }) },
+    followedBy: { type: [String], default: [] },
+    highlights: { type: [highlightSchema], default: [] },
+    posts: { type: [postSchema], default: [] },
+    pinnedPostIds: { type: [String], default: [] },
+    // Denormalised for the dashboard. Written by the pre-save hook, never by a
+    // caller — see the hook and the interface for why both are `displayName`.
+    senderName: { type: String, default: "", maxlength: US_LIMITS.displayName },
+    recipientName: { type: String, default: "", maxlength: US_LIMITS.displayName },
+    // Security & meta
+    password: { type: String, default: "" },
+    passwordRaw: { type: String, default: "", select: false },
+    viewCount: { type: Number, default: 0 },
+    isPublished: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+usPageSchema.pre("save", async function (next) {
+  if (!this.shareId) this.shareId = randomUUID();
+  // Denormalise the dashboard names in ONE place. Doing it in the create and
+  // update handlers instead means two copies of the same rule, and update is
+  // the one someone forgets — a renamed profile would keep its old dashboard
+  // row forever with no visible error anywhere.
+  //
+  // Both sides get `displayName`: this is one shared account, not a sender and
+  // a recipient. See the interface for the full reasoning.
+  const shared = (this.displayName ?? "").slice(0, US_LIMITS.displayName);
+  this.senderName = shared;
+  this.recipientName = shared;
+  if (this.isModified("password") && this.password) {
+    this.passwordRaw = this.password;
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
+  next();
+});
+
+usPageSchema.methods.comparePassword = async function (candidate: string): Promise<boolean> {
+  if (!this.password) return true;
+  return bcrypt.compare(candidate, this.password);
+};
+
+export default mongoose.model<IUsPage>("UsPage", usPageSchema);

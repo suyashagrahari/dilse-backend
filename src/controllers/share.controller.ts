@@ -1,5 +1,13 @@
 import { Request, Response } from "express";
 import BirthdayPage from "../models/BirthdayPage";
+import ProductPage from "../models/ProductPage";
+import WatchPage from "../models/WatchPage";
+import CallPage from "../models/CallPage";
+import RechargePage from "../models/RechargePage";
+import ChallanPage from "../models/ChallanPage";
+import NutritionPage from "../models/NutritionPage";
+import AppPage from "../models/AppPage";
+import ProfileProPage from "../models/ProfileProPage";
 import ValentinePage from "../models/ValentinePage";
 import HoliPage from "../models/HoliPage";
 import EidPage from "../models/EidPage";
@@ -13,10 +21,33 @@ import BirthdayGfPage from "../models/BirthdayGfPage";
 import ApologyDashboardPage from "../models/ApologyDashboardPage";
 import MissYouGfPage from "../models/MissYouGfPage";
 import BouquetGfPage from "../models/BouquetGfPage";
+import CourtOfLovePage from "../models/CourtOfLovePage";
+import ProposalPage from "../models/ProposalPage";
+import CourtMarriagePage from "../models/CourtMarriagePage";
+import HoldMyHandPage from "../models/HoldMyHandPage";
+import TrainTicketPage from "../models/TrainTicketPage";
+import LegalNoticePage from "../models/LegalNoticePage";
+import KundliMilanPage from "../models/KundliMilanPage";
+import VendingMachinePage from "../models/VendingMachinePage";
+import CatchPage from "../models/CatchPage";
+import FlagsPage from "../models/FlagsPage";
+import DateInvitationPage from "../models/DateInvitationPage";
+import PhotoPuzzlePage from "../models/PhotoPuzzlePage";
+import LoveflixPage from "../models/LoveflixPage";
+import RewindPage from "../models/RewindPage";
+import StreakPage from "../models/StreakPage";
+import DedicationPage from "../models/DedicationPage";
+import SearchedPage from "../models/SearchedPage";
+import CapsulePage from "../models/CapsulePage";
+import UsPage from "../models/UsPage";
+import RakshaBandhanPage from "../models/RakshaBandhanPage";
+import RakshaBandhanSisterPage from "../models/RakshaBandhanSisterPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
 import mongoose from "mongoose";
+import { projectSharedCapsuleData } from "./capsulePage.controller";
+import { projectSharedStreakData } from "./streakPage.controller";
 
 function detectDevice(ua: string): "mobile" | "desktop" | "tablet" {
   if (/tablet|ipad|playbook|silk/i.test(ua)) return "tablet";
@@ -28,10 +59,37 @@ interface TemplateLookup {
   model: mongoose.Model<unknown>;
   templateType: string;
   editorRoute: string;
+  /**
+   * Optional per-template narrowing of what a share response may contain.
+   *
+   * Two templates withhold content that they hold in the same document as the
+   * content they show — capsule's sealed predictions and streak's sealed notes.
+   * Their own `/share/:shareId` routes enforce that, but this generic resolver
+   * walks every model and would otherwise hand the whole document over through
+   * a different URL. The hook runs on the already-password-stripped object.
+   */
+  projectShared?: (
+    data: Record<string, unknown>,
+    req: Request
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
 }
 
-const TEMPLATE_LOOKUPS: TemplateLookup[] = [
+/**
+ * Exported so the activity feed can count real creations without a second copy
+ * of this list. A duplicate registry would drift the moment a template is added
+ * to one and not the other, and the symptom — a template quietly missing from
+ * the homepage — is invisible.
+ */
+export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: BirthdayPage as mongoose.Model<unknown>, templateType: "birthday", editorRoute: "/birthday-gf" },
+  { model: ProductPage as mongoose.Model<unknown>, templateType: "product", editorRoute: "/product" },
+  { model: WatchPage as mongoose.Model<unknown>, templateType: "watch", editorRoute: "/watch" },
+  { model: CallPage as mongoose.Model<unknown>, templateType: "call", editorRoute: "/call" },
+  { model: RechargePage as mongoose.Model<unknown>, templateType: "recharge", editorRoute: "/recharge" },
+  { model: ChallanPage as mongoose.Model<unknown>, templateType: "challan", editorRoute: "/challan" },
+  { model: NutritionPage as mongoose.Model<unknown>, templateType: "nutrition", editorRoute: "/nutrition" },
+  { model: AppPage as mongoose.Model<unknown>, templateType: "app", editorRoute: "/app" },
+  { model: ProfileProPage as mongoose.Model<unknown>, templateType: "profile-pro", editorRoute: "/profile-pro" },
   { model: ValentinePage as mongoose.Model<unknown>, templateType: "valentine", editorRoute: "/valentine-gf" },
   { model: HoliPage as mongoose.Model<unknown>, templateType: "holi", editorRoute: "/holi" },
   { model: EidPage as mongoose.Model<unknown>, templateType: "eid", editorRoute: "/eid-mubarak" },
@@ -45,21 +103,66 @@ const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: ApologyDashboardPage as mongoose.Model<unknown>, templateType: "apology-dashboard", editorRoute: "/apology-dashboard" },
   { model: MissYouGfPage as mongoose.Model<unknown>, templateType: "missyou-gf", editorRoute: "/missyou-gf" },
   { model: BouquetGfPage as mongoose.Model<unknown>, templateType: "bouquet-gf", editorRoute: "/bouquet-gf" },
+  { model: CourtOfLovePage as mongoose.Model<unknown>, templateType: "court-of-love", editorRoute: "/court-of-love" },
+  { model: ProposalPage as mongoose.Model<unknown>, templateType: "proposal", editorRoute: "/proposal" },
+  { model: CourtMarriagePage as mongoose.Model<unknown>, templateType: "court-marriage", editorRoute: "/court-marriage" },
+  { model: HoldMyHandPage as mongoose.Model<unknown>, templateType: "hold-my-hand", editorRoute: "/hold-my-hand" },
+  { model: TrainTicketPage as mongoose.Model<unknown>, templateType: "train-ticket", editorRoute: "/train-ticket" },
+  { model: LegalNoticePage as mongoose.Model<unknown>, templateType: "legal-notice", editorRoute: "/legal-notice" },
+  { model: KundliMilanPage as mongoose.Model<unknown>, templateType: "kundli-milan", editorRoute: "/kundli-milan" },
+  { model: VendingMachinePage as mongoose.Model<unknown>, templateType: "vending-machine", editorRoute: "/vending-machine" },
+  { model: CatchPage as mongoose.Model<unknown>, templateType: "catch", editorRoute: "/catch" },
+  { model: FlagsPage as mongoose.Model<unknown>, templateType: "flags", editorRoute: "/flags" },
+  { model: DateInvitationPage as mongoose.Model<unknown>, templateType: "date-invitation", editorRoute: "/date-invitation" },
+  { model: PhotoPuzzlePage as mongoose.Model<unknown>, templateType: "photo-puzzle", editorRoute: "/photo-puzzle" },
+  { model: LoveflixPage as mongoose.Model<unknown>, templateType: "loveflix", editorRoute: "/loveflix" },
+  { model: RewindPage as mongoose.Model<unknown>, templateType: "rewind", editorRoute: "/rewind" },
+  {
+    model: StreakPage as mongoose.Model<unknown>,
+    templateType: "streak",
+    editorRoute: "/streak",
+    // Today's sealed note stays out of the body until the viewer checks in.
+    // The reader's side is resolved from the `?k=` token, not asserted.
+    projectShared: (data, req) => projectSharedStreakData(data, req),
+  },
+  { model: DedicationPage as mongoose.Model<unknown>, templateType: "dedication", editorRoute: "/dedication" },
+  { model: SearchedPage as mongoose.Model<unknown>, templateType: "searched", editorRoute: "/searched" },
+  {
+    model: CapsulePage as mongoose.Model<unknown>,
+    templateType: "capsule",
+    editorRoute: "/capsule",
+    // Counts and authorship only until server time passes `opensOn`.
+    projectShared: (data) => projectSharedCapsuleData(data),
+  },
+  { model: UsPage as mongoose.Model<unknown>, templateType: "us", editorRoute: "/us" },
+  { model: RakshaBandhanPage as mongoose.Model<unknown>, templateType: "raksha-bandhan", editorRoute: "/happy-rakshabandhan-to-brother" },
+  { model: RakshaBandhanSisterPage as mongoose.Model<unknown>, templateType: "raksha-bandhan-sister", editorRoute: "/happy-rakshabandhan-to-sister" },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareId } = req.params;
 
-    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
+    for (const { model, templateType, editorRoute, projectShared } of TEMPLATE_LOOKUPS) {
       const page = await model.findOneAndUpdate(
         { shareId, isPublished: true },
         { $inc: { viewCount: 1 } },
         { new: true }
       );
       if (page) {
-        const pageObj = (page as { toObject: () => Record<string, unknown> }).toObject();
-        const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
+        // flattenMaps: rewind stores `answers` and searched stores
+        // `alternateResults` as Maps, and `JSON.stringify` of a Map is `{}`.
+        // A no-op for every other model — none store a Map.
+        const pageObj = (
+          page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
+        ).toObject({ flattenMaps: true });
+        // `contribToken` is the friends' WRITE link and must never ride along on
+        // the recipient's READ response. This resolver is the one place every
+        // template's document passes through generically, so stripping it here
+        // also covers templates that do not exist yet — the alternative is
+        // trusting each of them to remember, and share links get forwarded.
+        const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...stripped } = pageObj;
+        const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
 
         // Track page view for analytics (fire-and-forget)
@@ -329,15 +432,26 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
       res.status(404).json({ success: false, error: "User not found" });
       return;
     }
-    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
+    for (const { model, templateType, editorRoute, projectShared } of TEMPLATE_LOOKUPS) {
       const page = await model.findOneAndUpdate(
         { shareId, isPublished: true, userId: user._id },
         { $inc: { viewCount: 1 } },
         { new: true }
       );
       if (page) {
-        const pageObj = (page as { toObject: () => Record<string, unknown> }).toObject();
-        const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj;
+        // flattenMaps: rewind stores `answers` and searched stores
+        // `alternateResults` as Maps, and `JSON.stringify` of a Map is `{}`.
+        // A no-op for every other model — none store a Map.
+        const pageObj = (
+          page as { toObject: (o: { flattenMaps: boolean }) => Record<string, unknown> }
+        ).toObject({ flattenMaps: true });
+        // `contribToken` is the friends' WRITE link and must never ride along on
+        // the recipient's READ response. This resolver is the one place every
+        // template's document passes through generically, so stripping it here
+        // also covers templates that do not exist yet — the alternative is
+        // trusting each of them to remember, and share links get forwarded.
+        const { password: _pw, passwordRaw: _pr, contribToken: _ct, ...stripped } = pageObj;
+        const safeData = projectShared ? await projectShared(stripped, req) : stripped;
         const hasPassword = !!pageObj.password;
         res.json({
           success: true,

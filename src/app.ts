@@ -151,6 +151,9 @@ const generateLimiter = rateLimit({
 });
 
 app.use("/api/generate", generateLimiter);
+// Court of Love writes a whole case file from the sender's story — same cost
+// profile as /api/generate, so it gets the same per-minute cap.
+app.use("/api/court-of-love-pages/generate", generateLimiter);
 app.use("/api/auth", authLimiter);
 app.use("/api", apiLimiter, routes);
 

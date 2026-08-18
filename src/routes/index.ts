@@ -18,6 +18,26 @@ import darlingPageRoutes from "./darlingPage.routes";
 import apologyDashboardPageRoutes from "./apologyDashboardPage.routes";
 import missyouGfPageRoutes from "./missyouGfPage.routes";
 import bouquetGfPageRoutes from "./bouquetGfPage.routes";
+import courtOfLovePageRoutes from "./courtOfLovePage.routes";
+import proposalPageRoutes from "./proposalPage.routes";
+import courtMarriagePageRoutes from "./courtMarriagePage.routes";
+import holdMyHandPageRoutes from "./holdMyHandPage.routes";
+import trainTicketPageRoutes from "./trainTicketPage.routes";
+import legalNoticePageRoutes from "./legalNoticePage.routes";
+import kundliMilanPageRoutes from "./kundliMilanPage.routes";
+import vendingMachinePageRoutes from "./vendingMachinePage.routes";
+import catchGamePageRoutes from "./catchGamePage.routes";
+import flagsPageRoutes from "./flagsPage.routes";
+import dateInvitationPageRoutes from "./dateInvitationPage.routes";
+import photoPuzzlePageRoutes from "./photoPuzzlePage.routes";
+import loveflixPageRoutes from "./loveflixPage.routes";
+import rewindPageRoutes from "./rewindPage.routes";
+import streakPageRoutes from "./streakPage.routes";
+import dedicationPageRoutes from "./dedicationPage.routes";
+import searchedPageRoutes from "./searchedPage.routes";
+import capsulePageRoutes from "./capsulePage.routes";
+import usPageRoutes from "./usPage.routes";
+import storyRoutes from "./story.routes";
 import shareRoutes from "./share.routes";
 import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
@@ -25,13 +45,30 @@ import contactRoutes from "./contact.routes";
 import referralRoutes from "./referral.routes";
 import paymentRoutes from "./payment.routes";
 import adminRoutes from "./admin.routes";
+import productPageRoutes from "./productPage.routes";
+import watchPageRoutes from "./watchPage.routes";
+import callPageRoutes from "./callPage.routes";
+import rechargePageRoutes from "./rechargePage.routes";
+import challanPageRoutes from "./challanPage.routes";
+import nutritionPageRoutes from "./nutritionPage.routes";
+import appPageRoutes from "./appPage.routes";
+import profileProPageRoutes from "./profileProPage.routes";
+import contributionRoutes from "./contribution.routes";
+import activityRoutes from "./activity.routes";
+import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
+import rakshaBandhanSisterPageRoutes from "./rakshaBandhanSisterPage.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
+import { getPublicTemplateVisibility } from "../controllers/templateVisibility.controller";
 
 const router = Router();
 
 router.use("/auth", authRoutes);
 router.use("/templates", templateRoutes);
+// Which templates this deployment shows. Anonymous and cached — the gallery is
+// the first thing a stranger loads and must not need a session to know what to
+// render. The admin write side lives under /admin/template-visibility.
+router.get("/template-visibility", getPublicTemplateVisibility);
 router.use("/generate", protect, generateRoutes);
 router.use("/favorites", protect, favoriteRoutes);
 router.use("/content", protect, userContentRoutes);
@@ -49,6 +86,45 @@ router.use("/darling-pages", darlingPageRoutes);
 router.use("/apology-dashboard-pages", apologyDashboardPageRoutes);
 router.use("/missyou-gf-pages", missyouGfPageRoutes);
 router.use("/bouquet-gf-pages", bouquetGfPageRoutes);
+router.use("/court-of-love-pages", courtOfLovePageRoutes);
+router.use("/proposal-pages", proposalPageRoutes);
+router.use("/court-marriage-pages", courtMarriagePageRoutes);
+router.use("/hold-my-hand-pages", holdMyHandPageRoutes);
+router.use("/train-ticket-pages", trainTicketPageRoutes);
+router.use("/legal-notice-pages", legalNoticePageRoutes);
+router.use("/kundli-milan-pages", kundliMilanPageRoutes);
+router.use("/vending-machine-pages", vendingMachinePageRoutes);
+router.use("/catch-pages", catchGamePageRoutes);
+router.use("/flags-pages", flagsPageRoutes);
+router.use("/date-invitation-pages", dateInvitationPageRoutes);
+router.use("/photo-puzzle-pages", photoPuzzlePageRoutes);
+router.use("/loveflix-pages", loveflixPageRoutes);
+router.use("/rewind-pages", rewindPageRoutes);
+router.use("/streak-pages", streakPageRoutes);
+router.use("/dedication-pages", dedicationPageRoutes);
+router.use("/searched-pages", searchedPageRoutes);
+router.use("/capsule-pages", capsulePageRoutes);
+router.use("/us-pages", usPageRoutes);
+router.use("/product-pages", productPageRoutes);
+router.use("/watch-pages", watchPageRoutes);
+router.use("/call-pages", callPageRoutes);
+router.use("/recharge-pages", rechargePageRoutes);
+router.use("/challan-pages", challanPageRoutes);
+router.use("/nutrition-pages", nutritionPageRoutes);
+router.use("/app-pages", appPageRoutes);
+router.use("/profile-pro-pages", profileProPageRoutes);
+router.use("/raksha-bandhan-pages", rakshaBandhanPageRoutes);
+// The same festival read from the other side: a brother's page for his sister.
+// A separate mount and a separate collection, not a flag on the one above —
+// the two pages store different halves of the ritual and neither can render the
+// other's fields.
+router.use("/raksha-bandhan-sister-pages", rakshaBandhanSisterPageRoutes);
+// Anonymous friends post here, addressed only by shareId. Everything it can
+// reach is gated by config/contributionTemplates.ts.
+router.use("/contributions", contributionRoutes);
+// Real, aggregate creation counts for the homepage ticker.
+router.use("/activity", activityRoutes);
+router.use("/story", storyRoutes);
 router.use("/share", shareRoutes);
 router.use("/media", mediaRoutes);
 router.use("/analytics", analyticsRoutes);

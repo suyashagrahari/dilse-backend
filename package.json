@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
     "upload:missyou-media": "tsx src/scripts/uploadMissyouMedia.ts",
-    "upload:bouquet-media": "tsx src/scripts/uploadBouquetMedia.ts"
+    "upload:bouquet-media": "tsx src/scripts/uploadBouquetMedia.ts",
+    "upload:template-media": "tsx src/scripts/uploadTemplateMedia.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.998.0",

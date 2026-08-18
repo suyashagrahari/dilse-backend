@@ -13,7 +13,11 @@ const upload = multer({
   },
   fileFilter: (_req, file, cb: FileFilterCallback) => {
     if (!isAllowedUploadMime(file.mimetype)) {
-      cb(new Error("Unsupported file type. Allowed: jpg, jpeg, png, webp, gif, avif, mp3, wav"));
+      cb(
+        new Error(
+          "Unsupported file type. Allowed: jpg, jpeg, png, webp, gif, avif, mp3, wav, webm, ogg, mp4, aac, m4a"
+        )
+      );
       return;
     }
     cb(null, true);
