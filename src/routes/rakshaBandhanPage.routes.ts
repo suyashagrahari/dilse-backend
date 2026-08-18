@@ -11,8 +11,12 @@ import {
   submitVachan,
   deleteRakshaBandhanPage,
 } from "../controllers/rakshaBandhanPage.controller";
+import { requireTemplateLive } from "../middleware/templateGate";
 
 const router = Router();
+
+/** See the twin of this line in rakshaBandhanSisterPage.routes.ts. */
+const live = requireTemplateLive("happy-rakshabandhan-to-brother");
 
 router.get("/share/:shareId", getSharedRakshaBandhanPage);
 router.post("/share/:shareId/verify", verifyRakshaBandhanPagePassword);
@@ -21,11 +25,11 @@ router.post("/share/:shareId/verify", verifyRakshaBandhanPagePassword);
 router.post("/share/:shareId/vachan", submitVachan);
 
 router.use(protect);
-router.post("/", createRakshaBandhanPage);
+router.post("/", live, createRakshaBandhanPage);
 router.get("/my", getMyRakshaBandhanPages);
 router.get("/:id", getRakshaBandhanPage);
-router.put("/:id", updateRakshaBandhanPage);
-router.post("/:id/publish", publishRakshaBandhanPage);
+router.put("/:id", live, updateRakshaBandhanPage);
+router.post("/:id/publish", live, publishRakshaBandhanPage);
 router.delete("/:id", deleteRakshaBandhanPage);
 
 export default router;

@@ -59,11 +59,16 @@ import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
 import rakshaBandhanSisterPageRoutes from "./rakshaBandhanSisterPage.routes";
 import { protect } from "../middleware/auth";
 import { requireAdmin } from "../middleware/adminAuth";
+import { getPublicTemplateVisibility } from "../controllers/templateVisibility.controller";
 
 const router = Router();
 
 router.use("/auth", authRoutes);
 router.use("/templates", templateRoutes);
+// Which templates this deployment shows. Anonymous and cached — the gallery is
+// the first thing a stranger loads and must not need a session to know what to
+// render. The admin write side lives under /admin/template-visibility.
+router.get("/template-visibility", getPublicTemplateVisibility);
 router.use("/generate", protect, generateRoutes);
 router.use("/favorites", protect, favoriteRoutes);
 router.use("/content", protect, userContentRoutes);

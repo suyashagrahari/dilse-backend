@@ -1,4 +1,4 @@
-import { env } from "../config/env";
+import { env, isApexDeployment } from "../config/env";
 import User from "../models/User";
 
 /**
@@ -9,16 +9,12 @@ import User from "../models/User";
  * a `{user}.{ROOT_DOMAIN}` link would point at production (a different DB) and
  * 404. In that case we must fall back to the path-based SHARE_BASE_URL so the
  * link resolves within the same environment the page was created in.
+ *
+ * The test itself now lives in `config/env.ts` as `isApexDeployment`, because
+ * template visibility needs the same question answered and two copies of it
+ * would eventually disagree.
  */
-function servesWildcardSubdomains(): boolean {
-  if (!env.ROOT_DOMAIN) return false;
-  try {
-    const shareHost = new URL(env.SHARE_BASE_URL).hostname.toLowerCase();
-    return shareHost === env.ROOT_DOMAIN || shareHost === `www.${env.ROOT_DOMAIN}`;
-  } catch {
-    return false;
-  }
-}
+const servesWildcardSubdomains = isApexDeployment;
 
 /**
  * Build a share URL for a published page.
