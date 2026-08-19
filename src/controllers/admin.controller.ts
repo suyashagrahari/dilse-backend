@@ -6,6 +6,7 @@ import ContactInquiry from "../models/ContactInquiry";
 import { sendContactReplyEmail } from "../utils/mailer";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { templateLabel } from "../config/templateCatalog";
+import { hiddenSlugs } from "../config/templateVisibility";
 
 // Every template, derived from the one list that says which templates exist.
 //
@@ -19,10 +20,15 @@ import { templateLabel } from "../config/templateCatalog";
 //
 // Deriving it means a template added to TEMPLATE_LOOKUPS is counted here on the
 // same commit, and there is no longer a list that can be out of date.
-const ALL_PAGE_MODELS = TEMPLATE_LOOKUPS.map(({ model, templateType }) => ({
+const ALL_PAGE_MODELS = TEMPLATE_LOOKUPS.map(({ model, templateType, editorRoute }) => ({
   model,
   type: templateType,
   label: templateLabel(templateType),
+  // Visibility is keyed by builder route, not by templateType, because that is
+  // what the admin screen and the gate switch on. Birthday and Birthday GF share
+  // a route and so share one switch — which is correct: there is one page to
+  // show or hide.
+  slug: editorRoute.replace(/^\//, ""),
 }));
 
 // ─── ANALYTICS DASHBOARD ────────────────────────────────────────
@@ -50,14 +56,21 @@ export const getAnalyticsOverview = async (_req: Request, res: Response): Promis
       PageView.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
     ]);
 
+    // Whether each template is switched on HERE, so a row of zeros can be read.
+    // Without it the table lies by omission: a hidden template shows 0/0 and
+    // reads as "nobody wants this", when in fact nobody could reach it. On this
+    // production deployment 37 of 43 are currently switched off, so that is most
+    // of the table.
+    const hidden = new Set(await hiddenSlugs().catch(() => []));
+
     // Total pages created across all templates
     const templateStats = await Promise.all(
-      ALL_PAGE_MODELS.map(async ({ model, type, label }) => {
+      ALL_PAGE_MODELS.map(async ({ model, type, label, slug }) => {
         const [total, published] = await Promise.all([
           (model as mongoose.Model<unknown>).countDocuments(),
           (model as mongoose.Model<unknown>).countDocuments({ isPublished: true }),
         ]);
-        return { type, label, total, published };
+        return { type, label, slug, live: !hidden.has(slug), total, published };
       })
     );
 
