@@ -9,3 +9,4 @@ dist/
 .env.production
 # Allow the example/template file (no real secrets)
 !.env.example
+.env.satest
