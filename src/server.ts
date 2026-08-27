@@ -2,12 +2,15 @@ import app from "./app";
 import { env } from "./config/env";
 import { connectDB } from "./config/db";
 import { rebuildBannedContent } from "./services/bannedContent";
+import { ensureSuperAdmin } from "./services/ensureSuperAdmin";
 
 const startServer = async () => {
   await connectDB();
 
   // The hidden-share set lives in memory, so it is rebuilt on every boot.
   // Non-fatal: a failure here must not stop the server from starting.
+  await ensureSuperAdmin();
+
   await rebuildBannedContent().catch((e) =>
     console.error("[boot] bannedContent rebuild failed", e)
   );
