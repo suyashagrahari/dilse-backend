@@ -88,6 +88,16 @@ const api = async (path, opts = {}, token) => {
   check("profile reports hasPassword without leaking it", prof.body?.data?.pages?.[0]?.hasPassword === true && !JSON.stringify(prof.body).includes("opensesame"));
   check("plain admin cannot grant superadmin", (await api(`/admin/users/${victim._id}/role`, { method: "PATCH", body: JSON.stringify({ role: "superadmin" }) }, adminT)).status === 400);
 
+  // The superadmin must still reach every PRE-EXISTING admin surface. The role
+  // sits above `admin`, so any gate written as `role === "admin"` silently
+  // excludes it — which is how the Admin link vanished from the nav.
+  for (const p of ["/admin/users", "/admin/analytics/overview", "/admin/contacts", "/admin/template-visibility"]) {
+    check(`superadmin can reach ${p}`, (await api(p, {}, saT)).status === 200);
+  }
+  const meSa = await api(`/auth/me`, {}, saT);
+  check("/auth/me reports superadmin so the nav can gate on it",
+    (meSa.body?.data?.role ?? meSa.body?.data?.user?.role) === "superadmin");
+
   console.log("\n── password reveal + reset ──");
   const rev = await api(`/admin/super/pages/birthday-gf/${page._id}/password`, {}, saT);
   check("reveal returns the real password", rev.body?.data?.password === "opensesame", JSON.stringify(rev.body));
