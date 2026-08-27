@@ -17,7 +17,7 @@ import {
 const router = Router();
 
 router.get("/share/:shareId", getSharedBirthdayGfPage);
-router.post("/share/:shareId/verify-password", verifyBirthdayGfPagePassword);
+router.post("/share/:shareId/verify", verifyBirthdayGfPagePassword);
 router.post("/share/:shareId/game-response", saveGameResponse);
 router.post("/share/:shareId/quiz-attempt", saveQuizAttempt);
 router.post("/share/:shareId/quiz-answer", saveQuizAnswer);
