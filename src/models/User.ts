@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 import bcrypt from "bcryptjs";
+import { isSuperAdminEmail, USER_ROLES, type UserRole } from "../config/roles";
 
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -8,7 +9,14 @@ function generateReferralCode(): string {
   return code;
 }
 
-export type UserRole = "normal" | "member" | "admin";
+export type { UserRole };
+
+/**
+ * Why an account can be refused. `suspended` is reversible and leaves the
+ * user's published pages reachable — recipients hold those links and did
+ * nothing wrong. `banned` also hides the pages. See `accountStatus.ts`.
+ */
+export type AccountStatus = "active" | "suspended" | "banned";
 
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
@@ -20,6 +28,18 @@ export interface IUser extends Document {
   provider: "local" | "google";
   theme: "light" | "dark" | "system";
   role: UserRole;
+  status: AccountStatus;
+  statusReason?: string;
+  statusChangedAt?: Date;
+  statusChangedBy?: mongoose.Types.ObjectId;
+  suspendedUntil?: Date;
+  /**
+   * Bumped to invalidate every token already issued to this user. `protect`
+   * compares it against the `tv` claim, so a bump is an immediate,
+   * irreversible logout of every device — the only force-logout available
+   * when refresh tokens are stateless JWTs with a 30-day life.
+   */
+  tokenVersion: number;
   subdomain?: string;
   refreshToken?: string;
   points: number;
@@ -71,9 +91,20 @@ const userSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ["normal", "member", "admin"],
+      enum: USER_ROLES,
       default: "normal",
     },
+    status: {
+      type: String,
+      enum: ["active", "suspended", "banned"],
+      default: "active",
+      index: true,
+    },
+    statusReason: { type: String },
+    statusChangedAt: { type: Date },
+    statusChangedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    suspendedUntil: { type: Date },
+    tokenVersion: { type: Number, default: 0 },
     theme: {
       type: String,
       enum: ["light", "dark", "system"],
@@ -132,13 +163,19 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// Super admin email — always elevated to admin on save
-const SUPER_ADMIN_EMAIL = "suyashagrahari2121@gmail.com";
-
 userSchema.pre("save", async function (next) {
-  // Ensure super admin always has admin role
-  if (this.email === SUPER_ADMIN_EMAIL && this.role !== "admin") {
-    this.role = "admin";
+  // The super admin is defined by email, not by a row someone can edit: the
+  // role is re-asserted on every save so a bad UPDATE cannot strand the
+  // deployment with nobody able to reach the super-admin surfaces. For the
+  // same reason the account can never be suspended or banned — locking out
+  // the only account that can perform an unlock is not recoverable.
+  if (isSuperAdminEmail(this.email)) {
+    if (this.role !== "superadmin") this.role = "superadmin";
+    if (this.status !== "active") {
+      this.status = "active";
+      this.statusReason = undefined;
+      this.suspendedUntil = undefined;
+    }
   }
 
   // Auto-generate referral code on first save

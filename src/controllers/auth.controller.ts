@@ -68,9 +68,18 @@ async function applyReferral(newUserId: string, refCode: string): Promise<void> 
 
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
-function generateTokens(userId: string, email: string) {
-  const accessToken = generateAccessToken({ userId, email });
-  const refreshToken = generateRefreshToken({ userId, email });
+/**
+ * `tokenVersion` is stamped into both tokens so `protect` can reject sessions
+ * that a force-logout or a ban has revoked.
+ *
+ * It must come from the user document at mint time, not default to 0: after a
+ * force-logout bumps the stored version to 1, a fresh login issuing a `tv: 0`
+ * token would be rejected by `protect` on the very next request, and the user
+ * could never sign back in.
+ */
+function generateTokens(userId: string, email: string, tokenVersion = 0) {
+  const accessToken = generateAccessToken({ userId, email, tv: tokenVersion });
+  const refreshToken = generateRefreshToken({ userId, email, tv: tokenVersion });
   return { accessToken, refreshToken };
 }
 
@@ -198,7 +207,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const tokens = generateTokens(user._id.toString(), user.email);
+    const tokens = generateTokens(user._id.toString(), user.email, user.tokenVersion || 0);
 
     user.refreshToken = tokens.refreshToken;
     await user.save();
@@ -325,7 +334,7 @@ export const googleAuth = async (
       });
     }
 
-    const tokens = generateTokens(user._id.toString(), user.email);
+    const tokens = generateTokens(user._id.toString(), user.email, user.tokenVersion || 0);
     user.refreshToken = tokens.refreshToken;
     await user.save();
 
@@ -407,7 +416,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const pendingRef = user.pendingReferralCode;
     user.pendingReferralCode = undefined;
 
-    const tokens = generateTokens(user._id.toString(), user.email);
+    const tokens = generateTokens(user._id.toString(), user.email, user.tokenVersion || 0);
     user.refreshToken = tokens.refreshToken;
     await user.save();
 
@@ -760,7 +769,22 @@ export const refreshToken = async (
       return;
     }
 
-    const tokens = generateTokens(user._id.toString(), user.email);
+    // A blocked account must not be handed a fresh token. `protect` would
+    // refuse it on the next call anyway, but issuing one leaves the client
+    // looking signed in until it tries to do something.
+    if (user.status === "banned" || user.status === "suspended") {
+      res.status(403).json({
+        success: false,
+        error:
+          user.status === "banned"
+            ? "This account has been banned."
+            : "This account is temporarily suspended.",
+        code: user.status === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_SUSPENDED",
+      });
+      return;
+    }
+
+    const tokens = generateTokens(user._id.toString(), user.email, user.tokenVersion || 0);
     user.refreshToken = tokens.refreshToken;
     await user.save();
 
