@@ -68,6 +68,16 @@ const api = async (path, opts = {}, token) => {
   const adminT = tok(String(admin._id), admin.email);
   const victimT = tok(String(victim._id), victim.email);
 
+  console.log("\n── backward compatibility ──");
+  // The riskiest path in this release. Every already-signed-in user holds a
+  // token with no `tv` claim, against a document with no `tokenVersion` or
+  // `status` field. If either side failed to default to 0/"active", the deploy
+  // would sign out every user on the platform at once.
+  const legacyUser = await User.create({ email: "legacy@test.com", name: "Legacy", provider: "local", password: "x1234567" });
+  await db.collection("users").updateOne({ _id: legacyUser._id }, { $unset: { tokenVersion: "", status: "" } });
+  const legacyTok = jwt.sign({ userId: String(legacyUser._id), email: legacyUser.email }, process.env.JWT_SECRET, { expiresIn: "5m" });
+  check("pre-deploy token + pre-deploy document still authenticates", (await api(`/auth/me`, {}, legacyTok)).status === 200);
+
   console.log("\n── access control ──");
   check("superadmin route rejects normal user", (await api(`/admin/super/users/${victim._id}/profile`, {}, victimT)).status === 403);
   check("superadmin route rejects plain admin", (await api(`/admin/super/users/${victim._id}/profile`, {}, adminT)).status === 403);
