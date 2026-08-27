@@ -45,6 +45,7 @@ import contactRoutes from "./contact.routes";
 import referralRoutes from "./referral.routes";
 import paymentRoutes from "./payment.routes";
 import adminRoutes from "./admin.routes";
+import superAdminRoutes from "./superAdmin.routes";
 import productPageRoutes from "./productPage.routes";
 import watchPageRoutes from "./watchPage.routes";
 import callPageRoutes from "./callPage.routes";
@@ -58,10 +59,17 @@ import activityRoutes from "./activity.routes";
 import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
 import rakshaBandhanSisterPageRoutes from "./rakshaBandhanSisterPage.routes";
 import { protect } from "../middleware/auth";
-import { requireAdmin } from "../middleware/adminAuth";
+import { guardBannedContent } from "../services/bannedContent";
+import { requireAdmin, requireSuperAdmin } from "../middleware/adminAuth";
+import { endImpersonation } from "../controllers/superAdmin.controller";
 import { getPublicTemplateVisibility } from "../controllers/templateVisibility.controller";
 
 const router = Router();
+
+// Pages belonging to banned accounts answer 404 everywhere they are served —
+// the central share resolver and all 43 per-template share endpoints alike.
+// Costs nothing while no account is banned; see services/bannedContent.
+router.use(guardBannedContent);
 
 router.use("/auth", authRoutes);
 router.use("/templates", templateRoutes);
@@ -131,6 +139,15 @@ router.use("/analytics", analyticsRoutes);
 router.use("/contact", contactRoutes);
 router.use("/referral", referralRoutes);
 router.use("/payment", paymentRoutes);
+// Super-admin surfaces sit ABOVE the /admin mount so the more specific prefix
+// matches first, and behind their own gate rather than widening `requireAdmin`.
+router.use("/admin/super", protect, requireSuperAdmin, superAdminRoutes);
+
+// Ending an impersonation session happens while holding an impersonation token,
+// which `requireSuperAdmin` deliberately rejects — so this one route is mounted
+// on `protect` alone and reads both identities from the token itself.
+router.post("/admin/impersonate/end", protect, endImpersonation);
+
 router.use("/admin", protect, requireAdmin, adminRoutes);
 
 router.get("/health", (_req, res) => {

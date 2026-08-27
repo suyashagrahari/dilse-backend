@@ -1,4 +1,7 @@
 import { Request, Response } from "express";
+import { isSuperAdminEmail } from "../config/roles";
+import { invalidateUser } from "../services/accountStatus";
+import { audit } from "../services/adminAudit";
 import mongoose from "mongoose";
 import User, { UserRole } from "../models/User";
 import PageView from "../models/PageView";
@@ -222,13 +225,17 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
         { email: { $regex: search, $options: "i" } },
       ];
     }
-    if (roleFilter && ["normal", "member", "admin"].includes(roleFilter)) {
+    if (roleFilter && ["normal", "member", "admin", "superadmin"].includes(roleFilter)) {
       query.role = roleFilter;
+    }
+    const statusFilter = req.query.status as string;
+    if (statusFilter && ["active", "suspended", "banned"].includes(statusFilter)) {
+      query.status = statusFilter;
     }
 
     const [users, total] = await Promise.all([
       User.find(query)
-        .select("name email avatar provider role points isVerified createdAt")
+        .select("name email avatar provider role status statusReason suspendedUntil points isVerified createdAt")
         .sort({ [sortBy]: sortOrder })
         .skip((page - 1) * limit)
         .limit(limit)
@@ -261,7 +268,7 @@ export const getUserDetail = async (req: Request, res: Response): Promise<void> 
     const { userId } = req.params;
 
     const user = await User.findById(userId)
-      .select("name email avatar provider role points totalPointsEarned isVerified referralCode subdomain createdAt updatedAt")
+      .select("name email avatar provider role status statusReason suspendedUntil points totalPointsEarned isVerified referralCode subdomain createdAt updatedAt")
       .lean();
 
     if (!user) {
@@ -369,13 +376,17 @@ export const deleteUserPage = async (req: Request, res: Response): Promise<void>
 
 // ─── CHANGE USER ROLE ───────────────────────────────────────────
 
-const SUPER_ADMIN_EMAIL = "suyashagrahari2121@gmail.com";
+
 
 export const changeUserRole = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
     const { role } = req.body as { role: UserRole };
 
+    // "superadmin" is deliberately NOT grantable here. This route is behind
+    // `requireAdmin`, so allowing it would let any admin promote themselves to
+    // the tier that can read passwords, ban accounts and impersonate. The super
+    // admin is defined by email in `config/roles` and asserted on save.
     if (!["normal", "member", "admin"].includes(role)) {
       res.status(400).json({ success: false, error: "Invalid role. Must be normal, member, or admin." });
       return;
@@ -388,13 +399,24 @@ export const changeUserRole = async (req: Request, res: Response): Promise<void>
     }
 
     // Prevent demoting the super admin
-    if (targetUser.email === SUPER_ADMIN_EMAIL && role !== "admin") {
+    if (isSuperAdminEmail(targetUser.email) && role !== "superadmin") {
       res.status(403).json({ success: false, error: "Cannot change the super admin's role." });
       return;
     }
 
+    const previousRole = targetUser.role;
     targetUser.role = role;
     await targetUser.save();
+    // `protect` caches the role, so without this the change takes up to the
+    // cache TTL to take effect.
+    invalidateUser(String(targetUser._id));
+
+    await audit(req, {
+      action: "user.change_role",
+      targetUserId: String(targetUser._id),
+      targetUserEmail: targetUser.email,
+      changes: { role: { from: previousRole, to: role } },
+    });
 
     res.json({
       success: true,
