@@ -8,7 +8,7 @@ import ReferralRecord from "../models/ReferralRecord";
 import PaymentOrder from "../models/PaymentOrder";
 import PageView from "../models/PageView";
 import AdminAuditLog from "../models/AdminAuditLog";
-import { audit } from "../services/adminAudit";
+import { audit, diff } from "../services/adminAudit";
 import { invalidateUser } from "../services/accountStatus";
 import { rebuildBannedContent } from "../services/bannedContent";
 import {
@@ -321,6 +321,113 @@ export const setPagePassword = async (req: Request, res: Response): Promise<void
   } catch (error) {
     console.error("Super admin set password error:", error);
     res.status(500).json({ success: false, error: "Failed to update password" });
+  }
+};
+
+/**
+ * Edits the content a user wrote on one of their pages.
+ *
+ * ── WHAT IS EDITABLE, AND WHY ONLY THAT ─────────────────────────────────────
+ *
+ * Scalars only — the strings, numbers, booleans and dates the user typed. Not
+ * arrays, not nested objects, not media. Those are galleries, quiz banks and
+ * track lists whose shape differs in all 43 templates; a generic editor over
+ * them would be a JSON textarea that corrupts a page on one bad keystroke, and
+ * the real editor already handles them properly.
+ *
+ * Fixing a typo, a wrong name or a wrong date is what support actually needs,
+ * and that is exactly the scalar case.
+ *
+ * Keys are checked against the compiled schema, so a caller cannot introduce a
+ * field the model does not define, and PROTECTED keys are refused outright:
+ * `userId` would reassign the page to someone else, `shareId` would break every
+ * link already sent, and `password` must go through the password route so it is
+ * hashed by the pre-save hook rather than written raw.
+ */
+const PROTECTED_FIELDS = new Set([
+  "_id", "__v", "userId", "shareId", "password", "passwordRaw", "contribToken",
+  "viewCount", "installCount", "createdAt", "updatedAt",
+  "quizAttempts", "quizAnswers", "gameResponses",
+]);
+
+export const updatePageContent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const found = await loadPage(req, res);
+    if (!found) return;
+    const { entry, doc, pageId } = found;
+
+    const updates = req.body?.updates;
+    if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+      res.status(400).json({ success: false, error: "updates must be an object of field -> value" });
+      return;
+    }
+
+    const before = doc.toObject() as Record<string, unknown>;
+    const d = doc as unknown as Record<string, unknown>;
+    const applied: string[] = [];
+    const rejected: string[] = [];
+
+    for (const [key, value] of Object.entries(updates as Record<string, unknown>)) {
+      if (PROTECTED_FIELDS.has(key)) { rejected.push(key); continue; }
+
+      const path = entry.model.schema.path(key);
+      if (!path) { rejected.push(key); continue; }
+
+      // Scalars only. Anything whose schema type is an array or a subdocument
+      // is left to the real editor.
+      const t = path.instance;
+      if (!["String", "Number", "Boolean", "Date"].includes(t)) { rejected.push(key); continue; }
+
+      if (value === null || value === undefined) { d[key] = undefined; applied.push(key); continue; }
+      if (t === "Number") {
+        const n = Number(value);
+        if (!Number.isFinite(n)) { rejected.push(key); continue; }
+        d[key] = n;
+      } else if (t === "Boolean") {
+        d[key] = value === true || value === "true";
+      } else if (t === "Date") {
+        const dt = new Date(String(value));
+        if (isNaN(dt.getTime())) { rejected.push(key); continue; }
+        d[key] = dt;
+      } else {
+        d[key] = String(value);
+      }
+      applied.push(key);
+    }
+
+    if (applied.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: rejected.length
+          ? `Nothing editable in that request. Refused: ${rejected.join(", ")}`
+          : "No fields supplied.",
+      });
+      return;
+    }
+
+    await doc.save();
+    const after = doc.toObject() as Record<string, unknown>;
+
+    await audit(req, {
+      action: "page.edit_content",
+      targetUserId: String(before.userId || ""),
+      targetPageId: pageId,
+      targetTemplateType: entry.templateType,
+      changes: diff(
+        Object.fromEntries(applied.map((k) => [k, before[k]])),
+        Object.fromEntries(applied.map((k) => [k, after[k]]))
+      ),
+      reason: req.body?.reason,
+    });
+
+    res.json({
+      success: true,
+      data: { applied, rejected },
+      message: `Updated ${applied.length} field${applied.length > 1 ? "s" : ""}.`,
+    });
+  } catch (error) {
+    console.error("Super admin edit page error:", error);
+    res.status(500).json({ success: false, error: "Failed to update the page" });
   }
 };
 

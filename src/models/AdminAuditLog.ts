@@ -25,6 +25,7 @@ export type AuditAction =
   | "user.change_role"
   | "user.adjust_points"
   | "page.view_content"
+  | "page.edit_content"
   | "page.reset_password"
   | "page.clear_password"
   | "page.delete"

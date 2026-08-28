@@ -4,6 +4,7 @@ import {
   getPageContent,
   revealPagePassword,
   setPagePassword,
+  updatePageContent,
   deletePage,
   adjustPoints,
   setAccountStatus,
@@ -30,6 +31,7 @@ router.get("/audit", getAuditLog);
 
 // Page actions
 router.put("/pages/:templateType/:pageId/password", setPagePassword);
+router.patch("/pages/:templateType/:pageId", updatePageContent);
 router.delete("/pages/:templateType/:pageId", deletePage);
 
 // Account actions
