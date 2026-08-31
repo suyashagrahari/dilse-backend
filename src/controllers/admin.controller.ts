@@ -99,7 +99,15 @@ export const getAnalyticsOverview = async (_req: Request, res: Response): Promis
       data: {
         users: { total: totalUsers, today: usersToday, thisWeek: usersThisWeek, thisMonth: usersThisMonth },
         pageViews: { total: totalViews, today: viewsToday, thisWeek: viewsThisWeek, thisMonth: viewsThisMonth },
-        pages: { totalCreated: totalPagesCreated, totalPublished: totalPagesPublished },
+        pages: {
+          totalCreated: totalPagesCreated,
+          totalPublished: totalPagesPublished,
+          // Sent rather than left as a subtraction on the client. A draft is a
+          // page somebody built and did not finish paying for or publishing, so
+          // it is the number that says where people are dropping out — worth a
+          // name of its own rather than arithmetic each caller repeats.
+          totalDrafts: totalPagesCreated - totalPagesPublished,
+        },
         templateStats,
         roleDistribution: roleDistribution.map((r) => ({ role: r._id || "normal", count: r.count })),
         deviceBreakdown: deviceBreakdown.map((d) => ({ device: d._id || "unknown", count: d.count })),

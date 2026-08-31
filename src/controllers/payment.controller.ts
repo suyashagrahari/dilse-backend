@@ -3,43 +3,63 @@ import mongoose from "mongoose";
 import User from "../models/User";
 import PointTransaction from "../models/PointTransaction";
 import PaymentOrder from "../models/PaymentOrder";
-import HoliPage from "../models/HoliPage";
-import EidPage from "../models/EidPage";
-import WeddingPage from "../models/WeddingPage";
-import ReceptionPage from "../models/ReceptionPage";
-import BirthdayPage from "../models/BirthdayPage";
-import ValentinePage from "../models/ValentinePage";
-import { getPricing, TEMPLATE_PRICING } from "../config/templatePricing";
+import { getPricingFresh, allPricing } from "../config/templatePricing";
+import { templateLabel } from "../config/templateCatalog";
+import { TEMPLATE_LOOKUPS } from "./share.controller";
+import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 
-// ── Page ownership map ──────────────────────────────────────────────────────
-// Maps templateType → mongoose model for ownership verification
-const PAGE_MODELS: Record<string, mongoose.Model<unknown>> = {
-  holi:      HoliPage      as unknown as mongoose.Model<unknown>,
-  eid:       EidPage       as unknown as mongoose.Model<unknown>,
-  wedding:   WeddingPage   as unknown as mongoose.Model<unknown>,
-  reception: ReceptionPage as unknown as mongoose.Model<unknown>,
-  birthday:  BirthdayPage  as unknown as mongoose.Model<unknown>,
-  valentine: ValentinePage as unknown as mongoose.Model<unknown>,
-};
+// ── Page ownership ──────────────────────────────────────────────────────────
+//
+// This used to be a hand-written map of six templateTypes — holi, eid, wedding,
+// reception, birthday, valentine — which meant `create-order` answered 403 for
+// the other thirty-seven: a paywall that opens and then cannot take money.
+// Nothing failed while `holi` was the only paid template, and nothing would have
+// failed until a super admin priced the seventh.
+//
+// `TEMPLATE_LOOKUPS` is already the single list of which templates exist and
+// which model each one stores its pages in. Deriving from it means a new
+// template is chargeable the moment it is shareable, with no second place to
+// remember. `payment.ownership.test.ts` asserts the two lists cannot diverge.
+const MODEL_BY_TYPE = new Map<string, mongoose.Model<unknown>>(
+  TEMPLATE_LOOKUPS.map(({ templateType, model }) => [templateType, model])
+);
 
-/** Returns true if the page exists and belongs to the given userId */
-async function verifyPageOwnership(
+export function modelForTemplateType(templateType: string): mongoose.Model<unknown> | null {
+  return MODEL_BY_TYPE.get(String(templateType || "").trim().toLowerCase()) ?? null;
+}
+
+/** A page the requesting user owns, or null. */
+interface OwnedPage {
+  _id: mongoose.Types.ObjectId;
+  isPublished?: boolean;
+}
+
+/**
+ * The page, if it exists and belongs to this user.
+ *
+ * Returns the document rather than a boolean because both callers need to know
+ * whether it is already published, and a second query for one field would be
+ * wasteful. See `createOrder` for why that matters.
+ */
+async function findOwnedPage(
   templateType: string,
   pageId: string,
   userId: string
-): Promise<boolean> {
-  const Model = PAGE_MODELS[templateType];
-  if (!Model) return false;
+): Promise<OwnedPage | null> {
+  const Model = modelForTemplateType(templateType);
+  if (!Model) return null;
   try {
     const page = await Model.findOne({
       _id: new mongoose.Types.ObjectId(pageId),
       userId: new mongoose.Types.ObjectId(userId),
-    });
-    return !!page;
+    })
+      .select("_id isPublished")
+      .lean();
+    return (page as OwnedPage | null) ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -47,10 +67,97 @@ async function verifyPageOwnership(
 
 /**
  * GET /payment/pricing  — PUBLIC
- * Returns the full pricing config so the client can display prices without an extra call.
+ *
+ * Every priced template, keyed by slug. The client reads this instead of
+ * carrying a hardcoded mirror of the server's prices, which is what it used to
+ * do and what made a price change a two-repo deploy.
  */
-export const getPricingConfig = (_req: Request, res: Response): void => {
-  res.json({ success: true, data: TEMPLATE_PRICING });
+export const getPricingConfig = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const pricing = await allPricing();
+    // Same header and same reasoning as GET /api/template-visibility: a super
+    // admin's change reaching visitors about a minute later is worth not paying
+    // for this read on every gallery load.
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.json({ success: true, data: pricing });
+  } catch (error) {
+    console.error("Pricing config error:", error);
+    // An empty map, not a 500. Empty means "everything is free", and neither the
+    // gallery nor an editor may break because this read did. The gate is what
+    // actually decides whether money is owed, so a client that wrongly believes
+    // a template is free still gets a 402 when it tries to publish.
+    res.json({ success: true, data: {} });
+  }
+};
+
+/**
+ * GET /payment/access?templateType=&pageId=  — PROTECTED
+ *
+ * "If I press Publish now, will I be asked to pay?"
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ *
+ * Without it the client can only find out by ATTEMPTING a publish and reading
+ * the 402. That works, and it is still the backstop, but it means the publish
+ * button spins while the answer comes back — and then keeps spinning behind the
+ * paywall, because the publish never completed. The user sees a loading state
+ * before, and during, being asked for money.
+ *
+ * Asking first costs one fast request and lets the client put the paywall up with
+ * nothing spinning at all. The publish request is then only ever made when it is
+ * going to succeed.
+ *
+ * ── IT IS NOT A SECOND SET OF RULES ─────────────────────────────────────────
+ *
+ * It calls `checkPublishAccess` — the same function the publish endpoints call.
+ * A separate "will this be allowed" implementation would be two rule sets to keep
+ * in step, and the failure mode is the worst one available: the client believes
+ * publishing is free, does not show a paywall, and the publish is refused.
+ */
+export const getPublishAccess = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const templateType = String(req.query.templateType || "").trim();
+    const pageId = String(req.query.pageId || "").trim();
+
+    if (!templateType || !pageId) {
+      res.status(400).json({ success: false, error: "templateType and pageId are required" });
+      return;
+    }
+    if (!mongoose.Types.ObjectId.isValid(pageId)) {
+      res.status(400).json({ success: false, error: "Invalid pageId" });
+      return;
+    }
+
+    // Ownership, and `isAlreadyPublished` in the same query — the gate needs the
+    // second and we must not answer questions about somebody else's page.
+    const page = await findOwnedPage(templateType, pageId, String(req.userId));
+    if (!page) {
+      res.status(403).json({ success: false, error: "Page not found or access denied" });
+      return;
+    }
+
+    const gate = await checkPublishAccess({
+      userId: String(req.userId),
+      templateType,
+      pageId,
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    res.set("Cache-Control", "private, no-store");
+    res.json({
+      success: true,
+      data: gate.allowed
+        ? { needsPayment: false, reason: gate.reason, pricing: gate.pricing }
+        : { needsPayment: true, reason: "payment_required", pricing: gate.pricing },
+    });
+  } catch (error) {
+    console.error("Publish access error:", error);
+    // A 500 here must not become a dead Publish button. The client treats an
+    // unusable answer as "do not know", attempts the publish, and falls back to
+    // the 402 path — which is exactly the behaviour that existed before this
+    // endpoint. Degrading to the old flow beats blocking.
+    res.status(500).json({ success: false, error: "Could not check publish access" });
+  }
 };
 
 /**
@@ -72,7 +179,8 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const pricing = getPricing(templateType);
+    // Read uncached: this decides what comes off a card. See `getPricingFresh`.
+    const pricing = await getPricingFresh(templateType);
 
     if (pricing.isFree) {
       res.status(400).json({ success: false, error: "This template is free — no payment required" });
@@ -80,9 +188,25 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Verify the requesting user actually owns the page
-    const owns = await verifyPageOwnership(templateType, pageId, String(req.userId));
-    if (!owns) {
+    const page = await findOwnedPage(templateType, pageId, String(req.userId));
+    if (!page) {
       res.status(403).json({ success: false, error: "Page not found or access denied" });
+      return;
+    }
+
+    // ── Never charge for a page that is already live ─────────────────────────
+    //
+    // Gate rule 2 lets an already-published page re-publish for free. Taking
+    // money for one would be charging for something the user already has and can
+    // do again for nothing. Reachable in practice: publish while the template is
+    // free, a super admin prices it, then the editor's Publish is pressed again
+    // and a stale client opens checkout instead of just re-publishing.
+    if (page.isPublished) {
+      res.status(400).json({
+        success: false,
+        error: "This page is already published — re-publishing is free.",
+        code: "ALREADY_PUBLISHED",
+      });
       return;
     }
 
@@ -96,6 +220,31 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       res.status(400).json({ success: false, error: "Page is already unlocked for publishing" });
       return;
     }
+
+    // ── Never charge an amount the user was not shown ────────────────────────
+    //
+    // The client may send the price it displayed. If the super admin has changed
+    // it since — the public pricing endpoint is cached for 60s at the edge, so
+    // that window is real — refuse and hand back the current price so the paywall
+    // can re-render. The user then agrees to the new number before paying it.
+    //
+    // Optional on purpose: an older client that sends nothing still works, and
+    // gets the current price. Sending it is what buys the protection.
+    const { expectedFinalPricePaise } = req.body as { expectedFinalPricePaise?: unknown };
+    if (
+      Number.isInteger(expectedFinalPricePaise) &&
+      expectedFinalPricePaise !== pricing.finalPricePaise
+    ) {
+      res.status(409).json({
+        success: false,
+        error: "The price of this template changed. Please review it and try again.",
+        code: "PRICE_CHANGED",
+        pricing,
+      });
+      return;
+    }
+
+    const label = templateLabel(templateType);
 
     // Razorpay receipt: max 40 chars, must be unique
     const receipt = `pay_${pageId}_${Date.now()}`.slice(0, 40);
@@ -125,8 +274,14 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
         amount:         pricing.finalPricePaise,
         currency:       "INR",
         keyId:          env.RAZORPAY_KEY_ID,
-        name:           pricing.name,
-        description:    `Unlock ${pricing.name} — ${pricing.discountPercent}% off`,
+        name:           label,
+        // `ResolvedPricing` carries no name — pricing rows store a price, not
+        // copy. The human label comes from the catalogue, which is where every
+        // other surface already gets it.
+        description:
+          pricing.discountPercent > 0
+            ? `Unlock ${label} — ${pricing.discountPercent}% off`
+            : `Unlock ${label}`,
       },
     });
   } catch (error) {
@@ -224,7 +379,9 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const pricing = getPricing(templateType);
+    // Read uncached: points are a currency too, and the same "charged what the
+    // user was not shown" problem applies.
+    const pricing = await getPricingFresh(templateType);
 
     if (pricing.isFree || pricing.pointsCost === 0) {
       res.status(400).json({ success: false, error: "This template does not support points payment" });
@@ -232,9 +389,20 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Verify the requesting user actually owns the page
-    const owns = await verifyPageOwnership(templateType, pageId, String(req.userId));
-    if (!owns) {
+    const page = await findOwnedPage(templateType, pageId, String(req.userId));
+    if (!page) {
       res.status(403).json({ success: false, error: "Page not found or access denied" });
+      return;
+    }
+
+    // Already live means re-publishing is free — see the same guard in
+    // `createOrder`. Spending points here would take a real balance for nothing.
+    if (page.isPublished) {
+      res.status(400).json({
+        success: false,
+        error: "This page is already published — re-publishing is free.",
+        code: "ALREADY_PUBLISHED",
+      });
       return;
     }
 
@@ -262,24 +430,63 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Create the payment record (so publish gate clears)
-    await PaymentOrder.create({
-      userId:     req.userId,
-      templateType,
-      pageId:     new mongoose.Types.ObjectId(pageId),
-      amount:     0,             // no money charged
-      currency:   "INR",
-      status:     "points_used",
-      pointsUsed: pricing.pointsCost,
-    });
+    // ── From here the balance is already gone ────────────────────────────────
+    //
+    // The deduction above is atomic and has committed. If writing the unlock now
+    // fails, the user has paid and has nothing: the gate still refuses, and the
+    // points are not coming back on their own. There is no transaction spanning
+    // these writes (this deployment is not guaranteed to be a replica set, and
+    // `findOneAndUpdate` with a balance guard was chosen precisely to avoid
+    // needing one), so the compensation is explicit.
+    //
+    // Put the balance back and report failure. The user retries and is charged
+    // once, which is the only acceptable outcome of a half-finished payment.
+    try {
+      // Create the payment record (so publish gate clears)
+      await PaymentOrder.create({
+        userId:     req.userId,
+        templateType,
+        pageId:     new mongoose.Types.ObjectId(pageId),
+        amount:     0,             // no money charged
+        currency:   "INR",
+        status:     "points_used",
+        pointsUsed: pricing.pointsCost,
+      });
+    } catch (err) {
+      console.error("[points] unlock write failed after deducting, refunding:", err);
+      const refunded = await User.findOneAndUpdate(
+        { _id: req.userId },
+        { $inc: { points: pricing.pointsCost } },
+        { new: true, select: "points" }
+      );
+      // Recorded even on the failure path: a balance that moved twice with no
+      // trail is the thing that makes a support ticket unanswerable.
+      await PointTransaction.create({
+        user:    req.userId,
+        type:    "template_publish",
+        delta:   pricing.pointsCost,
+        balance: refunded?.points ?? updatedUser.points + pricing.pointsCost,
+        meta:    { templateType, pageId, reason: "refund: unlock write failed" },
+      }).catch(() => { /* already in a failure path; do not mask the 500 */ });
 
-    // Audit log for the point deduction
+      res.status(500).json({
+        success: false,
+        error: "Could not unlock the page. Your points have not been spent — please try again.",
+      });
+      return;
+    }
+
+    // Audit log for the point deduction. Deliberately AFTER the unlock: if this
+    // write is the one that fails, the user has what they paid for and we have
+    // lost a log line, which is the right way round for the two to fail.
     await PointTransaction.create({
       user:    req.userId,
       type:    "template_publish",
       delta:   -pricing.pointsCost,
       balance: updatedUser.points,
       meta:    { templateType, pageId },
+    }).catch((err) => {
+      console.error("[points] transaction log failed after a successful unlock:", err);
     });
 
     res.json({

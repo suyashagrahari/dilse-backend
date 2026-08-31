@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import WeddingPage from "../models/WeddingPage";
 import { env } from "../config/env";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
+import { checkPublishAccess } from "../services/publishGate.service";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -202,6 +203,24 @@ export const publishWeddingPage = async (req: Request, res: Response): Promise<v
       res.status(404).json({ success: false, error: "Page not found" });
       return;
     }
+
+    // ── Payment gate ─────────────────────────────────────────────────────────
+    const gate = await checkPublishAccess({
+      userId:             String(req.userId),
+      templateType:       "wedding",
+      pageId:             String(page._id),
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    if (!gate.allowed) {
+      res.status(gate.httpStatus).json({
+        success:  false,
+        error:    gate.error,
+        pricing:  gate.pricing,
+      });
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     page.isPublished = true;
     await page.save();

@@ -22,6 +22,20 @@ import {
   setTemplateVisibilityBulk,
   clearTemplateVisibility,
 } from "../controllers/templateVisibility.controller";
+import {
+  getAdminTemplatePricing,
+  setTemplatePricing,
+  setTemplatePricingBulk,
+  clearTemplatePricing,
+} from "../controllers/templatePricing.controller";
+import {
+  getTemplateGrantCounts,
+  getTemplateGrantsForSlug,
+  getTemplateGrantsForUser,
+  createTemplateGrant,
+  deleteTemplateGrant,
+} from "../controllers/templateGrant.controller";
+import { requireSuperAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -58,5 +72,34 @@ router.get("/template-visibility", getAdminTemplateVisibility);
 router.patch("/template-visibility", setTemplateVisibilityBulk);
 router.patch("/template-visibility/:slug", setTemplateVisibility);
 router.delete("/template-visibility/:slug", clearTemplateVisibility);
+
+// ── What each template costs ───────────────────────────────────────────────
+//
+// Bulk before per-slug, for the same Express-ordering reason as above.
+//
+// `requireSuperAdmin` per route, unlike the visibility block: this file is
+// mounted behind `requireAdmin`, and visibility is deliberately an admin
+// decision. A price is not — it decides what users are charged, so it needs the
+// tier that already holds the money capabilities. A superadmin outranks admin,
+// so both gates pass for them and only for them.
+router.get("/template-pricing", requireSuperAdmin, getAdminTemplatePricing);
+router.patch("/template-pricing", requireSuperAdmin, setTemplatePricingBulk);
+router.patch("/template-pricing/:slug", requireSuperAdmin, setTemplatePricing);
+router.delete("/template-pricing/:slug", requireSuperAdmin, clearTemplatePricing);
+
+// ── Who gets a template before everybody else ──────────────────────────────
+//
+// Super-admin only, like pricing and unlike visibility: this decides that one
+// named person may use something the public cannot, and — per the publish gate's
+// rule 4 — without paying for it.
+//
+// `/user/:userId` is declared BEFORE `/:slug` because Express matches in order
+// and `user` is a valid slug shape, so the per-user route would otherwise be
+// swallowed and answer with the grants for a template called "user".
+router.get("/template-grants", requireSuperAdmin, getTemplateGrantCounts);
+router.get("/template-grants/user/:userId", requireSuperAdmin, getTemplateGrantsForUser);
+router.get("/template-grants/:slug", requireSuperAdmin, getTemplateGrantsForSlug);
+router.post("/template-grants", requireSuperAdmin, createTemplateGrant);
+router.delete("/template-grants/:slug/:userId", requireSuperAdmin, deleteTemplateGrant);
 
 export default router;

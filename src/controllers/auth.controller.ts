@@ -10,6 +10,7 @@ import {
 } from "../utils/jwt";
 import { env } from "../config/env";
 import { sendOtpEmail } from "../utils/mailer";
+import { grantedSlugsFor } from "../config/templateAccess";
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -512,6 +513,23 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // ── Early access travels with the user, not with the public template list ──
+    //
+    // `GET /api/template-visibility` is unauthenticated and edge-cached for 60s,
+    // so a per-user list cannot ride on it — a CDN would hand one person's
+    // access to the next. It rides here instead, on a response that is already
+    // per-user and already fetched on boot by `checkAuth`.
+    //
+    // Two things fall out of that, both wanted. There is no extra request, and
+    // there is no render where the client knows WHO you are but not WHAT you can
+    // see — which is what would make a granted user's builder flash "Not
+    // available yet" before opening.
+    //
+    // Under impersonation this answers with the impersonated user's grants,
+    // because `protect` has already resolved `req.userId` to them. That is
+    // correct: an admin viewing as a user should see what that user sees.
+    const earlyAccess = [...(await grantedSlugsFor(String(user._id)))].sort();
+
     res.json({
       success: true,
       data: {
@@ -526,6 +544,8 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
         createdAt: user.createdAt,
         points: user.points,
         referralCode: user.referralCode,
+        /** Template slugs this user may use even while they are hidden. */
+        earlyAccess,
       },
     });
   } catch (error) {

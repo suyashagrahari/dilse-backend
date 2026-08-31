@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import EidPage from "../models/EidPage";
 import { env } from "../config/env";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
+import { checkPublishAccess } from "../services/publishGate.service";
 
 export const createEidPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -125,6 +126,24 @@ export const publishEidPage = async (req: Request, res: Response): Promise<void>
       res.status(404).json({ success: false, error: "Page not found" });
       return;
     }
+
+    // ── Payment gate ─────────────────────────────────────────────────────────
+    const gate = await checkPublishAccess({
+      userId:             String(req.userId),
+      templateType:       "eid",
+      pageId:             String(page._id),
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    if (!gate.allowed) {
+      res.status(gate.httpStatus).json({
+        success:  false,
+        error:    gate.error,
+        pricing:  gate.pricing,
+      });
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     page.isPublished = true;
     await page.save();
