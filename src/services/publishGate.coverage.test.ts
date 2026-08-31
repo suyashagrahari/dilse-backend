@@ -108,3 +108,70 @@ test("no publish handler tells the gate a page is already published unconditiona
 
   assert.deepEqual(offenders, [], `these would grandfather every page:\n  ${offenders.join("\n  ")}`);
 });
+
+/**
+ * The write gate, swept.
+ *
+ * Before this, `requireTemplateLive` was applied to two route files out of
+ * forty-three. So hiding any other template stopped the gallery and closed the
+ * builder — both client-side — and left `POST /`, `PUT /:id` and
+ * `POST /:id/publish` open to a direct call. A release control that holds for two
+ * templates is not a release control.
+ *
+ * Asserted over the route directory rather than a list, so the forty-fourth
+ * template cannot quietly ship without one.
+ */
+test("every template route file gates create, update and publish", () => {
+  const ROUTES = path.join(__dirname, "..", "routes");
+
+  /** Route files that are not a template's page routes. */
+  const NOT_TEMPLATE_ROUTES = new Set([
+    "activity.routes.ts", "admin.routes.ts", "analytics.routes.ts", "auth.routes.ts",
+    "contact.routes.ts", "contribution.routes.ts", "favorite.routes.ts",
+    "generate.routes.ts", "index.ts", "media.routes.ts", "payment.routes.ts",
+    "referral.routes.ts", "share.routes.ts", "storyFill.routes.ts",
+    "storyProfile.routes.ts", "superAdmin.routes.ts", "template.routes.ts",
+    "templateVisibility.routes.ts", "userContent.routes.ts",
+  ]);
+
+  const offenders: string[] = [];
+
+  for (const file of fs.readdirSync(ROUTES).filter((f) => f.endsWith(".routes.ts"))) {
+    if (NOT_TEMPLATE_ROUTES.has(file)) continue;
+
+    const body = fs.readFileSync(path.join(ROUTES, file), "utf8");
+
+    // A template's page routes are the ones that create a page.
+    if (!/router\.post\(\s*"\/"/.test(body)) continue;
+
+    if (!body.includes("requireTemplateAccess")) {
+      offenders.push(`${file} (no gate at all)`);
+      continue;
+    }
+
+    // The gate must be ON the three routes, not merely imported.
+    for (const [label, re] of [
+      ["create", /router\.post\(\s*"\/"\s*,\s*live\s*,/],
+      ["update", /router\.put\(\s*"\/:id"\s*,\s*live\s*,/],
+      ["publish", /router\.post\(\s*"\/:id\/publish"\s*,\s*live\s*,/],
+    ] as const) {
+      // Not every template has a publish route (a couple publish on create).
+      const hasRoute =
+        label === "create" ? true
+        : label === "update" ? /router\.put\(\s*"\/:id"/.test(body)
+        : /router\.post\(\s*"\/:id\/publish"/.test(body);
+      if (hasRoute && !re.test(body)) offenders.push(`${file} (${label} route ungated)`);
+    }
+
+    // And it must sit BELOW protect, or it sees no user and refuses the very
+    // person a grant was created for.
+    const protectIdx = body.search(/router\.use\(\s*protect\s*\)/);
+    const firstGated = body.search(/router\.(post|put)\([^)]*live\s*,/);
+    if (protectIdx === -1) offenders.push(`${file} (no router.use(protect))`);
+    else if (firstGated !== -1 && firstGated < protectIdx) {
+      offenders.push(`${file} (gate applied above protect — would see no user)`);
+    }
+  }
+
+  assert.deepEqual(offenders, [], `template write routes are unguarded in:\n  ${offenders.join("\n  ")}`);
+});

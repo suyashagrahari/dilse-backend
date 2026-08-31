@@ -1,5 +1,7 @@
 import PaymentOrder from "../models/PaymentOrder";
 import { getPricing } from "../config/templatePricing";
+import { hasGrant } from "../config/templateAccess";
+import { slugForTemplateType } from "../config/templateSlugs";
 import type { ResolvedPricing } from "../config/pricingMath";
 
 interface GateAllowed {
@@ -22,7 +24,8 @@ type GateResult = GateAllowed | GateDenied;
  *  1. Free template             → allowed
  *  2. Page is already published → allowed
  *  3. A successful PaymentOrder → allowed
- *  4. Otherwise                 → 402 with the pricing the client renders
+ *  4. An early-access grant     → allowed
+ *  5. Otherwise                 → 402 with the pricing the client renders
  *
  * ── WHY RULE 2 IS UNCONDITIONAL ────────────────────────────────────────────
  *
@@ -67,7 +70,24 @@ export async function checkPublishAccess(params: {
 
   if (payment) return { allowed: true };
 
-  // Rule 4: the paywall.
+  // ── Rule 4: early access ────────────────────────────────────────────────
+  //
+  // A super admin invited this person to try a template before it is released.
+  // Charging them for the privilege of testing it is not the deal, so a grant
+  // waives the payment as well as the visibility.
+  //
+  // Checked AFTER the payment lookup on purpose: somebody who has already paid
+  // is allowed by rule 3 and never reaches this, so a grant added later cannot
+  // retroactively make a completed payment look unnecessary in the logs. And
+  // checked BEFORE the 402, so a granted tester is never asked for money.
+  //
+  // Grants are keyed by slug, the gate speaks templateType — one translation,
+  // the same one the pricing lookup uses.
+  if (await hasGrant(params.userId, slugForTemplateType(params.templateType))) {
+    return { allowed: true };
+  }
+
+  // Rule 5: the paywall.
   return {
     allowed: false,
     error: "PAYMENT_REQUIRED",
