@@ -22,6 +22,13 @@ import {
   setTemplateVisibilityBulk,
   clearTemplateVisibility,
 } from "../controllers/templateVisibility.controller";
+import {
+  getAdminTemplatePricing,
+  setTemplatePricing,
+  setTemplatePricingBulk,
+  clearTemplatePricing,
+} from "../controllers/templatePricing.controller";
+import { requireSuperAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -58,5 +65,19 @@ router.get("/template-visibility", getAdminTemplateVisibility);
 router.patch("/template-visibility", setTemplateVisibilityBulk);
 router.patch("/template-visibility/:slug", setTemplateVisibility);
 router.delete("/template-visibility/:slug", clearTemplateVisibility);
+
+// ── What each template costs ───────────────────────────────────────────────
+//
+// Bulk before per-slug, for the same Express-ordering reason as above.
+//
+// `requireSuperAdmin` per route, unlike the visibility block: this file is
+// mounted behind `requireAdmin`, and visibility is deliberately an admin
+// decision. A price is not — it decides what users are charged, so it needs the
+// tier that already holds the money capabilities. A superadmin outranks admin,
+// so both gates pass for them and only for them.
+router.get("/template-pricing", requireSuperAdmin, getAdminTemplatePricing);
+router.patch("/template-pricing", requireSuperAdmin, setTemplatePricingBulk);
+router.patch("/template-pricing/:slug", requireSuperAdmin, setTemplatePricing);
+router.delete("/template-pricing/:slug", requireSuperAdmin, clearTemplatePricing);
 
 export default router;

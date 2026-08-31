@@ -29,6 +29,8 @@ export type AuditAction =
   | "page.reset_password"
   | "page.clear_password"
   | "page.delete"
+  | "template.set_pricing"
+  | "template.clear_pricing"
   | "impersonation.start"
   | "impersonation.end";
 
