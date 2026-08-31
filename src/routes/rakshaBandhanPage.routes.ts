@@ -11,12 +11,12 @@ import {
   submitVachan,
   deleteRakshaBandhanPage,
 } from "../controllers/rakshaBandhanPage.controller";
-import { requireTemplateLive } from "../middleware/templateGate";
+import { requireTemplateAccess } from "../middleware/templateGate";
 
 const router = Router();
 
 /** See the twin of this line in rakshaBandhanSisterPage.routes.ts. */
-const live = requireTemplateLive("happy-rakshabandhan-to-brother");
+const live = requireTemplateAccess("happy-rakshabandhan-to-brother");
 
 router.get("/share/:shareId", getSharedRakshaBandhanPage);
 router.post("/share/:shareId/verify", verifyRakshaBandhanPagePassword);

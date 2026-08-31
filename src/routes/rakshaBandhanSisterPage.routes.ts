@@ -11,7 +11,7 @@ import {
   submitSisterReply,
   deleteRakshaBandhanSisterPage,
 } from "../controllers/rakshaBandhanSisterPage.controller";
-import { requireTemplateLive } from "../middleware/templateGate";
+import { requireTemplateAccess } from "../middleware/templateGate";
 
 const router = Router();
 
@@ -20,7 +20,7 @@ const router = Router();
  * new page into existence. Reads stay open at every level — a page already sent
  * must not break because the template was switched off. See middleware/templateGate.
  */
-const live = requireTemplateLive("happy-rakshabandhan-to-sister");
+const live = requireTemplateAccess("happy-rakshabandhan-to-sister");
 
 // The three public routes come BEFORE `router.use(protect)`, because Express
 // applies middleware in declaration order and his sister will never have a
