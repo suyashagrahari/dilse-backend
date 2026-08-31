@@ -24,19 +24,45 @@
 
 import { TEMPLATE_LOOKUPS } from "../controllers/share.controller";
 
-const typeToSlug = new Map<string, string>();
-const slugToTypes = new Map<string, string[]>();
+let typeToSlug: Map<string, string> | null = null;
+let slugToTypes: Map<string, string[]> | null = null;
 
-for (const { templateType, editorRoute } of TEMPLATE_LOOKUPS) {
-  const type = String(templateType || "").trim().toLowerCase();
-  const slug = String(editorRoute || "").replace(/^\/+/, "").trim().toLowerCase();
-  if (!type || !slug) continue;
+/**
+ * Built on first use, not at module load.
+ *
+ * ── WHY LAZY ────────────────────────────────────────────────────────────────
+ *
+ * `TEMPLATE_LOOKUPS` lives in a controller that imports ~43 models, and this
+ * module is imported by the publish gate and the pricing config. Reading it at
+ * module load made the whole thing depend on import ORDER: inside the running
+ * server the graph happens to resolve, but a standalone script that requires
+ * `services/templateRegistry` first got `TEMPLATE_LOOKUPS === undefined` and
+ * threw "not iterable" before main() ran.
+ *
+ * A module that works or throws depending on who imported it first is a trap
+ * that only springs on the next person to write a maintenance script. Deferring
+ * the read to first call removes the ordering question entirely.
+ */
+function build(): void {
+  if (typeToSlug && slugToTypes) return;
 
-  typeToSlug.set(type, slug);
+  const t2s = new Map<string, string>();
+  const s2t = new Map<string, string[]>();
 
-  const list = slugToTypes.get(slug) ?? [];
-  if (!list.includes(type)) list.push(type);
-  slugToTypes.set(slug, list);
+  for (const { templateType, editorRoute } of TEMPLATE_LOOKUPS ?? []) {
+    const type = String(templateType || "").trim().toLowerCase();
+    const slug = String(editorRoute || "").replace(/^\/+/, "").trim().toLowerCase();
+    if (!type || !slug) continue;
+
+    t2s.set(type, slug);
+
+    const list = s2t.get(slug) ?? [];
+    if (!list.includes(type)) list.push(type);
+    s2t.set(slug, list);
+  }
+
+  typeToSlug = t2s;
+  slugToTypes = s2t;
 }
 
 /**
@@ -53,7 +79,8 @@ for (const { templateType, editorRoute } of TEMPLATE_LOOKUPS) {
 export function slugForTemplateType(templateType: string): string {
   const key = String(templateType || "").trim().toLowerCase();
   if (!key) return "";
-  return typeToSlug.get(key) ?? key;
+  build();
+  return typeToSlug!.get(key) ?? key;
 }
 
 /**
@@ -64,10 +91,12 @@ export function slugForTemplateType(templateType: string): string {
 export function templateTypesForSlug(slug: string): string[] {
   const key = String(slug || "").trim().toLowerCase();
   if (!key) return [];
-  return slugToTypes.get(key) ?? [];
+  build();
+  return slugToTypes!.get(key) ?? [];
 }
 
 /** For the invariant tests, and for the panel to know what is priceable. */
 export function allTemplateTypeSlugPairs(): Array<{ templateType: string; slug: string }> {
-  return [...typeToSlug].map(([templateType, slug]) => ({ templateType, slug }));
+  build();
+  return [...typeToSlug!].map(([templateType, slug]) => ({ templateType, slug }));
 }

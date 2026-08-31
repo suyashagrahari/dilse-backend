@@ -133,6 +133,42 @@ const api = async (path, opts = {}, token) => {
     check("raw tracked", fresh.passwordRaw === "tulip123");
   }
 
+  console.log("\n── whitespace: the bug where a correct password would not open the page ──");
+  {
+    // Reported as "user puts a password, recipient enters it, page will not
+    // open". The cause was an asymmetry: no builder trimmed what the sender
+    // typed, and 37 of 38 viewers trim what the recipient types. A sender who
+    // hit space after the word — which a phone keyboard invites — stored
+    // "sunflower ", and "sunflower" was then compared against its hash forever.
+    //
+    // 51 real pages in production were in this state when it was found.
+    const p = await HoliPage.create({
+      userId: owner._id, senderName: "S", recipientName: "R",
+      password: "sunflower ", isPublished: true,
+    });
+    const d = await HoliPage.findById(p._id).select("+passwordRaw");
+    check("a trailing space is trimmed at save time", d.passwordRaw === "sunflower", JSON.stringify(d.passwordRaw));
+
+    const ok = await api(`/holi-pages/share/${d.shareId}/verify`, { method: "POST", body: JSON.stringify({ password: "sunflower" }) });
+    check("the recipient's trimmed input opens the page", ok.status === 200, `got ${ok.status}`);
+
+    const spaced = await api(`/holi-pages/share/${d.shareId}/verify`, { method: "POST", body: JSON.stringify({ password: "sunflower " }) });
+    check("so does the untrimmed form — comparePassword trims both sides", spaced.status === 200, `got ${spaced.status}`);
+
+    const wrong = await api(`/holi-pages/share/${d.shareId}/verify`, { method: "POST", body: JSON.stringify({ password: "nope" }) });
+    check("a genuinely wrong password is still refused", wrong.status === 401, `got ${wrong.status}`);
+
+    const lead = await HoliPage.create({ userId: owner._id, senderName: "S", recipientName: "R", password: "  moonlight", isPublished: true });
+    const ld = await HoliPage.findById(lead._id).select("+passwordRaw");
+    check("leading whitespace trimmed too", ld.passwordRaw === "moonlight", JSON.stringify(ld.passwordRaw));
+
+    // Hashing "" would leave a page that reports itself protected and opens for
+    // nobody — worse than the bug being fixed.
+    const blank = await HoliPage.create({ userId: owner._id, senderName: "S", recipientName: "R", password: "   ", isPublished: true });
+    const bd = await HoliPage.findById(blank._id).select("+passwordRaw");
+    check("a whitespace-only password becomes NO password, not a hash of ''", bd.password === "" && bd.passwordRaw === "");
+  }
+
   console.log("\n── a hidden template does not lock the owner out ──");
   {
     // The template gate guards create/update/publish. Managing the password of a
