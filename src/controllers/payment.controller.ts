@@ -6,6 +6,7 @@ import PaymentOrder from "../models/PaymentOrder";
 import { getPricingFresh, allPricing } from "../config/templatePricing";
 import { templateLabel } from "../config/templateCatalog";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
+import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 
@@ -86,6 +87,76 @@ export const getPricingConfig = async (_req: Request, res: Response): Promise<vo
     // actually decides whether money is owed, so a client that wrongly believes
     // a template is free still gets a 402 when it tries to publish.
     res.json({ success: true, data: {} });
+  }
+};
+
+/**
+ * GET /payment/access?templateType=&pageId=  — PROTECTED
+ *
+ * "If I press Publish now, will I be asked to pay?"
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ *
+ * Without it the client can only find out by ATTEMPTING a publish and reading
+ * the 402. That works, and it is still the backstop, but it means the publish
+ * button spins while the answer comes back — and then keeps spinning behind the
+ * paywall, because the publish never completed. The user sees a loading state
+ * before, and during, being asked for money.
+ *
+ * Asking first costs one fast request and lets the client put the paywall up with
+ * nothing spinning at all. The publish request is then only ever made when it is
+ * going to succeed.
+ *
+ * ── IT IS NOT A SECOND SET OF RULES ─────────────────────────────────────────
+ *
+ * It calls `checkPublishAccess` — the same function the publish endpoints call.
+ * A separate "will this be allowed" implementation would be two rule sets to keep
+ * in step, and the failure mode is the worst one available: the client believes
+ * publishing is free, does not show a paywall, and the publish is refused.
+ */
+export const getPublishAccess = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const templateType = String(req.query.templateType || "").trim();
+    const pageId = String(req.query.pageId || "").trim();
+
+    if (!templateType || !pageId) {
+      res.status(400).json({ success: false, error: "templateType and pageId are required" });
+      return;
+    }
+    if (!mongoose.Types.ObjectId.isValid(pageId)) {
+      res.status(400).json({ success: false, error: "Invalid pageId" });
+      return;
+    }
+
+    // Ownership, and `isAlreadyPublished` in the same query — the gate needs the
+    // second and we must not answer questions about somebody else's page.
+    const page = await findOwnedPage(templateType, pageId, String(req.userId));
+    if (!page) {
+      res.status(403).json({ success: false, error: "Page not found or access denied" });
+      return;
+    }
+
+    const gate = await checkPublishAccess({
+      userId: String(req.userId),
+      templateType,
+      pageId,
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    res.set("Cache-Control", "private, no-store");
+    res.json({
+      success: true,
+      data: gate.allowed
+        ? { needsPayment: false, reason: gate.reason, pricing: gate.pricing }
+        : { needsPayment: true, reason: "payment_required", pricing: gate.pricing },
+    });
+  } catch (error) {
+    console.error("Publish access error:", error);
+    // A 500 here must not become a dead Publish button. The client treats an
+    // unusable answer as "do not know", attempts the publish, and falls back to
+    // the 402 path — which is exactly the behaviour that existed before this
+    // endpoint. Degrading to the old flow beats blocking.
+    res.status(500).json({ success: false, error: "Could not check publish access" });
   }
 };
 

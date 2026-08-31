@@ -4,8 +4,18 @@ import { hasGrant } from "../config/templateAccess";
 import { slugForTemplateType } from "../config/templateSlugs";
 import type { ResolvedPricing } from "../config/pricingMath";
 
+/**
+ * Why the gate said yes. Carried so `GET /payment/access` can explain itself and
+ * so a support question — "why wasn't this person charged?" — has an answer that
+ * does not require re-deriving the rules by hand.
+ */
+export type AllowReason = "free" | "already_published" | "already_paid" | "early_access";
+
 interface GateAllowed {
   allowed: true;
+  reason: AllowReason;
+  /** The template's price, whether or not it was owed. */
+  pricing: ResolvedPricing;
 }
 
 interface GateDenied {
@@ -56,10 +66,10 @@ export async function checkPublishAccess(params: {
   const pricing = await getPricing(params.templateType);
 
   // Rule 1: nobody has priced this template.
-  if (pricing.isFree) return { allowed: true };
+  if (pricing.isFree) return { allowed: true, reason: "free", pricing };
 
   // Rule 2: it is already live. Never take that away.
-  if (params.isAlreadyPublished) return { allowed: true };
+  if (params.isAlreadyPublished) return { allowed: true, reason: "already_published", pricing };
 
   // Rule 3: paid, by card or by points.
   const payment = await PaymentOrder.findOne({
@@ -68,7 +78,7 @@ export async function checkPublishAccess(params: {
     status: { $in: ["paid", "points_used"] },
   }).select("_id");
 
-  if (payment) return { allowed: true };
+  if (payment) return { allowed: true, reason: "already_paid", pricing };
 
   // ── Rule 4: early access ────────────────────────────────────────────────
   //
@@ -84,7 +94,7 @@ export async function checkPublishAccess(params: {
   // Grants are keyed by slug, the gate speaks templateType — one translation,
   // the same one the pricing lookup uses.
   if (await hasGrant(params.userId, slugForTemplateType(params.templateType))) {
-    return { allowed: true };
+    return { allowed: true, reason: "early_access", pricing };
   }
 
   // Rule 5: the paywall.
