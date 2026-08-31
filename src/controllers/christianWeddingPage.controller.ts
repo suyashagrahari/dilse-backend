@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import ChristianWeddingPage from "../models/ChristianWeddingPage";
 import { env } from "../config/env";
 import { transformMediaPayload, uploadAudioDataUrl } from "../services/mediaProcessor.service";
+import { checkPublishAccess } from "../services/publishGate.service";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -204,6 +205,24 @@ export const publishChristianWeddingPage = async (req: Request, res: Response): 
       res.status(404).json({ success: false, error: "Page not found" });
       return;
     }
+
+    // ── Payment gate ─────────────────────────────────────────────────────────
+    const gate = await checkPublishAccess({
+      userId:             String(req.userId),
+      templateType:       "christian-wedding",
+      pageId:             String(page._id),
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    if (!gate.allowed) {
+      res.status(gate.httpStatus).json({
+        success:  false,
+        error:    gate.error,
+        pricing:  gate.pricing,
+      });
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     page.isPublished = true;
     await page.save();

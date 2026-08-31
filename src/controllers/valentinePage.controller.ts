@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import ValentinePage from "../models/ValentinePage";
 import { env } from "../config/env";
+import { checkPublishAccess } from "../services/publishGate.service";
 
 export const createValentinePage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -66,6 +67,24 @@ export const publishValentinePage = async (req: Request, res: Response): Promise
   try {
     const page = await ValentinePage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+
+    // ── Payment gate ─────────────────────────────────────────────────────────
+    const gate = await checkPublishAccess({
+      userId:             String(req.userId),
+      templateType:       "valentine",
+      pageId:             String(page._id),
+      isAlreadyPublished: !!page.isPublished,
+    });
+
+    if (!gate.allowed) {
+      res.status(gate.httpStatus).json({
+        success:  false,
+        error:    gate.error,
+        pricing:  gate.pricing,
+      });
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     page.isPublished = true;
     await page.save();
