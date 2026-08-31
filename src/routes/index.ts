@@ -39,6 +39,7 @@ import capsulePageRoutes from "./capsulePage.routes";
 import usPageRoutes from "./usPage.routes";
 import storyRoutes from "./story.routes";
 import shareRoutes from "./share.routes";
+import myPageRoutes from "./myPage.routes";
 import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
 import contactRoutes from "./contact.routes";
@@ -134,6 +135,12 @@ router.use("/contributions", contributionRoutes);
 router.use("/activity", activityRoutes);
 router.use("/story", storyRoutes);
 router.use("/share", shareRoutes);
+
+// A page's owner managing their own share password. Deliberately NOT behind
+// `requireTemplateAccess`: switching a template off must not take away an
+// owner's control of pages they have already published from it — the same line
+// `middleware/templateGate` draws for reads and recipient routes.
+router.use("/my-pages", protect, myPageRoutes);
 router.use("/media", mediaRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/contact", contactRoutes);
