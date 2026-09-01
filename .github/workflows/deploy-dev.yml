@@ -95,9 +95,9 @@ jobs:
       # disables the draft follow-up emails with a banner nobody may notice for
       # weeks. So the keys are held as repository secrets and upserted here.
       #
-      # It only ever removes and rewrites its own two lines. It never truncates
-      # the file, and it skips entirely when the secrets are unset, so a fork or
-      # a repo without them deploys exactly as before.
+      # It only ever removes and rewrites its own two lines, targets the dev
+      # env file by name so it cannot touch production's, and skips entirely
+      # when the secrets are unset — so a fork deploys exactly as before.
       - name: Ensure SES credentials on the box
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -117,54 +117,43 @@ jobs:
               exit 0
             fi
 
-            # Which file feeds the backend container? Ask deploy.sh rather than
-            # guessing, and prefer a dev-specific one when the script names more
-            # than one, so a dev deploy cannot write into the production env.
-            FOUND=""
-            CANDS=$(grep -hoE 'env-file[= ]+[^ \\]+' /opt/dilse/scripts/deploy.sh 2>/dev/null \
-                    | sed -E 's/env-file[= ]+//' | sort -u || true)
-            echo "candidates named by deploy.sh: ${CANDS:-none}"
+            # ── Why the path is written out rather than discovered ──────────
+            #
+            # The first version of this step grepped deploy.sh for --env-file.
+            # That cannot work: the script passes "$ENV_FILE", a shell variable,
+            # so the grep returned the literal string and the step failed. It
+            # failed loudly and wrote nothing, which is what the guards are for.
+            #
+            # /opt/dilse holds .env.dev.backend and .env.backend side by side —
+            # dev and production on one box. Naming the dev file explicitly is
+            # both simpler and safer than any amount of parsing: there is no
+            # inference that could resolve to the production file.
+            ENV_FILE=/opt/dilse/.env.dev.backend
 
-            for c in $CANDS; do
-              case "$c" in
-                /*dev*) [ -f "$c" ] && FOUND="$c" && break ;;
-              esac
-            done
-            if [ -z "$FOUND" ]; then
-              for c in $CANDS; do
-                case "$c" in /*) [ -f "$c" ] && FOUND="$c" && break ;; esac
-              done
-            fi
-            if [ -z "$FOUND" ]; then
-              for c in /opt/dilse/dev/.env /opt/dilse/.env.dev /opt/dilse/backend.dev.env \
-                       /opt/dilse/.env /opt/dilse/backend.env; do
-                [ -f "$c" ] && FOUND="$c" && break
-              done
-            fi
-
-            if [ -z "$FOUND" ]; then
-              echo "::error::Could not locate the backend env file. Contents of /opt/dilse:"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
               ls -la /opt/dilse || true
               exit 1
             fi
 
-            # Sanity: it must look like the app's env, or we are editing the
-            # wrong file. Names only — no values are printed.
-            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$FOUND"; then
-              echo "::error::$FOUND does not look like the backend env file. Keys present:"
-              grep -oE '^[A-Z_]+=' "$FOUND" | sort -u || true
+            # It must look like the backend's env, or we are editing the wrong
+            # file. Key NAMES only — no values are ever printed.
+            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
               exit 1
             fi
-            echo "env file: $FOUND"
+            echo "env file: $ENV_FILE"
 
             SUDO=""
-            [ -w "$FOUND" ] || SUDO="sudo"
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
 
-            $SUDO sed -i '/^SES_ACCESS_KEY_ID=/d; /^SES_SECRET_ACCESS_KEY=/d' "$FOUND"
+            # Only ever this step's own two lines. Never a truncation.
+            $SUDO sed -i '/^SES_ACCESS_KEY_ID=/d; /^SES_SECRET_ACCESS_KEY=/d' "$ENV_FILE"
             printf 'SES_ACCESS_KEY_ID=%s\nSES_SECRET_ACCESS_KEY=%s\n' \
-              "$SES_ACCESS_KEY_ID" "$SES_SECRET_ACCESS_KEY" | $SUDO tee -a "$FOUND" >/dev/null
+              "$SES_ACCESS_KEY_ID" "$SES_SECRET_ACCESS_KEY" | $SUDO tee -a "$ENV_FILE" >/dev/null
 
-            echo "SES lines now present: $(grep -c '^SES_' "$FOUND")"
+            echo "SES lines now present: $(grep -c '^SES_' "$ENV_FILE")"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
