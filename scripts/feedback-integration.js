@@ -5,7 +5,7 @@
  * suite. It DROPS THE DATABASE it points at, so it must only ever be aimed at a
  * scratch one.
  *
- *   1. cp .env .env.satest
+ *   1. cp .env .env.satest   —  then BLANK RESEND_API_KEY in it
  *   2. in .env.satest set APP_ENV=local, LOCAL_PORT=5099, and point
  *      LOCAL_MONGODB_URI at a throwaway database (e.g. .../gifts_fbtest)
  *   3. npm run build
@@ -34,6 +34,29 @@ require("dotenv").config({ path: "./.env.satest" });
 process.env.APP_ENV = "local";
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
+
+// ── THIS SCRIPT EXERCISES A ROUTE THAT SENDS EMAIL ─────────────────────────
+//
+// `POST /admin/feedback/:id/reply` calls Resend. The first run of this script
+// was made against a .env.satest copied from .env, which carried a live
+// RESEND_API_KEY — so it really did send a message to the fixture address. The
+// fixtures are not deliverable (see below), so nothing reached a person, but a
+// delivery was attempted and bounces are charged to the sending domain's
+// reputation. A test must not be able to do that.
+//
+// The key must be blank in the scratch env. With no key the mailer logs the
+// message and returns, which is exactly what this script wants to assert
+// against: that the ROUTE recorded and audited the reply.
+if (process.env.RESEND_API_KEY) {
+  console.error(
+    "\n✗ RESEND_API_KEY is set in .env.satest.\n\n" +
+    "  This script calls the reply route, which sends real email. Blank the key\n" +
+    "  in .env.satest before running:\n\n" +
+    "      RESEND_API_KEY=\n\n" +
+    "  Set FEEDBACK_ALLOW_REAL_EMAIL=1 only if you genuinely mean to send.\n"
+  );
+  if (process.env.FEEDBACK_ALLOW_REAL_EMAIL !== "1") process.exit(1);
+}
 
 const BASE = `http://127.0.0.1:${process.env.LOCAL_PORT || 5099}/api`;
 let pass = 0, fail = 0;
@@ -69,10 +92,10 @@ const api = async (path, opts = {}, token) => {
   const PageFeedback = require("../dist/models/PageFeedback").default;
   const AdminAuditLog = require("../dist/models/AdminAuditLog").default;
 
-  const creator = await User.create({ email: "creator@test.com", name: "Priya Sharma", provider: "local", password: "x1234567" });
-  const other   = await User.create({ email: "other@test.com",   name: "Other",        provider: "local", password: "x1234567" });
-  const admin   = await User.create({ email: "admin@test.com",   name: "Admin",        provider: "local", password: "x1234567", role: "admin" });
-  const suFor   = await User.create({ email: "su@test.com",      name: "Super",        provider: "local", password: "x1234567", role: "superadmin" });
+  const creator = await User.create({ email: "creator@test.invalid", name: "Priya Sharma", provider: "local", password: "x1234567" });
+  const other   = await User.create({ email: "other@test.invalid",   name: "Other",        provider: "local", password: "x1234567" });
+  const admin   = await User.create({ email: "admin@test.invalid",   name: "Admin",        provider: "local", password: "x1234567", role: "admin" });
+  const suFor   = await User.create({ email: "su@test.invalid",      name: "Super",        provider: "local", password: "x1234567", role: "superadmin" });
 
   const CREATOR = tok(String(creator._id), creator.email);
   const OTHER   = tok(String(other._id),   other.email);
@@ -101,7 +124,7 @@ const api = async (path, opts = {}, token) => {
   const first = await PageFeedback.findOne({ pageUrl: URL_A });
   check("the first submission stored the rating", first && first.rating === 5);
   check("identity came from the session, not the payload",
-    first && first.userEmail === "creator@test.com" && first.userName === "Priya Sharma");
+    first && first.userEmail === "creator@test.invalid" && first.userName === "Priya Sharma");
 
   // Re-submitting the same page is an EDIT, not a duplicate. This is the case
   // that fires when somebody clears their browser storage or publishes the same
@@ -215,14 +238,14 @@ const api = async (path, opts = {}, token) => {
   // A CRLF in a subject is header injection. It must be gone, not merely trimmed.
   check("the subject was stripped of CRLF", !/[\r\n]/.test(replied.replies[0].subject));
   check("the status became 'replied'", replied.status === "replied");
-  check("the sender was recorded", replied.replies[0].sentByEmail === "su@test.com");
+  check("the sender was recorded", replied.replies[0].sentByEmail === "su@test.invalid");
   check("aiAssisted was recorded", replied.replies[0].aiAssisted === true);
 
   console.log("\n── replying is audited ──");
   const audits = await AdminAuditLog.find({ action: "feedback.reply_sent" });
   check("an audit entry was written", audits.length === 1);
-  check("the audit names the actor", audits[0] && audits[0].actorEmail === "su@test.com");
-  check("the audit names the recipient", audits[0] && audits[0].targetUserEmail === "creator@test.com");
+  check("the audit names the actor", audits[0] && audits[0].actorEmail === "su@test.invalid");
+  check("the audit names the recipient", audits[0] && audits[0].targetUserEmail === "creator@test.invalid");
 
   console.log("\n── 'replied' may now be un-set by hand, having been earned ──");
   check("setting it back to 'read' is allowed",
