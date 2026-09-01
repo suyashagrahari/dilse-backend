@@ -34,6 +34,7 @@ export type AuditAction =
   | "template.grant_access"
   | "template.revoke_access"
   | "feedback.reply_sent"
+  | "draft.followup_sent"
   | "impersonation.start"
   | "impersonation.end";
 
