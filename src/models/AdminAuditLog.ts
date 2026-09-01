@@ -33,6 +33,7 @@ export type AuditAction =
   | "template.clear_pricing"
   | "template.grant_access"
   | "template.revoke_access"
+  | "feedback.reply_sent"
   | "impersonation.start"
   | "impersonation.end";
 

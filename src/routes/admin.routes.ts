@@ -35,6 +35,14 @@ import {
   createTemplateGrant,
   deleteTemplateGrant,
 } from "../controllers/templateGrant.controller";
+import {
+  getFeedbackList,
+  setFeedbackStatus,
+  setFeedbackNotes,
+  deleteFeedback,
+  draftReply,
+  sendReply,
+} from "../controllers/adminFeedback.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
 
 const router = Router();
@@ -101,5 +109,21 @@ router.get("/template-grants/user/:userId", requireSuperAdmin, getTemplateGrants
 router.get("/template-grants/:slug", requireSuperAdmin, getTemplateGrantsForSlug);
 router.post("/template-grants", requireSuperAdmin, createTemplateGrant);
 router.delete("/template-grants/:slug/:userId", requireSuperAdmin, deleteTemplateGrant);
+
+// ── What creators thought, the moment they finished ────────────────────────
+//
+// Super-admin only, like pricing and grants and unlike contacts: replying here
+// sends mail as SubhSandesh to a named customer, and the drafts are written by a
+// model. See the header of adminFeedback.controller for why that tier.
+//
+// `draft-reply` and `reply` are two routes on purpose. Generating text and
+// sending an email are separate acts with a human in between, and there is no
+// route that does both.
+router.get("/feedback", requireSuperAdmin, getFeedbackList);
+router.patch("/feedback/:id/status", requireSuperAdmin, setFeedbackStatus);
+router.patch("/feedback/:id/notes", requireSuperAdmin, setFeedbackNotes);
+router.post("/feedback/:id/draft-reply", requireSuperAdmin, draftReply);
+router.post("/feedback/:id/reply", requireSuperAdmin, sendReply);
+router.delete("/feedback/:id", requireSuperAdmin, deleteFeedback);
 
 export default router;
