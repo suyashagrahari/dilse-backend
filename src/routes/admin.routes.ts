@@ -43,6 +43,12 @@ import {
   draftReply,
   sendReply,
 } from "../controllers/adminFeedback.controller";
+import {
+  getDrafts,
+  getDraftDetail,
+  draftEmail,
+  sendDraftEmail,
+} from "../controllers/adminDraft.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
 
 const router = Router();
@@ -125,5 +131,23 @@ router.patch("/feedback/:id/notes", requireSuperAdmin, setFeedbackNotes);
 router.post("/feedback/:id/draft-reply", requireSuperAdmin, draftReply);
 router.post("/feedback/:id/reply", requireSuperAdmin, sendReply);
 router.delete("/feedback/:id", requireSuperAdmin, deleteFeedback);
+
+// ── Pages somebody started and never published ─────────────────────────────
+//
+// Super-admin only, and for a sharper reason than the other blocks: `send` puts
+// UNSOLICITED email in a real person's inbox, in the company's name, about a
+// private document. That is the most externally-visible thing any admin route
+// here does.
+//
+// `draft-email` and `send` are two routes with a human in between. The generator
+// cannot mail and the sender cannot generate — see the controller header.
+//
+// The two-segment path is `(templateType, pageId)`, which is how every admin
+// surface addresses a page across the 43 collections. The list route is declared
+// first so it cannot be swallowed by the parameterised one.
+router.get("/drafts", requireSuperAdmin, getDrafts);
+router.get("/drafts/:templateType/:pageId", requireSuperAdmin, getDraftDetail);
+router.post("/drafts/:templateType/:pageId/draft-email", requireSuperAdmin, draftEmail);
+router.post("/drafts/:templateType/:pageId/send", requireSuperAdmin, sendDraftEmail);
 
 export default router;

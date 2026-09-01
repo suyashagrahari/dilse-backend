@@ -111,6 +111,28 @@ export const env = {
   // Resend (for OTP emails)
   RESEND_API_KEY: process.env.RESEND_API_KEY || "",
 
+  // ── Amazon SES ────────────────────────────────────────────────────────────
+  //
+  // Used for the draft follow-up emails only; OTP, contact replies and feedback
+  // replies still go through Resend. Two providers is deliberate rather than
+  // accidental: these follow-ups are the one thing here that goes out
+  // UNSOLICITED, so keeping them on their own domain identity, their own
+  // reputation and their own sending quota means a run of complaints cannot take
+  // the OTP mail down with it. Sign-in email failing is an outage; a nudge email
+  // failing is nothing.
+  //
+  // Deliberately NOT falling back to the S3_* credentials. That key has no SES
+  // permission, so a fallback would turn "SES is not configured" — which the
+  // sender reports clearly — into an AccessDenied at send time.
+  SES_REGION: process.env.SES_REGION || "us-east-1",
+  SES_ACCESS_KEY_ID: process.env.SES_ACCESS_KEY_ID || "",
+  SES_SECRET_ACCESS_KEY: process.env.SES_SECRET_ACCESS_KEY || "",
+  /** Must be a verified SES identity, or an address on a verified domain. */
+  SES_FROM_EMAIL: process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
+  SES_FROM_NAME: process.env.SES_FROM_NAME || "SubhSandesh",
+  /** Optional. Attaches bounce/complaint event tracking to every send. */
+  SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET || "",
+
   // Razorpay (payment gateway)
   // RAZORPAY_KEY_ID   — public key, safe to expose to client
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client
