@@ -165,9 +165,24 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
     }
 
     const name = (error as { name?: string })?.name || "";
+
+    // ── Pass AWS's own text through ────────────────────────────────────────
+    //
+    // The first version of this branch replaced the message with "the IAM user
+    // needs ses:SendEmail". That was actively misleading: the permission WAS
+    // attached, and AWS's real message named a resource the policy had not
+    // anticipated —
+    //
+    //   not authorized to perform 'ses:SendEmail' on resource
+    //   'arn:...:configuration-set/my-first-configuration-set'
+    //
+    // A send is authorised against BOTH the identity and, when one applies, the
+    // configuration set. Hiding which resource was refused cost real debugging
+    // time, so the original message is now included verbatim.
     if (name === "AccessDeniedException" || name === "UnrecognizedClientException") {
+      const detail = (error as Error)?.message || "";
       throw new SesSendError(
-        "SES refused the credentials. The IAM user needs the `ses:SendEmail` permission, and the key must belong to the same account as the verified identity."
+        `SES refused this send. AWS said: ${detail} — check that the IAM policy allows ses:SendEmail on the resource named above. A default configuration set on the identity needs its own statement (see docs/ses-setup.md).`
       );
     }
 

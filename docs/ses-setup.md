@@ -56,7 +56,7 @@ access), then attach an inline policy:
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "SendFromFeedbackAddress",
+      "Sid": "SendOnlyAsFeedbackAddress",
       "Effect": "Allow",
       "Action": "ses:SendEmail",
       "Resource": "arn:aws:ses:us-east-1:769638986416:identity/subhsandesh.in",
@@ -65,10 +65,38 @@ access), then attach an inline policy:
           "ses:FromAddress": "feedback@subhsandesh.in"
         }
       }
+    },
+    {
+      "Sid": "AllowConfigurationSets",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "arn:aws:ses:us-east-1:769638986416:configuration-set/*"
     }
   ]
 }
 ```
+
+### Both statements are required, and the second one is not optional
+
+The first version of this document had only the identity statement, and every
+send failed with:
+
+```
+not authorized to perform 'ses:SendEmail' on resource
+'arn:aws:ses:us-east-1:769638986416:configuration-set/my-first-configuration-set'
+```
+
+When a configuration set applies to a send — and one does as soon as the identity
+has a DEFAULT configuration set, which the SES setup wizard creates — SES
+authorises `ses:SendEmail` against **two** resources: the identity and the
+configuration set. Allowing only the identity denies every send, and the error
+names the configuration set rather than the identity, which sends you looking in
+the wrong place.
+
+The configuration-set statement carries no condition on purpose. A configuration
+set grants nothing by itself: SES still demands authorisation on the identity,
+and that is what statement 1 restricts. So the `feedback@` guardrail is intact
+while bounce and complaint tracking keeps working.
 
 Then *Security credentials* → **Create access key** → Application running outside
 AWS. Copy the key id and secret once; the secret is never shown again.
@@ -151,7 +179,7 @@ If the send fails, the panel shows SES's own reason. The three common ones:
 | Message | Cause |
 |---|---|
 | "the From address is not a verified identity" | The domain is still *Pending* in SES, or DKIM CNAMEs are not published. |
-| "SES refused the credentials" | Key lacks `ses:SendEmail`, or belongs to a different AWS account than the identity. |
+| "SES refused the credentials" | Key lacks `ses:SendEmail`, or belongs to a different AWS account than the identity — **or the policy is missing the configuration-set statement above**, which is by far the most likely cause. Read the full AWS message: it names the resource it denied. |
 | "SES has paused sending" | Bounce or complaint rate crossed a threshold. Check Reputation metrics; do not keep retrying. |
 
 ---
