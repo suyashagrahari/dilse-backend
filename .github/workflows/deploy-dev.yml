@@ -103,12 +103,13 @@ jobs:
         env:
           SES_ACCESS_KEY_ID: ${{ secrets.SES_ACCESS_KEY_ID }}
           SES_SECRET_ACCESS_KEY: ${{ secrets.SES_SECRET_ACCESS_KEY }}
+          SES_OTP_CONFIGURATION_SET: ${{ secrets.SES_OTP_CONFIGURATION_SET }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 120s
-          envs: SES_ACCESS_KEY_ID,SES_SECRET_ACCESS_KEY
+          envs: SES_ACCESS_KEY_ID,SES_SECRET_ACCESS_KEY,SES_OTP_CONFIGURATION_SET
           script: |
             set -eu
 
@@ -149,9 +150,16 @@ jobs:
             [ -w "$ENV_FILE" ] || SUDO="sudo"
 
             # Only ever this step's own two lines. Never a truncation.
-            $SUDO sed -i '/^SES_ACCESS_KEY_ID=/d; /^SES_SECRET_ACCESS_KEY=/d' "$ENV_FILE"
+            $SUDO sed -i '/^SES_ACCESS_KEY_ID=/d; /^SES_SECRET_ACCESS_KEY=/d; /^SES_OTP_CONFIGURATION_SET=/d' "$ENV_FILE"
             printf 'SES_ACCESS_KEY_ID=%s\nSES_SECRET_ACCESS_KEY=%s\n' \
               "$SES_ACCESS_KEY_ID" "$SES_SECRET_ACCESS_KEY" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            # Optional: keeps sign-in-code metrics separate from the follow-up
+            # ones. Written only when set, because SES rejects a send naming a
+            # configuration set that does not exist.
+            if [ -n "${SES_OTP_CONFIGURATION_SET:-}" ]; then
+              printf 'SES_OTP_CONFIGURATION_SET=%s\n' "$SES_OTP_CONFIGURATION_SET" | $SUDO tee -a "$ENV_FILE" >/dev/null
+            fi
 
             echo "SES lines now present: $(grep -c '^SES_' "$ENV_FILE")"
 
