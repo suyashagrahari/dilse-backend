@@ -39,6 +39,7 @@ export type AuditAction =
   // See adminThread.controller.ts — the one write in the conversation view that
   // puts words in somebody else's mouth, so it is recorded with who did it.
   | "thread.inbound_pasted"
+  | "thread.reply_sent"
   | "impersonation.start"
   | "impersonation.end";
 

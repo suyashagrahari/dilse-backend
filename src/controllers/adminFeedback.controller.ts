@@ -37,6 +37,8 @@ import PageFeedback, {
 } from "../models/PageFeedback";
 import { sendFeedbackReplyEmail } from "../utils/mailer";
 import { audit } from "../services/adminAudit";
+import { appendMessage, latestThreadForPage, openThread } from "../services/threadStore.service";
+import EmailThread from "../models/EmailThread";
 import {
   AiRefusedError,
   AiUnavailableError,
@@ -345,6 +347,76 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
     });
     doc.status = "replied";
     await doc.save();
+
+    // ── Record it as a conversation too ───────────────────────────────────
+    //
+    // `doc.replies` is the ticket's own history and stays as it is. This adds
+    // the same message to EmailThread, which is what /admin/threads reads and
+    // what an incoming reply gets matched against.
+    //
+    // Without this the feedback flow was one-directional: we could write, the
+    // creator could answer, and their answer had no conversation to join — it
+    // arrived as an "Unmatched" thread with no context, or matched only by the
+    // loosest rung of the ladder.
+    //
+    // Failing here must NOT fail the request. The email has already gone; a
+    // missing conversation entry is a display problem, telling a super admin
+    // the reply failed would invite them to send it twice.
+    try {
+      let thread = await EmailThread.findOne({
+        kind: "feedback",
+        userEmail: doc.userEmail.toLowerCase(),
+        subjectKey: subject.replace(/^\s*re\s*:\s*/i, "").trim().toLowerCase(),
+      })
+        .sort({ seq: -1 })
+        .lean<{ _id: mongoose.Types.ObjectId }>();
+
+      if (!thread) {
+        const opened = await openThread(
+          {
+            kind: "feedback",
+            userId: String(doc.userId),
+            userName: doc.userName || "",
+            userEmail: doc.userEmail,
+            templateType: doc.templateSlug || "",
+            templateLabel: doc.templateLabel || "",
+          },
+          subject
+        );
+        thread = { _id: opened._id as mongoose.Types.ObjectId };
+
+        // The creator's own feedback comment opens the conversation, so the
+        // reply reads as an answer to something rather than as the first
+        // thing anybody said.
+        if (doc.comment && doc.comment.trim()) {
+          await appendMessage(thread._id, {
+            direction: "inbound",
+            subject,
+            body: doc.comment.trim(),
+            at: doc.createdAt || new Date(),
+            source: "manual",
+          });
+        }
+      }
+
+      await appendMessage(thread._id, {
+        direction: "outbound",
+        subject,
+        body,
+        byEmail: req.userEmail || "",
+        aiAssisted,
+        // Resend does not report the RFC Message-ID it wrote, and unlike SES
+        // there is no documented pattern to reconstruct one from. So this
+        // message carries no id: the thread still holds together on the
+        // subject line, and it becomes exact the moment the creator replies
+        // and gives us a real id to anchor to.
+        rfcMessageId: "",
+        rfcMessageIdSource: "",
+        source: "resend",
+      });
+    } catch (error) {
+      console.error("Sent the feedback reply but failed to record the conversation:", error);
+    }
 
     // Staff acting on a customer, so it is audited — the same line the page
     // password controller draws between ordinary use and privileged action.

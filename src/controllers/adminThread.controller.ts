@@ -28,6 +28,15 @@ import { stripQuotedReply } from "../services/emailThread.service";
 import { appendMessage } from "../services/threadStore.service";
 import { shapeThread } from "./adminDraft.controller";
 import { audit } from "../services/adminAudit";
+import { env } from "../config/env";
+import {
+  ThreadAiRefusedError,
+  ThreadAiUnavailableError,
+  draftThreadReply,
+} from "../services/threadReplyAi.service";
+import { replySubject, rfcMessageIdFor, threadingHeadersFor } from "../services/emailThread.service";
+import { sendSesEmail, sesConfigured, SesSendError } from "../services/ses.service";
+import PageFeedback from "../models/PageFeedback";
 
 const PAGE_SIZE_MAX = 100;
 const PASTE_MAX = 20_000;
@@ -234,5 +243,203 @@ export const updateThread = async (req: Request, res: Response): Promise<void> =
   } catch (error) {
     console.error("Update thread error:", error);
     res.status(500).json({ success: false, error: "Failed to update the conversation" });
+  }
+};
+
+
+/**
+ * POST /api/admin/threads/:id/draft-reply
+ *
+ * Writes the next message using the WHOLE conversation. Sends nothing.
+ *
+ * The route boundary is the same one the other two AI drafters have, and for
+ * the same reason: a model that hallucinates a refund would be making a
+ * promise on the company's behalf, in writing, to a customer, with nobody
+ * having read it. This route never touches the mailer; `reply` never touches
+ * OpenAI.
+ */
+export const draftReplyForThread = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id || "");
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, error: "Not a valid conversation id" });
+      return;
+    }
+    const thread = await EmailThread.findById(id).lean();
+    if (!thread) {
+      res.status(404).json({ success: false, error: "No such conversation" });
+      return;
+    }
+
+    const t = thread as unknown as {
+      userName?: string; userEmail?: string; subject?: string; kind?: string;
+      templateLabel?: string; pageUrl?: string;
+      messages: { direction: string; body: string; at: Date }[];
+    };
+
+    // A feedback thread has a star rating behind it, and "they gave us 2 stars"
+    // changes what a good reply says. Looked up rather than denormalised so it
+    // cannot go stale.
+    let rating: number | undefined;
+    if (t.kind === "feedback" && t.userEmail) {
+      const fb = await PageFeedback.findOne({ userEmail: t.userEmail })
+        .sort({ createdAt: -1 })
+        .select("rating")
+        .lean<{ rating?: number }>();
+      if (typeof fb?.rating === "number") rating = fb.rating;
+    }
+
+    const draft = await draftThreadReply({
+      userName: t.userName || "",
+      subject: t.subject || "",
+      kind: t.kind || "inbound",
+      templateLabel: t.templateLabel || undefined,
+      rating,
+      messages: (t.messages || []).map((m) => ({
+        direction: m.direction === "outbound" ? "outbound" : "inbound",
+        body: m.body || "",
+        at: m.at,
+      })),
+    });
+
+    res.json({ success: true, data: draft });
+  } catch (error) {
+    if (error instanceof ThreadAiUnavailableError) {
+      res.status(503).json({ success: false, error: error.message });
+      return;
+    }
+    if (error instanceof ThreadAiRefusedError) {
+      // Shown verbatim: "it tried to promise a refund" is information a super
+      // admin should have, not an internal detail.
+      res.status(422).json({ success: false, error: error.message });
+      return;
+    }
+    console.error("Draft thread reply error:", error);
+    res.status(500).json({ success: false, error: "Failed to generate a reply" });
+  }
+};
+
+const REPLY_MAX = 6000;
+const REPLY_MIN = 20;
+
+/**
+ * POST /api/admin/threads/:id/reply
+ *
+ * `{ body, aiAssisted? }` — sends the text as the next message in THIS thread.
+ *
+ * Always in-thread, never a new conversation: this route exists because a
+ * conversation is open. Subject is derived from the thread, and the threading
+ * headers come from the messages already recorded, so the creator sees one
+ * exchange rather than a series of unrelated emails.
+ */
+export const replyToThread = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id || "");
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, error: "Not a valid conversation id" });
+      return;
+    }
+    const thread = await EmailThread.findById(id).lean();
+    if (!thread) {
+      res.status(404).json({ success: false, error: "No such conversation" });
+      return;
+    }
+
+    const t = thread as unknown as {
+      _id: mongoose.Types.ObjectId; userEmail?: string; userId?: unknown;
+      subject?: string; templateType?: string;
+      messages: { direction: string; rfcMessageId?: string; rfcMessageIdSource?: string; references?: string[] }[];
+    };
+
+    const to = String(t.userEmail || "").trim();
+    if (!to || to.endsWith(".invalid")) {
+      res.status(400).json({
+        success: false,
+        error: "This conversation has no usable email address to reply to.",
+      });
+      return;
+    }
+
+    const body = String(req.body?.body ?? "").replace(/\r\n/g, "\n").trim().slice(0, REPLY_MAX);
+    if (body.length < REPLY_MIN) {
+      res.status(400).json({ success: false, error: `Write at least ${REPLY_MIN} characters.` });
+      return;
+    }
+    const aiAssisted = req.body?.aiAssisted === true;
+
+    if (!sesConfigured()) {
+      res.status(503).json({
+        success: false,
+        error: "SES is not configured on this deployment, so nothing was sent.",
+        code: "SES_NOT_CONFIGURED",
+      });
+      return;
+    }
+
+    const subject = replySubject(t.subject || "").slice(0, 300);
+    const threading = threadingHeadersFor(
+      (t.messages || []).map((m) => ({
+        direction: m.direction === "outbound" ? "outbound" : "inbound",
+        rfcMessageId: m.rfcMessageId,
+        rfcMessageIdSource: m.rfcMessageIdSource as "received" | "reconstructed" | "" | undefined,
+        references: m.references,
+      }))
+    );
+
+    // Send BEFORE recording. A recorded message that never left the building
+    // is worse than an unrecorded one that did: the first is a lie the panel
+    // tells, the second is a refresh away from being fixed.
+    let messageId = "";
+    try {
+      const result = await sendSesEmail({
+        to,
+        subject,
+        text: `${body}\n\n—\n${env.SES_FROM_NAME} · ${env.SES_FROM_EMAIL}`,
+        from: env.SES_FROM_EMAIL,
+        replyTo: env.SES_FROM_EMAIL,
+        headers: {
+          "In-Reply-To": threading.inReplyTo,
+          References: threading.references,
+        },
+      });
+      if (result.outcome === "skipped") {
+        res.status(503).json({ success: false, error: "SES is not configured.", code: "SES_NOT_CONFIGURED" });
+        return;
+      }
+      messageId = result.messageId || "";
+    } catch (error) {
+      if (error instanceof SesSendError) {
+        res.status(502).json({ success: false, error: error.message, retryable: error.retryable });
+        return;
+      }
+      throw error;
+    }
+
+    await appendMessage(t._id, {
+      direction: "outbound",
+      subject,
+      body,
+      byEmail: req.userEmail || "",
+      aiAssisted,
+      providerMessageId: messageId,
+      rfcMessageId: rfcMessageIdFor(messageId, env.SES_REGION),
+      rfcMessageIdSource: messageId ? "reconstructed" : "",
+      inReplyTo: threading.inReplyTo,
+      references: threading.references ? threading.references.split(/\s+/) : [],
+      source: "ses",
+    });
+
+    await audit(req, {
+      action: "thread.reply_sent",
+      targetUserId: t.userId ? String(t.userId) : undefined,
+      targetUserEmail: to,
+      targetTemplateType: t.templateType || undefined,
+      reason: `Replied in conversation ${id} (${threading.confidence})${aiAssisted ? " · AI-assisted draft, approved and sent" : " · written by hand"}`,
+    });
+
+    res.json({ success: true, message: `Sent to ${to}`, data: { messageId, subject } });
+  } catch (error) {
+    console.error("Reply to thread error:", error);
+    res.status(500).json({ success: false, error: "Failed to send the reply" });
   }
 };

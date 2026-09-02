@@ -51,8 +51,10 @@ import {
 } from "../controllers/adminDraft.controller";
 import {
   addInboundManual,
+  draftReplyForThread,
   getThread,
   getThreads,
+  replyToThread,
   updateThread,
 } from "../controllers/adminThread.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
@@ -169,5 +171,11 @@ router.get("/threads", requireSuperAdmin, getThreads);
 router.get("/threads/:id", requireSuperAdmin, getThread);
 router.patch("/threads/:id", requireSuperAdmin, updateThread);
 router.post("/threads/:id/inbound", requireSuperAdmin, addInboundManual);
+
+// Generate and send are two routes with a human in between, the same boundary
+// the feedback and drafts panels have. `draft-reply` gets the WHOLE
+// conversation and cannot mail; `reply` mails and cannot generate.
+router.post("/threads/:id/draft-reply", requireSuperAdmin, draftReplyForThread);
+router.post("/threads/:id/reply", requireSuperAdmin, replyToThread);
 
 export default router;

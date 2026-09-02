@@ -450,7 +450,15 @@ export async function sendFeedbackReplyEmail(opts: {
   await resend.emails.send({
     from: "SubhSandesh Support <support@subhsandesh.in>",
     to,
-    replyTo: "support@subhsandesh.in",
+    // ── Why Reply-To is feedback@, not support@ ────────────────────────
+    //
+    // From stays support@ because that is who is writing. But the REPLY has
+    // to land somewhere the app can read, and only feedback@subhsandesh.in
+    // forwards into the SES inbound pipeline. Pointed at support@ — as it
+    // was — a creator's answer arrived in a mailbox nothing watches, so the
+    // conversation view showed only our side and read as if they had never
+    // replied.
+    replyTo: env.SES_FROM_EMAIL,
     subject,
     text: `${body}\n\n—\nYou left us ${stars} feedback${templateLabel ? ` after making your ${templateLabel} page` : ""}. Reply to this email to continue the conversation.\nsupport@subhsandesh.in | subhsandesh.in`,
     html: `<!DOCTYPE html>
