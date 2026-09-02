@@ -155,6 +155,62 @@ jobs:
 
             echo "SES lines now present: $(grep -c '^SES_' "$ENV_FILE")"
 
+      # ── Mailbox credentials for reading creators' replies ────────────────
+      #
+      # Separate step from the SES one on purpose: they are independent
+      # features with independent secrets, and one being unset must not stop
+      # the other being written. Both skip cleanly when their secrets are
+      # absent, which is how a fork or a fresh clone deploys with neither.
+      #
+      # The password never appears in this repository, in a log, or in a chat
+      # transcript — it lives only as a GitHub secret and is written straight
+      # into the env file on the box.
+      - name: Ensure mailbox (IMAP) credentials on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          IMAP_FILTER_TO: ${{ secrets.IMAP_FILTER_TO }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: IMAP_HOST,IMAP_USER,IMAP_PASSWORD,IMAP_FILTER_TO
+          script: |
+            set -eu
+
+            if [ -z "${IMAP_HOST:-}" ] || [ -z "${IMAP_USER:-}" ] || [ -z "${IMAP_PASSWORD:-}" ]; then
+              echo "IMAP secrets are not set in this repository — skipping. Replies will have to be pasted in by hand."
+              exit 0
+            fi
+
+            ENV_FILE=/opt/dilse/.env.dev.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            FILTER="${IMAP_FILTER_TO:-feedback@subhsandesh.in}"
+
+            $SUDO sed -i '/^IMAP_HOST=/d; /^IMAP_PORT=/d; /^IMAP_USER=/d; /^IMAP_PASSWORD=/d; /^IMAP_FILTER_TO=/d; /^IMAP_MAILBOX=/d' "$ENV_FILE"
+            printf 'IMAP_HOST=%s\nIMAP_PORT=993\nIMAP_USER=%s\nIMAP_PASSWORD=%s\nIMAP_MAILBOX=INBOX\nIMAP_FILTER_TO=%s\n' \
+              "$IMAP_HOST" "$IMAP_USER" "$IMAP_PASSWORD" "$FILTER" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            echo "IMAP lines now present: $(grep -c '^IMAP_' "$ENV_FILE")"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:

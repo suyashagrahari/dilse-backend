@@ -205,3 +205,114 @@ right token; did the provider actually forward.
   behind it: a reply saying "stop emailing me" is stored and readable, but
   nothing prevents the next follow-up. Right now the per-draft and per-person
   guards are what stand in for it.
+
+---
+
+# The simpler route: read the mailbox over IMAP
+
+Everything above needs a DNS change. This does not, and on GoDaddy it is the
+better fit — so it is what actually runs.
+
+## Why this works here
+
+`feedback@subhsandesh.in` is an **alias** at GoDaddy that redirects into the
+`support@subhsandesh.in` mailbox. It has no mailbox of its own. So there is
+already a real IMAP mailbox containing every reply, and the poller just reads
+it.
+
+```
+   creator replies
+        │
+        ▼
+   feedback@subhsandesh.in   ← alias, no mailbox
+        │
+        ▼
+   support@subhsandesh.in    ← the real mailbox, ALSO read by a person
+        │
+        │  IMAP, read-only, every 2 minutes
+        ▼
+   the reply appears in the conversation
+```
+
+## Two properties that shape the whole design
+
+**It is somebody's inbox.** The connection is opened **read-only**. Nothing is
+marked read, moved or deleted — a poller that marked mail seen would silently
+hide a customer's reply from the person whose job is to read it. Position is
+remembered in the `MailPollState` collection as an IMAP UID watermark instead.
+
+**It is a shared inbox.** Ordinary support mail sits in it too, so only mail
+**addressed to** `IMAP_FILTER_TO` is ingested. Without that filter every
+support email would become an unmatched "conversation" with a customer in the
+admin panel. Both directions of failure matter, so `addressedToFilter` has 15
+tests: it matches `To`, `Cc`, `Delivered-To`, `X-Original-To` and the envelope,
+and refuses `notfeedback@subhsandesh.in`, `feedback@subhsandesh.in.evil.com`,
+and a message that merely mentions the address in its subject. An **empty**
+filter matches nothing rather than everything.
+
+## Setup
+
+Four GitHub secrets on `suyashagrahari/dilse-backend`. The deploy workflow
+writes them into `/opt/dilse/.env.dev.backend` on the box.
+
+| Secret | Value |
+|---|---|
+| `IMAP_HOST` | `imap.secureserver.net` |
+| `IMAP_USER` | `support@subhsandesh.in` |
+| `IMAP_PASSWORD` | that mailbox's password |
+| `IMAP_FILTER_TO` | `feedback@subhsandesh.in` |
+
+**Set the password from your own terminal, never by pasting it into a chat:**
+
+```bash
+gh secret set IMAP_HOST      --repo suyashagrahari/dilse-backend --body "imap.secureserver.net"
+gh secret set IMAP_USER      --repo suyashagrahari/dilse-backend --body "support@subhsandesh.in"
+gh secret set IMAP_FILTER_TO --repo suyashagrahari/dilse-backend --body "feedback@subhsandesh.in"
+
+# Prompts, and the input is not echoed or stored in shell history:
+gh secret set IMAP_PASSWORD  --repo suyashagrahari/dilse-backend
+```
+
+Then re-run the dev deploy. With the secrets unset the step skips cleanly and
+the poller never starts, which is the default.
+
+`IMAP_PORT` (993) and `IMAP_MAILBOX` (`INBOX`) are written for you.
+`IMAP_POLL_SECONDS` defaults to 120 and is floored at 30.
+
+## Checking it works
+
+The drafts panel tells you which mode it is in. Under the send button:
+
+- poller running → *"It appears above on its own within 2 min."*
+- not configured → *"Paste it back in above…"*, and the paste box is shown
+
+A failing poller is reported **in red in the panel**, because a silently broken
+one looks exactly like a creator who never replied.
+
+On the box:
+
+```bash
+docker logs <container> 2>&1 | grep -i imap
+#  IMAP poller: watching support@subhsandesh.in every 120s for mail to feedback@subhsandesh.in
+#  IMAP: stored a reply from asha@gmail.com (matched by: headers)
+```
+
+`matched by:` names which rung of the ladder placed it. `headers` is exact.
+`subject` means the headers did not resolve and the fallback did its job —
+expected, not a bug.
+
+If it logs *"not configured"*, the secrets did not reach the box: check the
+"Ensure mailbox (IMAP) credentials" step in the deploy run.
+
+## Which route to use
+
+Both write into the same conversations through the same matching ladder, and
+both can run at once — a message already stored is recognised by its
+`Message-ID`, so neither can duplicate the other.
+
+- **IMAP** — needs one password, no DNS. Replies appear within a poll interval.
+- **SES receiving** — needs a subdomain MX and a forwarding rule. Replies
+  arrive within seconds and it does not depend on a mailbox password.
+
+IMAP is the right first choice. SES receiving is worth it later if the delay
+starts to matter.

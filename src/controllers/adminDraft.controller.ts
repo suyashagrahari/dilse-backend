@@ -81,6 +81,7 @@ import {
   draftNudgeEmail,
 } from "../services/draftNudgeAi.service";
 import { sendSesEmail, sesConfigured, SesSendError } from "../services/ses.service";
+import { imapStatus } from "../services/imapPoller.service";
 import {
   replySubject,
   rfcMessageIdFor,
@@ -490,6 +491,10 @@ export const getDraftDetail = async (req: Request, res: Response): Promise<void>
         sesConfigured: sesConfigured(),
         // Named so the panel can show what the recipient will actually see.
         fromEmail: env.SES_FROM_EMAIL,
+        // Whether a reply will appear here on its own, or has to be pasted.
+        // The panel says which, because "paste a reply" is confusing advice
+        // when the poller is already collecting them.
+        inbound: await imapStatus(),
         threads: threads.map(shapeThread),
         // What the compose box should default to, worked out here rather than in
         // the panel so the rule lives in one place.

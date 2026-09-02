@@ -149,6 +149,30 @@ export const env = {
   // create a topic and sign a message with Amazon's key.
   SES_INBOUND_TOPIC_ARN: process.env.SES_INBOUND_TOPIC_ARN || "",
 
+  // ── Inbound by IMAP ──────────────────────────────────────────────────────
+  //
+  // The other way replies get in, and the one that needs no DNS at all.
+  //
+  // `feedback@subhsandesh.in` is an ALIAS at GoDaddy that redirects into the
+  // `support@subhsandesh.in` mailbox — it has no mailbox of its own. So the
+  // login here is support@, and IMAP_FILTER_TO is what separates the draft
+  // replies from ordinary support mail sitting in the same inbox.
+  //
+  // Unset means the poller never starts. That is the default.
+  IMAP_HOST: process.env.IMAP_HOST || "",
+  IMAP_PORT: parseInt(process.env.IMAP_PORT || "993", 10),
+  IMAP_USER: process.env.IMAP_USER || "",
+  IMAP_PASSWORD: process.env.IMAP_PASSWORD || "",
+  IMAP_MAILBOX: process.env.IMAP_MAILBOX || "INBOX",
+  /**
+   * Only mail addressed to one of these is ingested, comma-separated.
+   *
+   * Load-bearing. Without it every support email in that shared inbox would
+   * become an unmatched "conversation" in the admin panel.
+   */
+  IMAP_FILTER_TO: process.env.IMAP_FILTER_TO || process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
+  IMAP_POLL_SECONDS: parseInt(process.env.IMAP_POLL_SECONDS || "120", 10),
+
   // Razorpay (payment gateway)
   // RAZORPAY_KEY_ID   — public key, safe to expose to client
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client

@@ -29,6 +29,7 @@
     "express-rate-limit": "^7.5.0",
     "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
+    "imapflow": "^1.7.8",
     "jsonwebtoken": "^9.0.3",
     "mailparser": "^3.9.20",
     "mongoose": "^8.10.1",

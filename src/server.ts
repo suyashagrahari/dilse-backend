@@ -3,6 +3,7 @@ import { env } from "./config/env";
 import { connectDB } from "./config/db";
 import { rebuildBannedContent } from "./services/bannedContent";
 import { ensureSuperAdmin } from "./services/ensureSuperAdmin";
+import { startImapPoller } from "./services/imapPoller.service";
 
 const startServer = async () => {
   await connectDB();
@@ -14,6 +15,11 @@ const startServer = async () => {
   await rebuildBannedContent().catch((e) =>
     console.error("[boot] bannedContent rebuild failed", e)
   );
+
+  // Watches the shared mailbox for creators' replies to draft follow-ups. A
+  // no-op with no IMAP credentials, which is the default — see the service
+  // header. Started AFTER connectDB because its first pass writes.
+  startImapPoller();
 
   app.listen(env.PORT, () => {
     console.log(`
