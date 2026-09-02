@@ -374,7 +374,52 @@ export function stopImapPoller(): void {
   timer = null;
 }
 
-/** For the admin panel: is it on, and is it working? */
+/**
+ * Is the SES receiving webhook armed?
+ *
+ * Only the token matters. Without it `sesInboundWebhook` answers 404 to
+ * everything, so an unset token means the route is closed regardless of what
+ * DNS says. The topic ARN is an additional restriction, not an enabler.
+ */
+export function sesInboundConfigured(): boolean {
+  return !!env.SES_INBOUND_TOKEN;
+}
+
+/**
+ * "Will a reply appear on its own, or does somebody have to paste it?"
+ *
+ * There are TWO independent ways in — this poller, and the SES receiving
+ * webhook — and the panel needs the answer for EITHER. The first version of
+ * this asked only about IMAP, which meant a deployment that had done all the
+ * DNS work for SES receiving would still be told to paste replies in by hand,
+ * and would still be offered a paste box for messages already arriving on
+ * their own. Reporting one mechanism when two exist is worse than reporting
+ * none, because it is confidently wrong.
+ */
+export async function inboundStatus() {
+  const imap = imapConfigured();
+  const webhook = sesInboundConfigured();
+
+  const mechanisms: string[] = [];
+  if (webhook) mechanisms.push("ses-webhook");
+  if (imap) mechanisms.push("imap");
+
+  return {
+    // The spread goes FIRST, deliberately. `imapStatus()` returns its own
+    // `configured` describing IMAP alone; spreading it afterwards overwrote the
+    // combined value below, so a deployment with the webhook on and IMAP off
+    // reported itself as not configured — the exact bug this function exists
+    // to fix. tsc caught it; the ordering is load-bearing.
+    ...(imap ? await imapStatus() : { filterAddresses: filterAddresses() }),
+    configured: imap || webhook,
+    mechanisms,
+    // The webhook delivers in seconds; the poller on its interval. Reported so
+    // the panel can promise the right thing rather than a guess.
+    etaSeconds: webhook ? 15 : imap ? Math.max(30, env.IMAP_POLL_SECONDS || 120) : 0,
+  };
+}
+
+/** IMAP detail only. Prefer `inboundStatus` — see the note there. */
 export async function imapStatus() {
   const configured = imapConfigured();
   if (!configured) return { configured, filterAddresses: filterAddresses() };

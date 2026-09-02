@@ -211,6 +211,58 @@ jobs:
 
             echo "IMAP lines now present: $(grep -c '^IMAP_' "$ENV_FILE")"
 
+      # ── SES receiving webhook ────────────────────────────────────────────
+      #
+      # The other way a reply gets in, for a deployment that has done the DNS
+      # work instead of handing over a mailbox password. Independent of the
+      # IMAP step above: either, both, or neither can be set, and a message
+      # already stored is recognised by its Message-ID so two live routes
+      # cannot duplicate each other.
+      #
+      # SES_INBOUND_TOKEN is the shared secret in the webhook path. Without it
+      # the route answers 404 to everything, which is the default.
+      - name: Ensure SES inbound webhook secrets on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN }}
+          SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN
+          script: |
+            set -eu
+
+            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
+              echo "SES_INBOUND_TOKEN is not set — skipping. The inbound webhook stays closed (404)."
+              exit 0
+            fi
+
+            ENV_FILE=/opt/dilse/.env.dev.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            $SUDO sed -i '/^SES_INBOUND_TOKEN=/d; /^SES_INBOUND_TOPIC_ARN=/d' "$ENV_FILE"
+            printf 'SES_INBOUND_TOKEN=%s\nSES_INBOUND_TOPIC_ARN=%s\n' \
+              "$SES_INBOUND_TOKEN" "${SES_INBOUND_TOPIC_ARN:-}" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            echo "SES_INBOUND lines now present: $(grep -c '^SES_INBOUND' "$ENV_FILE")"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:

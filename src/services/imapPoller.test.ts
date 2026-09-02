@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { addressedToFilter, senderFrom } from "./imapPoller.service";
 
 const WANTED = ["feedback@subhsandesh.in"];
@@ -136,5 +138,43 @@ describe("senderFrom", () => {
   it("returns empty when there is nothing usable", () => {
     assert.equal(senderFrom({}, OURS), "");
     assert.equal(senderFrom({ from: "undisclosed recipients" }, OURS), "");
+  });
+});
+
+// ─── The combined inbound status ────────────────────────────────────────────
+//
+// Structural, because `inboundStatus` reads env captured at module load.
+describe("inboundStatus reports EITHER route", () => {
+  const SRC = readFileSync(
+    join(process.cwd(), "src", "services", "imapPoller.service.ts"),
+    "utf8"
+  );
+  const fn = SRC.slice(
+    SRC.indexOf("export async function inboundStatus"),
+    SRC.indexOf("/** IMAP detail only")
+  );
+
+  it("is configured when only the SES webhook is on", () => {
+    assert.match(fn, /configured:\s*imap \|\| webhook/);
+  });
+
+  it("spreads imapStatus BEFORE setting configured", () => {
+    // imapStatus() returns its own `configured` describing IMAP alone.
+    // Spreading it afterwards silently overwrote the combined value, so a
+    // webhook-only deployment reported itself unconfigured — the very bug this
+    // function exists to fix.
+    const spreadAt = fn.indexOf("...(imap ?");
+    const configuredAt = fn.indexOf("configured: imap || webhook");
+    assert.ok(spreadAt > 0 && configuredAt > 0);
+    assert.ok(spreadAt < configuredAt, "the spread must not clobber `configured`");
+  });
+
+  it("names which mechanisms are live", () => {
+    assert.match(fn, /mechanisms\.push\("ses-webhook"\)/);
+    assert.match(fn, /mechanisms\.push\("imap"\)/);
+  });
+
+  it("reports a different ETA per mechanism", () => {
+    assert.match(fn, /etaSeconds:\s*webhook \? 15/);
   });
 });
