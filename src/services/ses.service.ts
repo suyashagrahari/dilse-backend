@@ -88,6 +88,79 @@ export interface SesEmail {
   text: string;
   html?: string;
   replyTo?: string;
+  /**
+   * Extra headers, used for `In-Reply-To` and `References` so a follow-up lands
+   * in the existing conversation rather than starting a second one.
+   *
+   * SES accepts arbitrary headers on a Simple send, with two limits that are
+   * enforced below rather than left to fail at the API: a value may be at most
+   * 995 characters, and a handful of names are reserved because SES writes them
+   * itself. `Message-ID` is the important one — SES overwrites whatever you put
+   * there, so asking for it is always a mistake and is refused here instead of
+   * silently doing nothing. See `emailThread.service.ts`.
+   */
+  headers?: Record<string, string>;
+}
+
+/**
+ * Headers SES sets itself and will not accept from a caller.
+ *
+ * From the SES documentation: "If you provide a Message-ID header, Amazon SES
+ * overrides the header with its own value", and a Simple send disallows the
+ * headers it builds from the request fields.
+ */
+const RESERVED_HEADERS = new Set([
+  "message-id",
+  "from",
+  "to",
+  "cc",
+  "bcc",
+  "subject",
+  "reply-to",
+  "return-path",
+  "date",
+  "mime-version",
+  "content-type",
+  "content-transfer-encoding",
+  "dkim-signature",
+]);
+
+/** Header value cap, from the SES `MessageHeader` reference. */
+const HEADER_VALUE_LIMIT = 995;
+const HEADER_NAME_RE = /^[!-9;-@A-~]+$/;
+
+/**
+ * Turn a header map into SES's `MessageHeader[]`, dropping what cannot be sent.
+ *
+ * Empty values are dropped silently: `threadingHeadersFor` returns "" for a
+ * message that opens a thread, and the caller passing that straight through is
+ * the expected path, not an error. A reserved or malformed NAME throws, because
+ * that is a programming mistake and swallowing it would produce mail that looks
+ * threaded in our database and is not threaded in anybody's inbox.
+ */
+function toMessageHeaders(headers?: Record<string, string>) {
+  const out: { Name: string; Value: string }[] = [];
+  for (const [rawName, rawValue] of Object.entries(headers || {})) {
+    const name = String(rawName || "").trim();
+    const value = String(rawValue ?? "").replace(/[\r\n]+/g, " ").trim();
+    if (!name || !value) continue;
+
+    if (RESERVED_HEADERS.has(name.toLowerCase())) {
+      throw new SesSendError(
+        `"${name}" is set by SES and cannot be supplied. SES overwrites Message-ID in particular, so a thread must be anchored to the id SES reports back, not one chosen here.`
+      );
+    }
+    if (!HEADER_NAME_RE.test(name)) {
+      throw new SesSendError(`"${name}" is not a valid header name`);
+    }
+    if (value.length > HEADER_VALUE_LIMIT) {
+      throw new SesSendError(
+        `The "${name}" header is ${value.length} characters; SES allows ${HEADER_VALUE_LIMIT}. Trim the References chain before sending.`
+      );
+    }
+    out.push({ Name: name, Value: value });
+  }
+  return out;
 }
 
 export interface SesSendResult {
@@ -115,9 +188,15 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
   if (!subject) throw new SesSendError("The email needs a subject");
   if (!email.text?.trim()) throw new SesSendError("The email needs a text body");
 
+  // Validated BEFORE the not-configured shortcut, so a bad header is caught on a
+  // laptop with no AWS credentials instead of only in production.
+  const messageHeaders = toMessageHeaders(email.headers);
+
   if (!client) {
     console.log(
-      `\n[SES — not configured] To: ${to}\nSubject: ${subject}\n\n${email.text}\n`
+      `\n[SES — not configured] To: ${to}\nSubject: ${subject}\n${messageHeaders
+        .map((h) => `${h.Name}: ${h.Value}`)
+        .join("\n")}\n\n${email.text}\n`
     );
     return { outcome: "skipped" };
   }
@@ -131,6 +210,7 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
     ...(env.SES_CONFIGURATION_SET ? { ConfigurationSetName: env.SES_CONFIGURATION_SET } : {}),
     Content: {
       Simple: {
+        ...(messageHeaders.length > 0 ? { Headers: messageHeaders } : {}),
         Subject: { Data: subject, Charset: "UTF-8" },
         Body: {
           Text: { Data: email.text, Charset: "UTF-8" },

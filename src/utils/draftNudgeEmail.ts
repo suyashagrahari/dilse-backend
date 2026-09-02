@@ -26,8 +26,18 @@ export function renderDraftNudgeHtml(opts: {
   templateLabel: string;
   fromEmail: string;
   profileUrl: string;
+  /**
+   * True when this message continues a conversation the creator is already in.
+   *
+   * The footer below explains why an unexpected email arrived — necessary and
+   * honest on first contact, and wrong on the third message of a thread the
+   * person is actively replying to, where it reads as a form letter and
+   * re-offers an opt-out they clearly did not take.
+   */
+  isReply?: boolean;
 }): string {
   const { body, templateLabel, fromEmail, profileUrl } = opts;
+  const isReply = opts.isReply === true;
 
   // Blank-line separated paragraphs, not <br> soup — the drafts come back as
   // paragraphs and collapsing them ruins readability on a phone.
@@ -112,12 +122,16 @@ ${cta}
         </tr>
 
         <!-- Why this arrived, and how to stop it. Not boilerplate: this is the
-             only mail we send that nobody asked for. -->
+             only mail we send that nobody asked for. Dropped on a reply, where
+             the person already knows who we are and why we are writing. -->
         <tr>
           <td style="padding:0 52px 22px;border-top:1px solid #f0e6da;">
             <p style="margin:14px 0 0;font-size:11px;color:#b09a88;line-height:1.6;">
-              You are receiving this because you started a page on SubhSandesh and did not finish it.
-              It is still saved and nobody else can see it. Reply to this email if you would rather we did not write again.
+              ${
+                isReply
+                  ? `You can reply to this email — it reaches the SubhSandesh team at ${esc(fromEmail)}.`
+                  : "You are receiving this because you started a page on SubhSandesh and did not finish it. It is still saved and nobody else can see it. Reply to this email if you would rather we did not write again."
+              }
             </p>
           </td>
         </tr>

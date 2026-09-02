@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import routes from "./routes";
+import webhookRoutes from "./routes/webhooks.routes";
 import { notFound, errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -155,6 +156,18 @@ app.use("/api/generate", generateLimiter);
 // profile as /api/generate, so it gets the same per-minute cap.
 app.use("/api/court-of-love-pages/generate", generateLimiter);
 app.use("/api/auth", authLimiter);
+
+// ── Public webhooks, ahead of the API rate limiter ─────────────────────────
+//
+// Mounted before `apiLimiter` on purpose. SNS retries anything it does not get
+// a 200 for, backing off over hours, so a burst of arriving mail that tripped a
+// 100-per-15-minutes cap would be redelivered indefinitely rather than dropped.
+//
+// It is not unprotected by being outside the limiter: the route authenticates
+// with a path secret, an Amazon SNS signature and a topic-ARN check, and with
+// no SES_INBOUND_TOKEN set it answers 404 to everything.
+app.use("/api/webhooks", webhookRoutes);
+
 app.use("/api", apiLimiter, routes);
 
 // ── 404 + global error handler ─────────────────────────────────────────────

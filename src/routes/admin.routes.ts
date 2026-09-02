@@ -49,6 +49,12 @@ import {
   draftEmail,
   sendDraftEmail,
 } from "../controllers/adminDraft.controller";
+import {
+  addInboundManual,
+  getThread,
+  getThreads,
+  updateThread,
+} from "../controllers/adminThread.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
 
 const router = Router();
@@ -149,5 +155,19 @@ router.get("/drafts", requireSuperAdmin, getDrafts);
 router.get("/drafts/:templateType/:pageId", requireSuperAdmin, getDraftDetail);
 router.post("/drafts/:templateType/:pageId/draft-email", requireSuperAdmin, draftEmail);
 router.post("/drafts/:templateType/:pageId/send", requireSuperAdmin, sendDraftEmail);
+
+// ── Conversations ──────────────────────────────────────────────────────────
+//
+// Reading what was said, both directions. Super-admin only for the same reason
+// as the block above and one more: these documents hold what a creator wrote
+// back, which is private correspondence and not general staff reading.
+//
+// `POST /threads/:id/inbound` is the only write that adds a message ATTRIBUTED
+// to somebody else — a reply pasted in from the mailbox while inbound mail is
+// not yet wired up. It is audited. See adminThread.controller.ts.
+router.get("/threads", requireSuperAdmin, getThreads);
+router.get("/threads/:id", requireSuperAdmin, getThread);
+router.patch("/threads/:id", requireSuperAdmin, updateThread);
+router.post("/threads/:id/inbound", requireSuperAdmin, addInboundManual);
 
 export default router;

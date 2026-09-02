@@ -36,6 +36,29 @@
 //
 // Both are overridable with `force: true`, because a real reason to write twice
 // exists and a guard with no override gets worked around by worse means.
+//
+// A third case sits outside both: once the creator has REPLIED, answering them
+// is not unsolicited mail at all, it is a conversation. Neither guard applies —
+// see `guardsApply` below.
+//
+// ── SAME THREAD OR A NEW ONE ────────────────────────────────────────────────
+//
+// `threadMode` on the send:
+//
+//   "same" — the message continues the newest conversation about this page. Its
+//            subject is DERIVED (`Re: <the thread's subject>`) and whatever the
+//            client sent is ignored. That is deliberate: subject is one of the
+//            three things holding a thread together, and letting it drift would
+//            silently break the one thing this mode promises. The panel shows
+//            the derived subject read-only and says why.
+//
+//   "new"  — opens a fresh conversation with its own subject and no threading
+//            headers. Right when the topic genuinely changed; wrong as a habit,
+//            because two threads about one page is what the creator sees as two
+//            unrelated emails.
+//
+// Absent, it defaults to "same" when a conversation exists and "new" otherwise,
+// so the safe thing happens when nobody chose.
 
 import { Request, Response } from "express";
 import mongoose from "mongoose";
@@ -58,6 +81,17 @@ import {
   draftNudgeEmail,
 } from "../services/draftNudgeAi.service";
 import { sendSesEmail, sesConfigured, SesSendError } from "../services/ses.service";
+import {
+  replySubject,
+  rfcMessageIdFor,
+  threadingHeadersFor,
+} from "../services/emailThread.service";
+import {
+  appendMessage,
+  latestThreadForPage,
+  openThread,
+  threadsForPage,
+} from "../services/threadStore.service";
 import { renderDraftNudgeHtml } from "../utils/draftNudgeEmail";
 import { audit } from "../services/adminAudit";
 import { env } from "../config/env";
@@ -363,6 +397,65 @@ async function loadDraft(req: Request, res: Response) {
   };
 }
 
+/**
+ * A thread as the panel needs it: messages in order, ids kept out.
+ *
+ * `rfcMessageIdSource` DOES go through, because "how confident are we that this
+ * is really one thread" is something the person reading it should be able to
+ * see. Everything else about the plumbing stays server-side.
+ */
+export function shapeThread(t: {
+  _id: unknown;
+  threadKey: string;
+  subject: string;
+  seq: number;
+  messageCount: number;
+  lastMessageAt: Date;
+  lastDirection: string;
+  unread: boolean;
+  status: string;
+  notes?: string;
+  messages: {
+    direction: string;
+    subject: string;
+    body: string;
+    rawBody?: string;
+    at: Date;
+    byEmail?: string;
+    aiAssisted?: boolean;
+    rfcMessageIdSource?: string;
+    source: string;
+    trimmed?: boolean;
+  }[];
+}) {
+  return {
+    id: String(t._id),
+    threadKey: t.threadKey,
+    subject: t.subject,
+    seq: t.seq,
+    messageCount: t.messageCount,
+    lastMessageAt: t.lastMessageAt,
+    lastDirection: t.lastDirection,
+    unread: t.unread,
+    status: t.status,
+    notes: t.notes || "",
+    messages: (t.messages || []).map((m) => ({
+      direction: m.direction,
+      subject: m.subject,
+      body: m.body,
+      // Only when the trim actually removed something — otherwise the panel
+      // would offer to expand a message into the identical text.
+      rawBody: m.trimmed ? m.rawBody || "" : "",
+      at: m.at,
+      byEmail: m.byEmail || "",
+      aiAssisted: m.aiAssisted === true,
+      confidence: m.rfcMessageIdSource || "",
+      source: m.source,
+      trimmed: m.trimmed === true,
+    })),
+  };
+}
+
 /** GET /api/admin/drafts/:templateType/:pageId */
 export const getDraftDetail = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -370,6 +463,7 @@ export const getDraftDetail = async (req: Request, res: Response): Promise<void>
     if (!loaded) return;
 
     const existing = await DraftNudge.findOne({ pageId: loaded.pageId }).lean();
+    const threads = await threadsForPage(loaded.pageId);
     const recent = await DraftNudge.findOne({
       userId: new mongoose.Types.ObjectId(String(loaded.doc.userId)),
       sentAt: { $gte: new Date(Date.now() - USER_COOLDOWN_DAYS * 86_400_000) },
@@ -396,6 +490,10 @@ export const getDraftDetail = async (req: Request, res: Response): Promise<void>
         sesConfigured: sesConfigured(),
         // Named so the panel can show what the recipient will actually see.
         fromEmail: env.SES_FROM_EMAIL,
+        threads: threads.map(shapeThread),
+        // What the compose box should default to, worked out here rather than in
+        // the panel so the rule lives in one place.
+        defaultThreadMode: threads.length > 0 ? "same" : "new",
       },
     });
   } catch (error) {
@@ -448,7 +546,8 @@ export const draftEmail = async (req: Request, res: Response): Promise<void> => 
 /**
  * POST /api/admin/drafts/:templateType/:pageId/send
  *
- * `{ subject, body, aiAssisted?, force? }` — sends exactly this text via SES.
+ * `{ subject, body, aiAssisted?, force?, threadMode? }` — sends exactly this
+ * text via SES, into an existing conversation or a new one.
  */
 export const sendDraftEmail = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -462,6 +561,35 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
     const body = String(req.body?.body ?? "").replace(/\r\n/g, "\n").trim().slice(0, BODY_MAX);
     const aiAssisted = req.body?.aiAssisted === true;
     const force = req.body?.force === true;
+
+    const rawMode = String(req.body?.threadMode ?? "").trim().toLowerCase();
+    if (rawMode && rawMode !== "same" && rawMode !== "new") {
+      res.status(400).json({
+        success: false,
+        error: `threadMode must be "same" or "new".`,
+      });
+      return;
+    }
+
+    const existingThread = await latestThreadForPage(loaded.pageId);
+    // Absent means "do the safe thing": continue a conversation if there is
+    // one, because a second unconnected email is the failure this whole feature
+    // exists to avoid.
+    const threadMode: "same" | "new" =
+      rawMode === "same" || rawMode === "new"
+        ? (rawMode as "same" | "new")
+        : existingThread
+          ? "same"
+          : "new";
+
+    if (threadMode === "same" && !existingThread) {
+      res.status(409).json({
+        success: false,
+        error: "There is no conversation about this draft yet, so there is nothing to reply into. Send it as a new thread.",
+        code: "NO_THREAD",
+      });
+      return;
+    }
 
     if (!subject) {
       res.status(400).json({ success: false, error: "The email needs a subject." });
@@ -482,7 +610,20 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
 
     const userObjectId = new mongoose.Types.ObjectId(String(loaded.doc.userId));
 
-    if (!force) {
+    // ── When the two guards do NOT apply ──────────────────────────────────
+    //
+    // Both guards exist to stop UNSOLICITED mail arriving twice. Once the
+    // creator has written back, the next message is an answer to a person who
+    // asked us something, and refusing to send it — or making a super admin
+    // click "send anyway" to reply to their own customer — would be absurd.
+    //
+    // The test is the thread's own last direction, not whether a thread exists:
+    // a second nudge into a conversation the creator never answered is still
+    // unsolicited, and still guarded.
+    const theyReplied = threadMode === "same" && existingThread?.lastDirection === "inbound";
+    const guardsApply = !force && !theyReplied;
+
+    if (guardsApply) {
       const already = await DraftNudge.findOne({ pageId: loaded.pageId }).lean();
       if (already) {
         res.status(409).json({
@@ -508,6 +649,26 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
       }
     }
 
+    // ── The subject is derived, not accepted, when replying ───────────────
+    //
+    // See the header. In "same" mode the outgoing subject is `Re: <the thread's
+    // subject>` regardless of what the panel sent, because subject is one of
+    // the three things that hold a thread together and a drifting one breaks
+    // threading in exactly the clients that need it most.
+    const outSubject =
+      threadMode === "same" && existingThread
+        ? replySubject(existingThread.subject).slice(0, SUBJECT_MAX)
+        : subject;
+
+    // ── Threading headers ─────────────────────────────────────────────────
+    //
+    // Empty strings in "new" mode; `sendSesEmail` drops empty values, so the
+    // same call shape covers both modes without a branch at the send site.
+    const threading =
+      threadMode === "same" && existingThread
+        ? threadingHeadersFor(existingThread.messages || [])
+        : { inReplyTo: "", references: "", confidence: "none" as const };
+
     // ── Send BEFORE recording ─────────────────────────────────────────────
     //
     // If SES refuses, nothing is written and the panel still shows the draft as
@@ -517,14 +678,26 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
     try {
       const result = await sendSesEmail({
         to,
-        subject,
-        text: `${body}\n\n—\nYou are receiving this because you started a page on SubhSandesh and did not finish it. Reply to this email if you would rather we did not write again.\n${env.SES_FROM_EMAIL}`,
+        subject: outSubject,
+        // The footer is dropped on a reply. It explains why an unexpected email
+        // arrived, which is exactly right for first contact and wrong on the
+        // third message of a conversation the person is actively having with
+        // us — there it reads as a form letter.
+        text:
+          threadMode === "same"
+            ? `${body}\n\n—\n${env.SES_FROM_NAME} · ${env.SES_FROM_EMAIL}`
+            : `${body}\n\n—\nYou are receiving this because you started a page on SubhSandesh and did not finish it. Reply to this email if you would rather we did not write again.\n${env.SES_FROM_EMAIL}`,
         html: renderDraftNudgeHtml({
           body,
           templateLabel: loaded.entry.label,
           fromEmail: env.SES_FROM_EMAIL,
           profileUrl: profileUrl(),
+          isReply: threadMode === "same",
         }),
+        headers: {
+          "In-Reply-To": threading.inReplyTo,
+          References: threading.references,
+        },
       });
       if (result.outcome === "skipped") {
         res.status(503).json({
@@ -558,7 +731,7 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
           templateLabel: loaded.entry.label,
           stallReason: loaded.verdict.reason,
           completeness: loaded.summary.completeness,
-          subject,
+          subject: outSubject,
           body,
           sentAt: new Date(),
           sentByEmail: (req.userEmail || "").toLowerCase(),
@@ -569,19 +742,71 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
       { upsert: true }
     );
 
+    // ── Record it in the conversation ─────────────────────────────────────
+    //
+    // Separately from DraftNudge, and deliberately so: that row is the
+    // one-per-page ledger that enforces no-double-contact, and it cannot also
+    // be a growing list of messages. See models/EmailThread.ts.
+    //
+    // Failing here must NOT fail the request. The email has already gone out;
+    // reporting a failure would tell a super admin nothing was sent and invite
+    // them to send it twice. A missing conversation entry is a display problem,
+    // a duplicate unsolicited email is not.
+    let thread = threadMode === "same" ? existingThread : null;
+    try {
+      if (!thread) {
+        thread = await openThread(
+          {
+            kind: "draft",
+            userId: String(loaded.doc.userId),
+            userName: loaded.user.name || "",
+            userEmail: to,
+            pageId: loaded.pageId,
+            templateType: loaded.entry.templateType,
+            templateLabel: loaded.entry.label,
+          },
+          outSubject
+        );
+      }
+      await appendMessage(thread._id as mongoose.Types.ObjectId, {
+        direction: "outbound",
+        subject: outSubject,
+        body,
+        at: new Date(),
+        byEmail: req.userEmail || "",
+        aiAssisted,
+        providerMessageId: messageId,
+        // A guess at the header SES wrote, not a fact — see rfcMessageIdFor.
+        rfcMessageId: rfcMessageIdFor(messageId, env.SES_REGION),
+        rfcMessageIdSource: messageId ? "reconstructed" : "",
+        inReplyTo: threading.inReplyTo,
+        references: threading.references ? threading.references.split(/\s+/) : [],
+        source: "ses",
+      });
+    } catch (error) {
+      console.error("Recorded the send but failed to write the conversation:", error);
+    }
+
     await audit(req, {
       action: "draft.followup_sent",
       targetUserId: String(loaded.doc.userId),
       targetUserEmail: to,
       targetPageId: loaded.pageId,
       targetTemplateType: loaded.entry.templateType,
-      reason: `${loaded.verdict.reason}${aiAssisted ? " · AI-assisted draft, approved and sent" : " · written by hand"}${force ? " · FORCED past the cooldown" : ""}`,
+      reason: `${loaded.verdict.reason}${aiAssisted ? " · AI-assisted draft, approved and sent" : " · written by hand"}${force ? " · FORCED past the cooldown" : ""}${threadMode === "same" ? ` · replied in thread ${thread?.threadKey || "?"} (${threading.confidence})` : " · new thread"}${theyReplied ? " · answering their reply, guards not applicable" : ""}`,
     });
 
     res.json({
       success: true,
       message: `Sent to ${to}`,
-      data: { sentAt: new Date(), messageId },
+      data: {
+        sentAt: new Date(),
+        messageId,
+        subject: outSubject,
+        threadMode,
+        threadId: thread ? String(thread._id) : "",
+        threadConfidence: threading.confidence,
+      },
     });
   } catch (error) {
     console.error("Send draft email error:", error);

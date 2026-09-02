@@ -133,6 +133,22 @@ export const env = {
   /** Optional. Attaches bounce/complaint event tracking to every send. */
   SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET || "",
 
+  // ── Inbound: replies coming BACK to feedback@subhsandesh.in ──────────────
+  //
+  // Outbound threading needs none of this. These two only matter for putting
+  // the creator's REPLY into the panel, which requires SES Email Receiving to
+  // POST it here. Unset means the webhook refuses everything, which is the
+  // right default for a publicly reachable endpoint.
+  //
+  // SES_INBOUND_TOKEN is a shared secret that forms part of the webhook path,
+  // so an unauthenticated scan cannot even reach the parser. It is checked in
+  // ADDITION to the SNS signature, not instead of it.
+  SES_INBOUND_TOKEN: process.env.SES_INBOUND_TOKEN || "",
+  // When set, only this SNS topic is accepted. A signature proves a message
+  // came from SNS; it does not prove it came from OUR topic, and anybody can
+  // create a topic and sign a message with Amazon's key.
+  SES_INBOUND_TOPIC_ARN: process.env.SES_INBOUND_TOPIC_ARN || "",
+
   // Razorpay (payment gateway)
   // RAZORPAY_KEY_ID   — public key, safe to expose to client
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client
