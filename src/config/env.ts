@@ -133,6 +133,18 @@ export const env = {
   /** Optional. Attaches bounce/complaint event tracking to every send. */
   SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET || "",
 
+  // ── Sign-in codes over SES ───────────────────────────────────────────────
+  //
+  // A sign-in code must not go out as feedback@. That address sends
+  // unsolicited follow-ups, and the two kinds of mail have opposite engagement
+  // profiles — mixing them means a bad run of follow-ups drags down the
+  // deliverability of the one email a user is actively waiting for.
+  //
+  // Its own configuration set for the same reason: bounce and complaint
+  // metrics for sign-in codes have to be readable on their own.
+  SES_OTP_FROM_EMAIL: process.env.SES_OTP_FROM_EMAIL || "verify@subhsandesh.in",
+  SES_OTP_CONFIGURATION_SET: process.env.SES_OTP_CONFIGURATION_SET || process.env.SES_CONFIGURATION_SET || "",
+
   // ── Inbound: replies coming BACK to feedback@subhsandesh.in ──────────────
   //
   // Outbound threading needs none of this. These two only matter for putting

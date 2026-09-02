@@ -89,6 +89,27 @@ export interface SesEmail {
   html?: string;
   replyTo?: string;
   /**
+   * Override the From address.
+   *
+   * Defaults to `SES_FROM_EMAIL` (feedback@), which is right for draft
+   * follow-ups. OTP mail must go as `verify@` — a sign-in code arriving from
+   * the address that sends unsolicited follow-ups is both confusing and worse
+   * for deliverability, because the two have different engagement profiles.
+   *
+   * Must be on a verified SES identity. The domain identity covers every
+   * address on subhsandesh.in, so no per-address verification is needed.
+   */
+  from?: string;
+  fromName?: string;
+  /**
+   * Override the configuration set.
+   *
+   * Worth using: it is how bounce and complaint metrics for sign-in codes stay
+   * separate from those for follow-ups. Mixed together, a bad run of one
+   * silently poisons the reading of the other.
+   */
+  configurationSet?: string;
+  /**
    * Extra headers, used for `In-Reply-To` and `References` so a follow-up lands
    * in the existing conversation rather than starting a second one.
    *
@@ -194,20 +215,32 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
 
   if (!client) {
     console.log(
-      `\n[SES — not configured] To: ${to}\nSubject: ${subject}\n${messageHeaders
+      `\n[SES — not configured] From: ${email.from || env.SES_FROM_EMAIL}\nTo: ${to}\nSubject: ${subject}\n${messageHeaders
         .map((h) => `${h.Name}: ${h.Value}`)
         .join("\n")}\n\n${email.text}\n`
     );
     return { outcome: "skipped" };
   }
 
+  const fromEmail = String(email.from || env.SES_FROM_EMAIL).trim();
+  if (!EMAIL_RE.test(fromEmail)) {
+    throw new SesSendError(`"${fromEmail}" is not a valid From address`);
+  }
+  // A display name with a newline or a quote in it would break the header, and
+  // a caller cannot be trusted to have escaped it.
+  const fromName = String(email.fromName || env.SES_FROM_NAME || "")
+    .replace(/[\r\n"<>]+/g, " ")
+    .trim();
+
+  const configurationSet = email.configurationSet || env.SES_CONFIGURATION_SET;
+
   const command = new SendEmailCommand({
-    FromEmailAddress: `${env.SES_FROM_NAME} <${env.SES_FROM_EMAIL}>`,
+    FromEmailAddress: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
     Destination: { ToAddresses: [to] },
-    ReplyToAddresses: [email.replyTo || env.SES_FROM_EMAIL],
+    ReplyToAddresses: [email.replyTo || fromEmail],
     // Only when set: SES rejects the whole send if it names a configuration set
     // that does not exist, so an empty string must not be passed through.
-    ...(env.SES_CONFIGURATION_SET ? { ConfigurationSetName: env.SES_CONFIGURATION_SET } : {}),
+    ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
     Content: {
       Simple: {
         ...(messageHeaders.length > 0 ? { Headers: messageHeaders } : {}),
