@@ -50,6 +50,16 @@ import {
 /** Rung 3 will not reach further back than this. */
 const LOOSE_MATCH_WINDOW_DAYS = 45;
 
+/**
+ * A subject that announces itself as a reply.
+ *
+ * Deliberately narrow — only the prefixes mail clients actually prepend. It
+ * must NOT match a subject that merely begins with those letters, or every
+ * email titled "Refund request" or "Reference for my page" would be treated as
+ * a continuation of whatever that person last wrote about.
+ */
+const REPLY_PREFIX = /^\s*(?:re|aw|sv|antw|ref|res|r|fw|fwd|forward)\s*(?:\[\d+\])?\s*:/i;
+
 export type MatchRung = "headers" | "subject" | "recent" | "none";
 
 export interface ThreadIdentity {
@@ -251,15 +261,41 @@ export async function matchInboundThread(ev: InboundEvidence): Promise<InboundMa
   }
 
   // ── Rung 3: same person, a recent open conversation ────────────────────
-  const since = new Date(Date.now() - LOOSE_MATCH_WINDOW_DAYS * 86_400_000);
-  const recent = await EmailThread.findOne({
-    userEmail: from,
-    status: "open",
-    lastMessageAt: { $gte: since },
-  })
-    .sort({ lastMessageAt: -1 })
-    .lean<IEmailThread>();
-  if (recent) return { thread: recent, rung: "recent" };
+  //
+  // ONLY for messages that look like replies. This guard was missing, and its
+  // absence was a real bug: somebody who already had an open conversation and
+  // then wrote to feedback@ about something completely different — new subject,
+  // no quoted history — had that new message appended to the old thread. The
+  // conversation then held two unrelated topics, and the AI drafter, which is
+  // given the whole thread, would answer a mixture of both.
+  //
+  // "Looks like a reply" means one of:
+  //   · the subject carries a Re:/Fwd: prefix, or
+  //   · it has In-Reply-To or References headers that simply did not match
+  //     anything we hold — which is precisely the case rung 3 exists for: a
+  //     genuine reply whose parent id we never learned, because SES never told
+  //     us the Message-ID it wrote.
+  //
+  // A fresh subject with no threading headers at all is a NEW topic. It gets
+  // its own thread, which is both more accurate and easier to correct — two
+  // threads can be read separately, whereas one thread holding two topics
+  // cannot be pulled apart.
+  const looksLikeReply =
+    REPLY_PREFIX.test(String(ev.subject || "")) ||
+    parseMessageIds(ev.inReplyTo).length > 0 ||
+    parseMessageIds(ev.references).length > 0;
+
+  if (looksLikeReply) {
+    const since = new Date(Date.now() - LOOSE_MATCH_WINDOW_DAYS * 86_400_000);
+    const recent = await EmailThread.findOne({
+      userEmail: from,
+      status: "open",
+      lastMessageAt: { $gte: since },
+    })
+      .sort({ lastMessageAt: -1 })
+      .lean<IEmailThread>();
+    if (recent) return { thread: recent, rung: "recent" };
+  }
 
   return { thread: null, rung: "none" };
 }

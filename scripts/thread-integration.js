@@ -252,11 +252,52 @@ const api = async (path, opts = {}, token) => {
     });
     check("rung 2 matches on sender plus base subject", m.rung === "subject" && String(m.thread._id) === mainThreadId, m.rung);
 
-    // Rung 3: the subject was rewritten entirely.
+    // Rung 3: a genuine reply whose parent id we never learned. It announces
+    // itself as a reply, either by prefix or by carrying threading headers
+    // that matched nothing.
     m = await matchInboundThread({
-      fromEmail: creator.email, subject: "hey", inReplyTo: "", references: "", messageId: "<new4@x>",
+      fromEmail: creator.email, subject: "Re: something they retitled",
+      inReplyTo: "", references: "", messageId: "<new4@x>",
     });
-    check("rung 3 falls back to their newest open conversation", m.rung === "recent" && String(m.thread._id) === mainThreadId, m.rung);
+    check("rung 3 matches a Re: whose subject was rewritten", m.rung === "recent" && String(m.thread._id) === mainThreadId, m.rung);
+
+    m = await matchInboundThread({
+      fromEmail: creator.email, subject: "no prefix at all",
+      inReplyTo: "<parent-we-never-saw@x>", references: "", messageId: "<new4b@x>",
+    });
+    check("rung 3 matches when unmatched threading headers are present", m.rung === "recent", m.rung);
+
+    // ── The bug this guard exists for ──────────────────────────────────────
+    //
+    // A brand-new email from somebody who happens to have an open thread. No
+    // Re: prefix, no threading headers, unrelated subject. Before the guard
+    // this was appended to their old conversation, which then held two topics
+    // — and the AI drafter, which is given the whole thread, answered a mix.
+    m = await matchInboundThread({
+      fromEmail: creator.email, subject: "Question about pricing",
+      inReplyTo: "", references: "", messageId: "<fresh1@x>",
+    });
+    check(
+      "a NEW topic from a known person does NOT join their old thread",
+      m.rung === "none" && m.thread === null,
+      m.rung
+    );
+
+    m = await matchInboundThread({
+      fromEmail: creator.email, subject: "Reference for my page",
+      inReplyTo: "", references: "", messageId: "<fresh2@x>",
+    });
+    check(
+      'a subject merely STARTING with "Re" letters is not a reply',
+      m.rung === "none",
+      m.rung
+    );
+
+    m = await matchInboundThread({
+      fromEmail: creator.email, subject: "Refund request",
+      inReplyTo: "", references: "", messageId: "<fresh3@x>",
+    });
+    check('"Refund request" is not treated as a Re: prefix', m.rung === "none", m.rung);
 
     // Rung 3 must respect the window.
     await EmailThread.updateOne(
@@ -264,14 +305,16 @@ const api = async (path, opts = {}, token) => {
       { $set: { lastMessageAt: new Date(Date.now() - 200 * 86400000) } }
     );
     m = await matchInboundThread({
-      fromEmail: creator.email, subject: "hey", inReplyTo: "", references: "", messageId: "<new5@x>",
+      fromEmail: creator.email, subject: "Re: Your Holi page is still saved",
+      inReplyTo: "", references: "", messageId: "<new5@x>",
     });
     check("rung 3 will not staple a reply to a conversation from months ago", m.rung === "none", m.rung);
     await EmailThread.updateOne({ _id: mainThreadId }, { $set: { lastMessageAt: new Date() } });
 
     // Rung 3 must not cross people.
     m = await matchInboundThread({
-      fromEmail: other.email, subject: "hey", inReplyTo: "", references: "", messageId: "<new6@x>",
+      fromEmail: other.email, subject: "Re: not their conversation",
+      inReplyTo: "", references: "", messageId: "<new6@x>",
     });
     check("rung 3 never matches a different person's conversation", m.rung === "none", m.rung);
 
@@ -284,11 +327,12 @@ const api = async (path, opts = {}, token) => {
     // A closed conversation is out of rung 3's reach but still reachable by id.
     await EmailThread.updateOne({ _id: mainThreadId }, { $set: { status: "closed" } });
     m = await matchInboundThread({
-      fromEmail: creator.email, subject: "hey", inReplyTo: "", references: "", messageId: "<new8@x>",
+      fromEmail: creator.email, subject: "Re: Your Holi page is still saved",
+      inReplyTo: "", references: "", messageId: "<new8@x>",
     });
     check("a closed conversation is not reopened by a loose match", m.rung === "none", m.rung);
     m = await matchInboundThread({
-      fromEmail: creator.email, subject: "hey",
+      fromEmail: creator.email, subject: "Re: Your Holi page is still saved",
       inReplyTo: "<CAF1abc@mail.gmail.com>", references: "", messageId: "<new9@x>",
     });
     check("but a closed conversation still matches on its own headers", m.rung === "headers", m.rung);
