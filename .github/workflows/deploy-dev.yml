@@ -232,8 +232,12 @@ jobs:
       - name: Ensure SES inbound webhook secrets on the box
         uses: appleboy/ssh-action@v1.0.3
         env:
-          SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN }}
-          SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN }}
+          # The _DEV pair, deliberately. Staging and production have their own
+          # token, their own SNS topic and their own receiving address, so a
+          # real customer reply can never be delivered into the staging
+          # database and one leaked token cannot arm the other environment.
+          SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN_DEV }}
+          SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN_DEV }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -244,7 +248,7 @@ jobs:
             set -eu
 
             if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
-              echo "SES_INBOUND_TOKEN is not set — skipping. The inbound webhook stays closed (404)."
+              echo "SES_INBOUND_TOKEN_DEV is not set — skipping. The inbound webhook stays closed (404)."
               exit 0
             fi
 

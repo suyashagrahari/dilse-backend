@@ -84,6 +84,122 @@ jobs:
     environment: production
 
     steps:
+      # ── SES credentials for PRODUCTION ───────────────────────────────────
+      #
+      # Mirrors the dev workflow, with one difference that matters: the env
+      # file is /opt/dilse/.env.backend, NOT .env.dev.backend. Both live side
+      # by side on the same box, so the path is written out rather than
+      # discovered — there is no inference here that could resolve to the
+      # wrong environment.
+      #
+      # Sending credentials. The inbound webhook has its own step below.
+      - name: Ensure SES credentials on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          SES_ACCESS_KEY_ID: ${{ secrets.SES_ACCESS_KEY_ID }}
+          SES_SECRET_ACCESS_KEY: ${{ secrets.SES_SECRET_ACCESS_KEY }}
+          SES_OTP_CONFIGURATION_SET: ${{ secrets.SES_OTP_CONFIGURATION_SET }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: SES_ACCESS_KEY_ID,SES_SECRET_ACCESS_KEY,SES_OTP_CONFIGURATION_SET
+          script: |
+            set -eu
+
+            if [ -z "${SES_ACCESS_KEY_ID:-}" ] || [ -z "${SES_SECRET_ACCESS_KEY:-}" ]; then
+              echo "SES secrets are not set in this repository — skipping."
+              exit 0
+            fi
+
+            ENV_FILE=/opt/dilse/.env.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            # It must look like the backend's env, and it must NOT be the dev
+            # one. Key NAMES only; no values are ever printed.
+            if ! grep -qE '^(PROD_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the production backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+            echo "env file: $ENV_FILE"
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            $SUDO sed -i '/^SES_ACCESS_KEY_ID=/d; /^SES_SECRET_ACCESS_KEY=/d; /^SES_OTP_CONFIGURATION_SET=/d' "$ENV_FILE"
+            printf 'SES_ACCESS_KEY_ID=%s\nSES_SECRET_ACCESS_KEY=%s\n' \
+              "$SES_ACCESS_KEY_ID" "$SES_SECRET_ACCESS_KEY" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            if [ -n "${SES_OTP_CONFIGURATION_SET:-}" ]; then
+              printf 'SES_OTP_CONFIGURATION_SET=%s\n' "$SES_OTP_CONFIGURATION_SET" | $SUDO tee -a "$ENV_FILE" >/dev/null
+            fi
+
+            echo "SES lines now present: $(grep -c '^SES_' "$ENV_FILE")"
+
+      # ── SES inbound webhook, PRODUCTION ──────────────────────────────────
+      #
+      # A different token and a different SNS topic from staging, on purpose.
+      # The two environments receive at different addresses:
+      #
+      #   inbox@reply.subhsandesh.in    -> prod topic    -> api.subhsandesh.in
+      #   staging@reply.subhsandesh.in  -> dev topic     -> stag-api...
+      #
+      # Only `inbox@` receives the GoDaddy forward from feedback@, so REAL
+      # customer replies reach production and nothing else. Staging is
+      # exercised by writing to `staging@` directly.
+      #
+      # Sharing one token across both would mean a leak in either environment
+      # arms the other's webhook, and sharing one subscription would deliver
+      # every customer reply into the staging database.
+      - name: Ensure SES inbound webhook secrets on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN }}
+          SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN
+          script: |
+            set -eu
+
+            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
+              echo "SES_INBOUND_TOKEN is not set — skipping. The inbound webhook stays closed (404)."
+              exit 0
+            fi
+
+            ENV_FILE=/opt/dilse/.env.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            if ! grep -qE '^(PROD_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the production backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            $SUDO sed -i '/^SES_INBOUND_TOKEN=/d; /^SES_INBOUND_TOPIC_ARN=/d' "$ENV_FILE"
+            printf 'SES_INBOUND_TOKEN=%s\nSES_INBOUND_TOPIC_ARN=%s\n' \
+              "$SES_INBOUND_TOKEN" "${SES_INBOUND_TOPIC_ARN:-}" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            echo "SES_INBOUND lines now present: $(grep -c '^SES_INBOUND' "$ENV_FILE")"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
