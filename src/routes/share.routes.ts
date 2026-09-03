@@ -10,6 +10,7 @@ import {
   markPasswordVerified,
   getReceivedPages,
   getMyCreations,
+  discardMyDraft,
 } from "../controllers/share.controller";
 
 const router = Router();
@@ -18,6 +19,8 @@ router.get("/stats/installs", getInstallStats);
 
 router.get("/me/received", protect, getReceivedPages);
 router.get("/me/creations", protect, getMyCreations);
+// Before the `/:shareId` routes below, which would otherwise swallow "me".
+router.delete("/me/drafts/:templateType/:pageId", protect, discardMyDraft);
 
 router.get("/u/:username", getPublicProfile);
 router.get("/u/:username/:shareId", getSharedPageByUsername);

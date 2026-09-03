@@ -352,6 +352,33 @@ export const getReceivedPages = async (req: Request, res: Response): Promise<voi
   }
 };
 
+// ─── The fields a "My Pages" row needs, and nothing else ─────────────────────
+//
+// This projection is load-bearing, not tidiness.
+//
+// Thirty-eight of the templates store their photos as base64 data URLs INSIDE
+// the page document. `find({ userId })` with no projection returns those blobs,
+// so rendering a list of titles used to pull the user's entire photo library
+// over the wire — tolerable while a row only existed after someone pressed
+// Publish, and not tolerable now that every abandoned build is a draft.
+//
+// `+passwordRaw` has to be named explicitly: it is `select: false` on the
+// schemas, so a projection would otherwise silently drop the one field the
+// profile needs to show a page's password back to its owner.
+const CREATION_FIELDS = [
+  "_id",
+  "shareId",
+  "isPublished",
+  "recipientName",
+  "senderName",
+  "password",
+  "viewCount",
+  "installCount",
+  "createdAt",
+  "updatedAt",
+  "+passwordRaw",
+].join(" ");
+
 export const getMyCreations = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
@@ -360,13 +387,23 @@ export const getMyCreations = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const results: Record<string, unknown>[] = [];
+    // ── WHY Promise.all AND NOT A for..of ────────────────────────────────────
+    //
+    // Forty-three collections, one round trip each. Sequentially that is
+    // forty-three times the latency to Mongo for a screen the user is staring
+    // at, and it grew from "slow" to "the slowest authenticated endpoint we
+    // have" the moment drafts meant most users had rows in several of them.
+    //
+    // Nothing here depends on anything else here, so they all go at once.
+    const perTemplate = await Promise.all(
+      TEMPLATE_LOOKUPS.map(async ({ model, templateType, editorRoute }) => {
+        const pages = await model
+          .find({ userId })
+          .select(CREATION_FIELDS)
+          .sort({ updatedAt: -1 })
+          .lean();
 
-    for (const { model, templateType, editorRoute } of TEMPLATE_LOOKUPS) {
-      const pages = await model.find({ userId }).select("+passwordRaw").sort({ updatedAt: -1 });
-      for (const page of pages) {
-        const obj = (page as { toObject: () => Record<string, unknown> }).toObject();
-        results.push({
+        return (pages as Record<string, unknown>[]).map((obj) => ({
           _id: obj._id,
           shareId: obj.shareId,
           templateType,
@@ -391,15 +428,75 @@ export const getMyCreations = async (req: Request, res: Response): Promise<void>
           installCount: (obj.installCount as number) || 0,
           updatedAt: obj.updatedAt,
           createdAt: obj.createdAt,
-        });
-      }
-    }
+        }));
+      })
+    );
 
+    const results = perTemplate.flat();
     results.sort((a, b) => new Date(b.updatedAt as string).getTime() - new Date(a.updatedAt as string).getTime());
     res.json({ success: true, data: results });
   } catch (error) {
     console.error("Get my creations error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch creations" });
+  }
+};
+
+// ─── Discarding a draft ──────────────────────────────────────────────────────
+//
+// Deleting a PUBLISHED page already has a home: the profile sends a DELETE to
+// the template's own REST base, which is where the per-template cleanup lives.
+// A draft needs a different door for one reason — the caller does not
+// necessarily know the REST base. A draft the user abandoned before signing in
+// is addressed the way every admin surface addresses a page across the 43
+// collections, by `(templateType, pageId)`, and this endpoint resolves that pair
+// through the same registry rather than making the client hold a 43-entry map it
+// would keep stale.
+//
+// It refuses a published page on purpose. "Discard draft" and "delete the card I
+// already sent people" are different decisions with different consequences, and
+// a route that silently did both would turn one misplaced tap into an
+// unrecoverable loss. Published pages keep going through the deliberate,
+// confirmed path.
+export const discardMyDraft = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const templateType = String(req.params.templateType || "");
+    const pageId = String(req.params.pageId || "");
+    const lookup = TEMPLATE_LOOKUPS.find((t) => t.templateType === templateType);
+    if (!lookup) {
+      res.status(404).json({ success: false, error: "Unknown template" });
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(pageId)) {
+      res.status(400).json({ success: false, error: "Invalid page id" });
+      return;
+    }
+
+    // Ownership and draft-ness are BOTH in the filter, so neither is a
+    // read-then-write that a concurrent publish could slip between.
+    const deleted = await lookup.model.findOneAndDelete({
+      _id: pageId,
+      userId,
+      isPublished: { $ne: true },
+    });
+
+    if (!deleted) {
+      // One message for "not yours", "not there" and "already published". The
+      // distinction is only useful to someone probing for other people's ids.
+      res.status(404).json({ success: false, error: "No such draft" });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Discard draft error:", error);
+    res.status(500).json({ success: false, error: "Failed to discard draft" });
   }
 };
 
