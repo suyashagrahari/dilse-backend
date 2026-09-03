@@ -365,7 +365,7 @@ export const getReceivedPages = async (req: Request, res: Response): Promise<voi
 // `+passwordRaw` has to be named explicitly: it is `select: false` on the
 // schemas, so a projection would otherwise silently drop the one field the
 // profile needs to show a page's password back to its owner.
-const CREATION_FIELDS = [
+export const CREATION_FIELDS = [
   "_id",
   "shareId",
   "isPublished",
