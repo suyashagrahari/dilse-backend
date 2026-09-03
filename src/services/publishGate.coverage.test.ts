@@ -128,6 +128,10 @@ test("every template route file gates create, update and publish", () => {
   const NOT_TEMPLATE_ROUTES = new Set([
     "activity.routes.ts", "admin.routes.ts", "analytics.routes.ts", "auth.routes.ts",
     "contact.routes.ts", "contribution.routes.ts", "favorite.routes.ts",
+    // `POST /` here creates a feedback row, not a page. It is listed for the
+    // same reason contact.routes.ts is: the heuristic below is "posts to /", and
+    // these two post to / without being a template.
+    "feedback.routes.ts",
     "generate.routes.ts", "index.ts", "media.routes.ts", "payment.routes.ts",
     "referral.routes.ts", "share.routes.ts", "storyFill.routes.ts",
     "storyProfile.routes.ts", "superAdmin.routes.ts", "template.routes.ts",

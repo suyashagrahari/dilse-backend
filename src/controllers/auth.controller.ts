@@ -107,8 +107,18 @@ export const register = async (
       return;
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email }).select("+password");
     if (existingUser) {
+      // "An account already exists" is true but useless to somebody who signed
+      // up with Google and has simply forgotten. Name the way in.
+      if (existingUser.provider === "google" && !existingUser.password) {
+        res.status(409).json({
+          success: false,
+          error: "This email is already registered with Google. Use Continue with Google to sign in.",
+          code: "USE_GOOGLE",
+        });
+        return;
+      }
       res.status(409).json({
         success: false,
         error: "An account with this email already exists",
@@ -130,17 +140,17 @@ export const register = async (
       pendingReferralCode: referralCode || undefined,
     });
 
-    // Send OTP email (non-blocking — don't fail registration if email fails)
-    try {
-      await sendOtpEmail(email, name, otp);
-    } catch (emailErr) {
-      console.error("OTP email send failed:", emailErr);
-    }
+    // The account is created either way — losing a registration because mail
+    // is down would be worse. But whether the code actually went is reported,
+    // so the client can stop telling people to check an inbox that will never
+    // receive anything. See sendOtpEmail for the two-provider chain.
+    const sent = await sendOtpEmail(email, name, otp);
 
     res.status(201).json({
       success: true,
       data: {
         requiresVerification: true,
+        emailDelivered: sent.delivered,
         email,
       },
     });
@@ -198,12 +208,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       user.otp = otp;
       user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
       await user.save();
-      try { await sendOtpEmail(user.email, user.name, otp); } catch {}
+      // This `catch {}` used to swallow everything and then claim "a new code
+      // has been sent" regardless. On the Resend free tier's 100-a-day cap
+      // that is a lie the user cannot see through.
+      const sent = await sendOtpEmail(user.email, user.name, otp);
       res.status(403).json({
         success: false,
         requiresVerification: true,
         email: user.email,
-        error: "Please verify your email. A new code has been sent.",
+        emailDelivered: sent.delivered,
+        error: sent.delivered
+          ? "Please verify your email. A new code has been sent."
+          : "We could not send your code right now. Try signing in with Google, or try again in a few minutes.",
       });
       return;
     }
@@ -261,25 +277,57 @@ export const googleAuth = async (
     let googlePicture: string | undefined;
     let googleSub: string | undefined;
 
-    if (profile?.email) {
-      const verifyRes = await fetch(
-        "https://www.googleapis.com/oauth2/v3/userinfo",
-        { headers: { Authorization: `Bearer ${credential}` } }
-      );
+    let googleEmailVerified = true;
 
-      if (!verifyRes.ok) {
-        res.status(401).json({
-          success: false,
-          error: "Invalid Google access token",
-        });
+    if (profile?.email) {
+      // ── Who was this token issued TO? ──────────────────────────────────
+      //
+      // The previous version called `/userinfo` with the bearer token and
+      // accepted whatever came back. That endpoint answers for ANY valid
+      // Google access token, whichever OAuth client minted it — so a token
+      // issued to somebody else's application, for a user who had granted
+      // that application access, would authenticate as that user here.
+      //
+      // `tokeninfo` reports the token's `aud`. It must be our client. This is
+      // the same check `verifyIdToken({ audience })` performs on the other
+      // branch, which is why only this one was exposed.
+      const tokenInfoRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(credential)}`
+      );
+      if (!tokenInfoRes.ok) {
+        res.status(401).json({ success: false, error: "Invalid Google access token" });
+        return;
+      }
+      const tokenInfo = (await tokenInfoRes.json()) as Record<string, string>;
+      if (!tokenInfo.aud || tokenInfo.aud !== env.GOOGLE_CLIENT_ID) {
+        console.warn(
+          `Rejected a Google access token issued to a different client: aud=${tokenInfo.aud}`
+        );
+        res.status(401).json({ success: false, error: "Invalid Google access token" });
         return;
       }
 
-      const verified = (await verifyRes.json()) as Record<string, string>;
-      googleEmail = verified.email;
-      googleName = verified.name;
-      googlePicture = verified.picture;
-      googleSub = verified.sub;
+      googleEmail = tokenInfo.email;
+      googleSub = tokenInfo.sub;
+      // tokeninfo reports this as the STRING "true"/"false".
+      googleEmailVerified = String(tokenInfo.email_verified ?? "true") !== "false";
+
+      // Name and picture only — identity has already been established above,
+      // so a failure here costs a display name, not a login.
+      try {
+        const profileRes = await fetch(
+          "https://www.googleapis.com/oauth2/v3/userinfo",
+          { headers: { Authorization: `Bearer ${credential}` } }
+        );
+        if (profileRes.ok) {
+          const verified = (await profileRes.json()) as Record<string, string>;
+          googleName = verified.name;
+          googlePicture = verified.picture;
+          if (!googleEmail) googleEmail = verified.email;
+        }
+      } catch {
+        // Non-fatal, deliberately.
+      }
     } else {
       const ticket = await googleClient.verifyIdToken({
         idToken: credential,
@@ -299,6 +347,7 @@ export const googleAuth = async (
       googleName = payload.name;
       googlePicture = payload.picture;
       googleSub = payload.sub;
+      googleEmailVerified = payload.email_verified !== false;
     }
 
     if (!googleEmail) {
@@ -309,21 +358,90 @@ export const googleAuth = async (
       return;
     }
 
+    // Google publishes `email_verified` precisely because a Google account can
+    // carry an address its owner has not proved. Everything downstream treats
+    // a Google sign-in as proof of the address — it is what marks the account
+    // verified and what skips the OTP — so an unproved address cannot be let
+    // through, or that proof means nothing.
+    if (!googleEmailVerified) {
+      res.status(401).json({
+        success: false,
+        error:
+          "Google has not verified the email address on that account. Please verify it with Google, or sign up with an email and password instead.",
+      });
+      return;
+    }
+
+    // `+password` is required, not optional: `password` is `select: false`, so
+    // without it `user.password` reads as undefined even for an account that
+    // has one — and the linking logic below turns on exactly that question.
     let user = await User.findOne({
       $or: [
         ...(googleSub ? [{ googleId: googleSub }] : []),
         { email: googleEmail },
       ],
-    });
+    }).select("+password");
 
     const isNewUser = !user;
 
     if (user) {
-      if (!user.googleId && googleSub) {
-        user.googleId = googleSub;
-        user.provider = "google";
-        if (googlePicture) user.avatar = googlePicture;
+      // ── Linking Google to an account that already exists ───────────────
+      //
+      // This block had one job and did half of it: it attached the googleId
+      // and flipped `provider`, but never touched `isVerified`.
+      //
+      // The consequence, reproduced before this was written: somebody registers
+      // with an email and password (isVerified false, code pending), then signs
+      // in with Google. Google sign-in succeeds — but the account stays
+      // unverified, so their NEXT password login hits the `!user.isVerified`
+      // gate, is refused with 403, and a fresh OTP is sent. Google had already
+      // proved they own the address; we asked them to prove it again.
+      const wasUnverified = !user.isVerified;
+      const hadPassword = !!user.password;
+
+      if (googleSub && !user.googleId) user.googleId = googleSub;
+      // Only fill an EMPTY avatar. Overwriting one the user chose with their
+      // Google photo on every sign-in silently undoes their own choice.
+      if (googlePicture && !user.avatar) user.avatar = googlePicture;
+
+      if (wasUnverified) {
+        // Google has proved control of the address. That is the whole point.
+        user.isVerified = true;
+
+        // ── And this is why marking it verified is not enough on its own ──
+        //
+        // A password on an account that was NEVER verified was set by somebody
+        // who never proved they own the address. Marking the account verified
+        // and keeping that password hands it to them:
+        //
+        //   1. attacker registers victim@gmail.com with a password they choose
+        //      — no verification needed to create the row
+        //   2. the real victim later signs in with Google
+        //   3. the account is now verified, and the attacker's password works
+        //
+        // Today the missing `isVerified` accidentally blocks step 3, so fixing
+        // the reported bug without this would OPEN an account takeover. The
+        // password is therefore discarded. The real owner keeps Google, and
+        // can set a password again through the reset flow, which proves
+        // ownership properly.
+        if (hadPassword) {
+          user.set("password", undefined);
+          console.warn(
+            `Google sign-in verified ${user.email}, which had an unverified-era password. The password was cleared; that account can sign in with Google or reset it.`
+          );
+        }
       }
+
+      // A pending code is meaningless once the address is proved, and leaving
+      // it live means a code mailed before the Google sign-in still works.
+      if (user.otp) user.set("otp", undefined);
+      if (user.otpExpiry) user.set("otpExpiry", undefined);
+
+      // `provider` is a single field describing what is really two independent
+      // capabilities. Only claim "google" when there is no usable password
+      // left, so a verified user who has BOTH keeps `local` and stays out of
+      // the "this account uses Google sign-in" refusal in `login`.
+      if (!user.password) user.provider = "google";
     } else {
       user = new User({
         email: googleEmail,
@@ -488,10 +606,18 @@ export const resendOtp = async (req: Request, res: Response): Promise<void> => {
     user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
-    try {
-      await sendOtpEmail(user.email, user.name, otp);
-    } catch (emailErr) {
-      console.error("Resend OTP email failed:", emailErr);
+    const sent = await sendOtpEmail(user.email, user.name, otp);
+    if (!sent.delivered) {
+      // 502, not 200. This route exists BECAUSE the first code did not
+      // arrive; answering "New code sent to your email" when nothing was sent
+      // sends the person back to wait for a second email that is equally
+      // absent. The code is stored and still valid if mail recovers.
+      res.status(502).json({
+        success: false,
+        error: "We could not send your code right now. Try signing in with Google, or try again in a few minutes.",
+        code: "OTP_SEND_FAILED",
+      });
+      return;
     }
 
     res.json({ success: true, message: "New code sent to your email" });
@@ -614,11 +740,8 @@ export const changePassword = async (
   try {
     const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({
-        success: false,
-        error: "Current password and new password are required",
-      });
+    if (!newPassword) {
+      res.status(400).json({ success: false, error: "A new password is required" });
       return;
     }
 
@@ -636,24 +759,55 @@ export const changePassword = async (
       return;
     }
 
-    if (user.provider === "google" && !user.password) {
-      res.status(400).json({
-        success: false,
-        error: "Google accounts cannot change password here",
-      });
-      return;
-    }
+    // ── Setting a first password, versus changing an existing one ────────
+    //
+    // This route used to refuse outright when the account had no password,
+    // which left two groups with no way to ever have one:
+    //
+    //   · anyone who signed up with Google — there is no reset flow anywhere
+    //     in this codebase to fall back on (no /forgot-password route exists)
+    //   · anyone whose unverified-era password was cleared when Google sign-in
+    //     verified their address — see googleAuth
+    //
+    // The second group is created by the fix in googleAuth, so leaving this
+    // as it was would have stranded them permanently.
+    //
+    // `currentPassword` is required only when there IS one to prove. With no
+    // password on the account there is nothing to compare against, and the
+    // request is already authenticated by `protect` plus `blockImpersonation`
+    // — a valid access token is the proof, and anyone holding one already has
+    // full access to the account.
+    const settingFirstPassword = !user.password;
 
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      res.status(401).json({ success: false, error: "Current password is incorrect" });
-      return;
+    if (!settingFirstPassword) {
+      if (!currentPassword) {
+        res.status(400).json({
+          success: false,
+          error: "Your current password is required to change it",
+        });
+        return;
+      }
+      const isMatch = await user.comparePassword(currentPassword);
+      if (!isMatch) {
+        res.status(401).json({ success: false, error: "Current password is incorrect" });
+        return;
+      }
     }
 
     user.password = newPassword;
+    // The account can now sign in both ways, and `login` refuses on
+    // `provider === "google" && !password` — so leaving provider as "google"
+    // with a password set would reject the password it just accepted.
+    if (user.provider === "google") user.provider = "local";
     await user.save();
 
-    res.json({ success: true, message: "Password updated successfully" });
+    res.json({
+      success: true,
+      message: settingFirstPassword
+        ? "Password set. You can now sign in with your email as well as Google."
+        : "Password updated successfully",
+      data: { wasFirstPassword: settingFirstPassword },
+    });
   } catch (error) {
     console.error("Change password error:", error);
     res.status(500).json({ success: false, error: "Failed to change password" });

@@ -33,6 +33,13 @@ export type AuditAction =
   | "template.clear_pricing"
   | "template.grant_access"
   | "template.revoke_access"
+  | "feedback.reply_sent"
+  | "draft.followup_sent"
+  // A message attributed to a creator that a staff member typed in by hand.
+  // See adminThread.controller.ts — the one write in the conversation view that
+  // puts words in somebody else's mouth, so it is recorded with who did it.
+  | "thread.inbound_pasted"
+  | "thread.reply_sent"
   | "impersonation.start"
   | "impersonation.end";
 

@@ -83,6 +83,209 @@ jobs:
     environment: development
 
     steps:
+      # ── SES credentials ─────────────────────────────────────────────────────
+      #
+      # The container's environment comes from a file on the box, not from this
+      # workflow — nothing else here is passed through, which is why every other
+      # app secret (Mongo, JWT, S3, Resend, OpenAI, Razorpay) lives there and
+      # not in GitHub. Adding SES by hand over SSH is the normal way to do it.
+      #
+      # This step exists because it has to be repeatable: the box can be
+      # replaced, and a missing SES key does not break the API, it just silently
+      # disables the draft follow-up emails with a banner nobody may notice for
+      # weeks. So the keys are held as repository secrets and upserted here.
+      #
+      # It only ever removes and rewrites its own two lines, targets the dev
+      # env file by name so it cannot touch production's, and skips entirely
+      # when the secrets are unset — so a fork deploys exactly as before.
+      - name: Ensure SES credentials on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          SES_ACCESS_KEY_ID: ${{ secrets.SES_ACCESS_KEY_ID }}
+          SES_SECRET_ACCESS_KEY: ${{ secrets.SES_SECRET_ACCESS_KEY }}
+          SES_OTP_CONFIGURATION_SET: ${{ secrets.SES_OTP_CONFIGURATION_SET }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: SES_ACCESS_KEY_ID,SES_SECRET_ACCESS_KEY,SES_OTP_CONFIGURATION_SET
+          script: |
+            set -eu
+
+            if [ -z "${SES_ACCESS_KEY_ID:-}" ] || [ -z "${SES_SECRET_ACCESS_KEY:-}" ]; then
+              echo "SES secrets are not set in this repository — skipping."
+              exit 0
+            fi
+
+            # ── Why the path is written out rather than discovered ──────────
+            #
+            # The first version of this step grepped deploy.sh for --env-file.
+            # That cannot work: the script passes "$ENV_FILE", a shell variable,
+            # so the grep returned the literal string and the step failed. It
+            # failed loudly and wrote nothing, which is what the guards are for.
+            #
+            # /opt/dilse holds .env.dev.backend and .env.backend side by side —
+            # dev and production on one box. Naming the dev file explicitly is
+            # both simpler and safer than any amount of parsing: there is no
+            # inference that could resolve to the production file.
+            ENV_FILE=/opt/dilse/.env.dev.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            # It must look like the backend's env, or we are editing the wrong
+            # file. Key NAMES only — no values are ever printed.
+            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+            echo "env file: $ENV_FILE"
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            # Only ever this step's own two lines. Never a truncation.
+            $SUDO sed -i '/^SES_ACCESS_KEY_ID=/d; /^SES_SECRET_ACCESS_KEY=/d; /^SES_OTP_CONFIGURATION_SET=/d' "$ENV_FILE"
+            printf 'SES_ACCESS_KEY_ID=%s\nSES_SECRET_ACCESS_KEY=%s\n' \
+              "$SES_ACCESS_KEY_ID" "$SES_SECRET_ACCESS_KEY" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            # Optional: keeps sign-in-code metrics separate from the follow-up
+            # ones. Written only when set, because SES rejects a send naming a
+            # configuration set that does not exist.
+            if [ -n "${SES_OTP_CONFIGURATION_SET:-}" ]; then
+              printf 'SES_OTP_CONFIGURATION_SET=%s\n' "$SES_OTP_CONFIGURATION_SET" | $SUDO tee -a "$ENV_FILE" >/dev/null
+            fi
+
+            echo "SES lines now present: $(grep -c '^SES_' "$ENV_FILE")"
+
+      # ── Mailbox credentials for reading creators' replies ────────────────
+      #
+      # Separate step from the SES one on purpose: they are independent
+      # features with independent secrets, and one being unset must not stop
+      # the other being written. Both skip cleanly when their secrets are
+      # absent, which is how a fork or a fresh clone deploys with neither.
+      #
+      # The password never appears in this repository, in a log, or in a chat
+      # transcript — it lives only as a GitHub secret and is written straight
+      # into the env file on the box.
+      - name: Ensure mailbox (IMAP) credentials on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          IMAP_FILTER_TO: ${{ secrets.IMAP_FILTER_TO }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: IMAP_HOST,IMAP_USER,IMAP_PASSWORD,IMAP_FILTER_TO
+          script: |
+            set -eu
+
+            if [ -z "${IMAP_HOST:-}" ] || [ -z "${IMAP_USER:-}" ] || [ -z "${IMAP_PASSWORD:-}" ]; then
+              echo "IMAP secrets are not set in this repository — skipping. Replies will have to be pasted in by hand."
+              exit 0
+            fi
+
+            ENV_FILE=/opt/dilse/.env.dev.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            FILTER="${IMAP_FILTER_TO:-feedback@subhsandesh.in}"
+
+            $SUDO sed -i '/^IMAP_HOST=/d; /^IMAP_PORT=/d; /^IMAP_USER=/d; /^IMAP_PASSWORD=/d; /^IMAP_FILTER_TO=/d; /^IMAP_MAILBOX=/d' "$ENV_FILE"
+            printf 'IMAP_HOST=%s\nIMAP_PORT=993\nIMAP_USER=%s\nIMAP_PASSWORD=%s\nIMAP_MAILBOX=INBOX\nIMAP_FILTER_TO=%s\n' \
+              "$IMAP_HOST" "$IMAP_USER" "$IMAP_PASSWORD" "$FILTER" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            echo "IMAP lines now present: $(grep -c '^IMAP_' "$ENV_FILE")"
+
+      # ── SES receiving webhook ────────────────────────────────────────────
+      #
+      # The other way a reply gets in, for a deployment that has done the DNS
+      # work instead of handing over a mailbox password. Independent of the
+      # IMAP step above: either, both, or neither can be set, and a message
+      # already stored is recognised by its Message-ID so two live routes
+      # cannot duplicate each other.
+      #
+      # SES_INBOUND_TOKEN is the shared secret in the webhook path. Without it
+      # the route answers 404 to everything, which is the default.
+      - name: Ensure SES inbound webhook secrets on the box
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          # The _DEV pair, deliberately. Staging and production have their own
+          # token, their own SNS topic and their own receiving address, so a
+          # real customer reply can never be delivered into the staging
+          # database and one leaked token cannot arm the other environment.
+          SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN_DEV }}
+          SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN_DEV }}
+          # The address staging asks creators to reply to, and the reason a
+          # reply from a staging test cannot land in the production database.
+          # Not a secret, and literal on purpose — see deploy.yml.
+          SES_REPLY_TO_EMAIL: staging@reply.subhsandesh.in
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN,SES_REPLY_TO_EMAIL
+          script: |
+            set -eu
+
+            ENV_FILE=/opt/dilse/.env.dev.backend
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE does not exist. Contents of /opt/dilse:"
+              ls -la /opt/dilse || true
+              exit 1
+            fi
+
+            if ! grep -qE '^(PROD_MONGODB_URI|LOCAL_MONGODB_URI|JWT_SECRET)=' "$ENV_FILE"; then
+              echo "::error::$ENV_FILE does not look like the backend env. Keys present:"
+              grep -oE '^[A-Z_]+=' "$ENV_FILE" | sort -u || true
+              exit 1
+            fi
+
+            SUDO=""
+            [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            # Written before the token guard: the token decides whether SES may
+            # POST a reply in, this decides whether the reply is addressed here
+            # at all. See deploy.yml.
+            $SUDO sed -i '/^SES_REPLY_TO_EMAIL=/d' "$ENV_FILE"
+            printf 'SES_REPLY_TO_EMAIL=%s\n' "$SES_REPLY_TO_EMAIL" | $SUDO tee -a "$ENV_FILE" >/dev/null
+            echo "Replies will be addressed to: $SES_REPLY_TO_EMAIL"
+
+            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
+              echo "SES_INBOUND_TOKEN_DEV is not set — the inbound webhook stays closed (404)."
+              exit 0
+            fi
+
+            $SUDO sed -i '/^SES_INBOUND_TOKEN=/d; /^SES_INBOUND_TOPIC_ARN=/d' "$ENV_FILE"
+            printf 'SES_INBOUND_TOKEN=%s\nSES_INBOUND_TOPIC_ARN=%s\n' \
+              "$SES_INBOUND_TOKEN" "${SES_INBOUND_TOPIC_ARN:-}" | $SUDO tee -a "$ENV_FILE" >/dev/null
+
+            echo "SES_INBOUND lines now present: $(grep -c '^SES_INBOUND' "$ENV_FILE")"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:

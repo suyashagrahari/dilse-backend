@@ -1,0 +1,81 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadAccountStatus",
+      "Effect": "Allow",
+      "Action": [
+        "ses:GetAccount",
+        "ses:ListEmailIdentities",
+        "ses:GetEmailIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "VerifyTheReceivingSubdomain",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateEmailIdentity",
+        "ses:PutEmailIdentityDkimAttributes",
+        "ses:PutEmailIdentityDkimSigningAttributes"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageReceiptRules",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateReceiptRuleSet",
+        "ses:CreateReceiptRule",
+        "ses:UpdateReceiptRule",
+        "ses:DescribeReceiptRule",
+        "ses:DescribeReceiptRuleSet",
+        "ses:DescribeActiveReceiptRuleSet",
+        "ses:ListReceiptRuleSets",
+        "ses:SetActiveReceiptRuleSet",
+        "ses:SetReceiptRulePosition"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ConfigurationSetsForTransactionalMail",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateConfigurationSet",
+        "ses:GetConfigurationSet",
+        "ses:ListConfigurationSets",
+        "ses:CreateConfigurationSetEventDestination",
+        "ses:GetConfigurationSetEventDestinations"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SnsForInboundNotifications",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:ListTopics",
+        "sns:Subscribe",
+        "sns:ListSubscriptionsByTopic",
+        "sns:GetSubscriptionAttributes"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SendOnlyFromOurOwnAddresses",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ses:FromAddress": [
+            "feedback@subhsandesh.in",
+            "verify@subhsandesh.in"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -35,6 +35,28 @@ import {
   createTemplateGrant,
   deleteTemplateGrant,
 } from "../controllers/templateGrant.controller";
+import {
+  getFeedbackList,
+  setFeedbackStatus,
+  setFeedbackNotes,
+  deleteFeedback,
+  draftReply,
+  sendReply,
+} from "../controllers/adminFeedback.controller";
+import {
+  getDrafts,
+  getDraftDetail,
+  draftEmail,
+  sendDraftEmail,
+} from "../controllers/adminDraft.controller";
+import {
+  addInboundManual,
+  draftReplyForThread,
+  getThread,
+  getThreads,
+  replyToThread,
+  updateThread,
+} from "../controllers/adminThread.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
 
 const router = Router();
@@ -101,5 +123,59 @@ router.get("/template-grants/user/:userId", requireSuperAdmin, getTemplateGrants
 router.get("/template-grants/:slug", requireSuperAdmin, getTemplateGrantsForSlug);
 router.post("/template-grants", requireSuperAdmin, createTemplateGrant);
 router.delete("/template-grants/:slug/:userId", requireSuperAdmin, deleteTemplateGrant);
+
+// ── What creators thought, the moment they finished ────────────────────────
+//
+// Super-admin only, like pricing and grants and unlike contacts: replying here
+// sends mail as SubhSandesh to a named customer, and the drafts are written by a
+// model. See the header of adminFeedback.controller for why that tier.
+//
+// `draft-reply` and `reply` are two routes on purpose. Generating text and
+// sending an email are separate acts with a human in between, and there is no
+// route that does both.
+router.get("/feedback", requireSuperAdmin, getFeedbackList);
+router.patch("/feedback/:id/status", requireSuperAdmin, setFeedbackStatus);
+router.patch("/feedback/:id/notes", requireSuperAdmin, setFeedbackNotes);
+router.post("/feedback/:id/draft-reply", requireSuperAdmin, draftReply);
+router.post("/feedback/:id/reply", requireSuperAdmin, sendReply);
+router.delete("/feedback/:id", requireSuperAdmin, deleteFeedback);
+
+// ── Pages somebody started and never published ─────────────────────────────
+//
+// Super-admin only, and for a sharper reason than the other blocks: `send` puts
+// UNSOLICITED email in a real person's inbox, in the company's name, about a
+// private document. That is the most externally-visible thing any admin route
+// here does.
+//
+// `draft-email` and `send` are two routes with a human in between. The generator
+// cannot mail and the sender cannot generate — see the controller header.
+//
+// The two-segment path is `(templateType, pageId)`, which is how every admin
+// surface addresses a page across the 43 collections. The list route is declared
+// first so it cannot be swallowed by the parameterised one.
+router.get("/drafts", requireSuperAdmin, getDrafts);
+router.get("/drafts/:templateType/:pageId", requireSuperAdmin, getDraftDetail);
+router.post("/drafts/:templateType/:pageId/draft-email", requireSuperAdmin, draftEmail);
+router.post("/drafts/:templateType/:pageId/send", requireSuperAdmin, sendDraftEmail);
+
+// ── Conversations ──────────────────────────────────────────────────────────
+//
+// Reading what was said, both directions. Super-admin only for the same reason
+// as the block above and one more: these documents hold what a creator wrote
+// back, which is private correspondence and not general staff reading.
+//
+// `POST /threads/:id/inbound` is the only write that adds a message ATTRIBUTED
+// to somebody else — a reply pasted in from the mailbox while inbound mail is
+// not yet wired up. It is audited. See adminThread.controller.ts.
+router.get("/threads", requireSuperAdmin, getThreads);
+router.get("/threads/:id", requireSuperAdmin, getThread);
+router.patch("/threads/:id", requireSuperAdmin, updateThread);
+router.post("/threads/:id/inbound", requireSuperAdmin, addInboundManual);
+
+// Generate and send are two routes with a human in between, the same boundary
+// the feedback and drafts panels have. `draft-reply` gets the WHOLE
+// conversation and cannot mail; `reply` mails and cannot generate.
+router.post("/threads/:id/draft-reply", requireSuperAdmin, draftReplyForThread);
+router.post("/threads/:id/reply", requireSuperAdmin, replyToThread);
 
 export default router;

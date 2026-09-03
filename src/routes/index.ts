@@ -40,6 +40,7 @@ import usPageRoutes from "./usPage.routes";
 import storyRoutes from "./story.routes";
 import shareRoutes from "./share.routes";
 import myPageRoutes from "./myPage.routes";
+import feedbackRoutes from "./feedback.routes";
 import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
 import contactRoutes from "./contact.routes";
@@ -144,6 +145,10 @@ router.use("/my-pages", protect, myPageRoutes);
 router.use("/media", mediaRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/contact", contactRoutes);
+// Post-publish feedback from the creator. `protect` because a reply is an
+// email, so a rating with no account behind it is a dead end — and because the
+// address replied to must come from the session rather than the payload.
+router.use("/feedback", protect, feedbackRoutes);
 router.use("/referral", referralRoutes);
 router.use("/payment", paymentRoutes);
 // Super-admin surfaces sit ABOVE the /admin mount so the more specific prefix

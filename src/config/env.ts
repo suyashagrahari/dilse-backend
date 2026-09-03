@@ -111,6 +111,107 @@ export const env = {
   // Resend (for OTP emails)
   RESEND_API_KEY: process.env.RESEND_API_KEY || "",
 
+  // ── Amazon SES ────────────────────────────────────────────────────────────
+  //
+  // Used for the draft follow-up emails only; OTP, contact replies and feedback
+  // replies still go through Resend. Two providers is deliberate rather than
+  // accidental: these follow-ups are the one thing here that goes out
+  // UNSOLICITED, so keeping them on their own domain identity, their own
+  // reputation and their own sending quota means a run of complaints cannot take
+  // the OTP mail down with it. Sign-in email failing is an outage; a nudge email
+  // failing is nothing.
+  //
+  // Deliberately NOT falling back to the S3_* credentials. That key has no SES
+  // permission, so a fallback would turn "SES is not configured" — which the
+  // sender reports clearly — into an AccessDenied at send time.
+  SES_REGION: process.env.SES_REGION || "us-east-1",
+  SES_ACCESS_KEY_ID: process.env.SES_ACCESS_KEY_ID || "",
+  SES_SECRET_ACCESS_KEY: process.env.SES_SECRET_ACCESS_KEY || "",
+  /** Must be a verified SES identity, or an address on a verified domain. */
+  SES_FROM_EMAIL: process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
+  SES_FROM_NAME: process.env.SES_FROM_NAME || "SubhSandesh",
+  /** Optional. Attaches bounce/complaint event tracking to every send. */
+  SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET || "",
+
+  // ── Sign-in codes over SES ───────────────────────────────────────────────
+  //
+  // A sign-in code must not go out as feedback@. That address sends
+  // unsolicited follow-ups, and the two kinds of mail have opposite engagement
+  // profiles — mixing them means a bad run of follow-ups drags down the
+  // deliverability of the one email a user is actively waiting for.
+  //
+  // Its own configuration set for the same reason: bounce and complaint
+  // metrics for sign-in codes have to be readable on their own.
+  SES_OTP_FROM_EMAIL: process.env.SES_OTP_FROM_EMAIL || "verify@subhsandesh.in",
+  SES_OTP_CONFIGURATION_SET: process.env.SES_OTP_CONFIGURATION_SET || process.env.SES_CONFIGURATION_SET || "",
+
+  // ── Inbound: replies coming BACK to feedback@subhsandesh.in ──────────────
+  //
+  // Outbound threading needs none of this. These two only matter for putting
+  // the creator's REPLY into the panel, which requires SES Email Receiving to
+  // POST it here. Unset means the webhook refuses everything, which is the
+  // right default for a publicly reachable endpoint.
+  //
+  // SES_INBOUND_TOKEN is a shared secret that forms part of the webhook path,
+  // so an unauthenticated scan cannot even reach the parser. It is checked in
+  // ADDITION to the SNS signature, not instead of it.
+  // ── Where a creator's REPLY has to be sent ───────────────────────────────
+  //
+  // This is the one address in the whole pipeline that decides whether a real
+  // reply is ever seen, and it is NOT the From address.
+  //
+  // Mail we send goes out as `feedback@subhsandesh.in`, which lives on the
+  // apex domain — and the apex MX belongs to GoDaddy, because it carries all
+  // company mail. So a reply addressed to feedback@ is delivered into the
+  // GoDaddy `support@` mailbox and SES never sees it. The conversation view
+  // then shows only our own side, exactly as if the creator had never
+  // answered. That was the bug: sending worked, receiving looked wired up,
+  // and the two were pointed at different mail systems.
+  //
+  // Reply-To is therefore the SES RECEIVING address, on the subdomain whose MX
+  // is SES itself (`reply.subhsandesh.in`). A reply then goes straight to SES
+  // with no GoDaddy hop, so nothing depends on a mail-forwarding rule nobody
+  // can see from here — and because each deployment names its own inbox, a
+  // real reply lands in the environment that sent the mail:
+  //
+  //   production  -> inbox@reply.subhsandesh.in    -> prod SNS topic
+  //   staging     -> staging@reply.subhsandesh.in  -> dev SNS topic
+  //
+  // Defaults to SES_FROM_EMAIL, which is the pre-fix behaviour: wrong, but no
+  // worse than it already was. An unset value must not stop mail going out.
+  SES_REPLY_TO_EMAIL:
+    process.env.SES_REPLY_TO_EMAIL || process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
+
+  SES_INBOUND_TOKEN: process.env.SES_INBOUND_TOKEN || "",
+  // When set, only this SNS topic is accepted. A signature proves a message
+  // came from SNS; it does not prove it came from OUR topic, and anybody can
+  // create a topic and sign a message with Amazon's key.
+  SES_INBOUND_TOPIC_ARN: process.env.SES_INBOUND_TOPIC_ARN || "",
+
+  // ── Inbound by IMAP ──────────────────────────────────────────────────────
+  //
+  // The other way replies get in, and the one that needs no DNS at all.
+  //
+  // `feedback@subhsandesh.in` is an ALIAS at GoDaddy that redirects into the
+  // `support@subhsandesh.in` mailbox — it has no mailbox of its own. So the
+  // login here is support@, and IMAP_FILTER_TO is what separates the draft
+  // replies from ordinary support mail sitting in the same inbox.
+  //
+  // Unset means the poller never starts. That is the default.
+  IMAP_HOST: process.env.IMAP_HOST || "",
+  IMAP_PORT: parseInt(process.env.IMAP_PORT || "993", 10),
+  IMAP_USER: process.env.IMAP_USER || "",
+  IMAP_PASSWORD: process.env.IMAP_PASSWORD || "",
+  IMAP_MAILBOX: process.env.IMAP_MAILBOX || "INBOX",
+  /**
+   * Only mail addressed to one of these is ingested, comma-separated.
+   *
+   * Load-bearing. Without it every support email in that shared inbox would
+   * become an unmatched "conversation" in the admin panel.
+   */
+  IMAP_FILTER_TO: process.env.IMAP_FILTER_TO || process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
+  IMAP_POLL_SECONDS: parseInt(process.env.IMAP_POLL_SECONDS || "120", 10),
+
   // Razorpay (payment gateway)
   // RAZORPAY_KEY_ID   — public key, safe to expose to client
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client
