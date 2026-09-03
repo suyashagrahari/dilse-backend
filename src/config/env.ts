@@ -155,6 +155,33 @@ export const env = {
   // SES_INBOUND_TOKEN is a shared secret that forms part of the webhook path,
   // so an unauthenticated scan cannot even reach the parser. It is checked in
   // ADDITION to the SNS signature, not instead of it.
+  // ── Where a creator's REPLY has to be sent ───────────────────────────────
+  //
+  // This is the one address in the whole pipeline that decides whether a real
+  // reply is ever seen, and it is NOT the From address.
+  //
+  // Mail we send goes out as `feedback@subhsandesh.in`, which lives on the
+  // apex domain — and the apex MX belongs to GoDaddy, because it carries all
+  // company mail. So a reply addressed to feedback@ is delivered into the
+  // GoDaddy `support@` mailbox and SES never sees it. The conversation view
+  // then shows only our own side, exactly as if the creator had never
+  // answered. That was the bug: sending worked, receiving looked wired up,
+  // and the two were pointed at different mail systems.
+  //
+  // Reply-To is therefore the SES RECEIVING address, on the subdomain whose MX
+  // is SES itself (`reply.subhsandesh.in`). A reply then goes straight to SES
+  // with no GoDaddy hop, so nothing depends on a mail-forwarding rule nobody
+  // can see from here — and because each deployment names its own inbox, a
+  // real reply lands in the environment that sent the mail:
+  //
+  //   production  -> inbox@reply.subhsandesh.in    -> prod SNS topic
+  //   staging     -> staging@reply.subhsandesh.in  -> dev SNS topic
+  //
+  // Defaults to SES_FROM_EMAIL, which is the pre-fix behaviour: wrong, but no
+  // worse than it already was. An unset value must not stop mail going out.
+  SES_REPLY_TO_EMAIL:
+    process.env.SES_REPLY_TO_EMAIL || process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
+
   SES_INBOUND_TOKEN: process.env.SES_INBOUND_TOKEN || "",
   // When set, only this SNS topic is accepted. A signature proves a message
   // came from SNS; it does not prove it came from OUR topic, and anybody can

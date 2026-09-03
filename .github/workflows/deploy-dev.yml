@@ -238,19 +238,18 @@ jobs:
           # database and one leaked token cannot arm the other environment.
           SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN_DEV }}
           SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN_DEV }}
+          # The address staging asks creators to reply to, and the reason a
+          # reply from a staging test cannot land in the production database.
+          # Not a secret, and literal on purpose — see deploy.yml.
+          SES_REPLY_TO_EMAIL: staging@reply.subhsandesh.in
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 120s
-          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN
+          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN,SES_REPLY_TO_EMAIL
           script: |
             set -eu
-
-            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
-              echo "SES_INBOUND_TOKEN_DEV is not set — skipping. The inbound webhook stays closed (404)."
-              exit 0
-            fi
 
             ENV_FILE=/opt/dilse/.env.dev.backend
 
@@ -268,6 +267,18 @@ jobs:
 
             SUDO=""
             [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            # Written before the token guard: the token decides whether SES may
+            # POST a reply in, this decides whether the reply is addressed here
+            # at all. See deploy.yml.
+            $SUDO sed -i '/^SES_REPLY_TO_EMAIL=/d' "$ENV_FILE"
+            printf 'SES_REPLY_TO_EMAIL=%s\n' "$SES_REPLY_TO_EMAIL" | $SUDO tee -a "$ENV_FILE" >/dev/null
+            echo "Replies will be addressed to: $SES_REPLY_TO_EMAIL"
+
+            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
+              echo "SES_INBOUND_TOKEN_DEV is not set — the inbound webhook stays closed (404)."
+              exit 0
+            fi
 
             $SUDO sed -i '/^SES_INBOUND_TOKEN=/d; /^SES_INBOUND_TOPIC_ARN=/d' "$ENV_FILE"
             printf 'SES_INBOUND_TOKEN=%s\nSES_INBOUND_TOPIC_ARN=%s\n' \

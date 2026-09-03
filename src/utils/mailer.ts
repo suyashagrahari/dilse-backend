@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { sendSesEmail } from "../services/ses.service";
+import { sendSesEmail, threadReplyToAddress } from "../services/ses.service";
 import { env } from "../config/env";
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
@@ -450,15 +450,17 @@ export async function sendFeedbackReplyEmail(opts: {
   await resend.emails.send({
     from: "SubhSandesh Support <support@subhsandesh.in>",
     to,
-    // ── Why Reply-To is feedback@, not support@ ────────────────────────
+    // ── Why Reply-To is the SES inbox, not support@ and not feedback@ ──
     //
     // From stays support@ because that is who is writing. But the REPLY has
-    // to land somewhere the app can read, and only feedback@subhsandesh.in
-    // forwards into the SES inbound pipeline. Pointed at support@ — as it
-    // was — a creator's answer arrived in a mailbox nothing watches, so the
-    // conversation view showed only our side and read as if they had never
-    // replied.
-    replyTo: env.SES_FROM_EMAIL,
+    // to land somewhere the app can read, and that is neither of the apex
+    // addresses: apex mail is GoDaddy's, so a reply to support@ OR to
+    // feedback@ arrives in a mailbox nothing watches, and the conversation
+    // view shows only our side — reading as if they had never replied.
+    //
+    // `threadReplyToAddress()` is the address SES itself receives on for this
+    // deployment. See `SES_REPLY_TO_EMAIL` in config/env.ts.
+    replyTo: threadReplyToAddress(),
     subject,
     text: `${body}\n\n—\nYou left us ${stars} feedback${templateLabel ? ` after making your ${templateLabel} page` : ""}. Reply to this email to continue the conversation.\nsupport@subhsandesh.in | subhsandesh.in`,
     html: `<!DOCTYPE html>

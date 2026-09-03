@@ -36,6 +36,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { env } from "../config/env";
+import { threadReplyToAddress } from "./ses.service";
 import MailPollState from "../models/MailPollState";
 import {
   appendMessage,
@@ -413,6 +414,14 @@ export async function inboundStatus() {
     ...(imap ? await imapStatus() : { filterAddresses: filterAddresses() }),
     configured: imap || webhook,
     mechanisms,
+    // The address creators are actually TOLD to reply to.
+    //
+    // `filterAddresses` above describes the IMAP filter, which is a different
+    // thing and only meaningful when IMAP is the mechanism. Showing that as
+    // "where replies arrive" is how the earlier mismatch stayed hidden: the
+    // panel named feedback@ while mail was being received on the reply
+    // subdomain, so the two halves could disagree without anyone seeing it.
+    replyToAddress: threadReplyToAddress(),
     // The webhook delivers in seconds; the poller on its interval. Reported so
     // the panel can promise the right thing rather than a guess.
     etaSeconds: webhook ? 15 : imap ? Math.max(30, env.IMAP_POLL_SECONDS || 120) : 0,

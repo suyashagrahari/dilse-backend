@@ -80,7 +80,12 @@ import {
   AiUnavailableError,
   draftNudgeEmail,
 } from "../services/draftNudgeAi.service";
-import { sendSesEmail, sesConfigured, SesSendError } from "../services/ses.service";
+import {
+  sendSesEmail,
+  sesConfigured,
+  SesSendError,
+  threadReplyToAddress,
+} from "../services/ses.service";
 import { inboundStatus } from "../services/imapPoller.service";
 import {
   replySubject,
@@ -699,6 +704,10 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
           profileUrl: profileUrl(),
           isReply: threadMode === "same",
         }),
+        // Passing no replyTo let this fall through to the From address, which
+        // is on the apex domain GoDaddy serves — so every creator who replied
+        // to a follow-up was answering into a mailbox this app cannot read.
+        replyTo: threadReplyToAddress(),
         headers: {
           "In-Reply-To": threading.inReplyTo,
           References: threading.references,

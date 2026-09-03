@@ -81,6 +81,56 @@ export function sesConfigured(): boolean {
   return isConfigured;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * The address a threaded email must ask for its reply on.
+ *
+ * Every send that is part of a conversation — a feedback reply, a draft
+ * follow-up, a reply from the conversation panel — has to use this rather than
+ * the From address. See the note on `SES_REPLY_TO_EMAIL` in `config/env.ts`:
+ * From is on the apex domain, whose mail belongs to GoDaddy, so a reply sent
+ * back to it never reaches SES and never reaches the panel.
+ *
+ * OTP and contact mail deliberately do NOT use this. Those replies belong to a
+ * human in the support mailbox, not to a conversation thread.
+ *
+ * Carries the display name so the recipient sees "SubhSandesh", not a raw
+ * `inbox@` address that looks like a machine wrote it.
+ */
+export function threadReplyToAddress(): string {
+  return formatReplyToAddress(env.SES_REPLY_TO_EMAIL, env.SES_FROM_EMAIL, env.SES_FROM_NAME);
+}
+
+/**
+ * The decision behind `threadReplyToAddress`, with the environment lifted out.
+ *
+ * Separate because `config/env` freezes itself on first import, so a test that
+ * reaches for the wrapper can only ever observe whichever environment happened
+ * to load first. The rule this encodes is worth testing on its own terms.
+ */
+export function formatReplyToAddress(
+  replyTo: string | undefined,
+  fromEmail: string | undefined,
+  fromName: string | undefined
+): string {
+  const fallback = String(fromEmail || "").trim();
+  const name = String(fromName || "").replace(/[\r\n"<>]+/g, " ").trim();
+
+  // Blank is the same as unset. The deploy step writes the variable
+  // unconditionally, so a missing value arrives as an empty string rather than
+  // as an absent key — and that must land on the ordinary fallback below, not
+  // be mistaken for a malformed override.
+  const override = String(replyTo || "").trim();
+  const address = override || fallback;
+
+  // A malformed override, on the other hand, is a misconfiguration worth
+  // making visible: fall back to the bare From address, which sendSesEmail has
+  // already validated, rather than emitting a header that breaks the send.
+  if (!EMAIL_RE.test(address)) return fallback;
+  return name ? `${name} <${address}>` : address;
+}
+
 export interface SesEmail {
   to: string;
   subject: string;
@@ -190,7 +240,6 @@ export interface SesSendResult {
   messageId?: string;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Send one email through SES.

@@ -151,9 +151,12 @@ jobs:
       #   inbox@reply.subhsandesh.in    -> prod topic    -> api.subhsandesh.in
       #   staging@reply.subhsandesh.in  -> dev topic     -> stag-api...
       #
-      # Only `inbox@` receives the GoDaddy forward from feedback@, so REAL
-      # customer replies reach production and nothing else. Staging is
-      # exercised by writing to `staging@` directly.
+      # SES_REPLY_TO_EMAIL is what actually routes a reply here. Mail goes out
+      # as feedback@subhsandesh.in, whose MX is GoDaddy's — so Reply-To has to
+      # name the address SES itself receives on, or the creator's answer is
+      # delivered into a mailbox this app cannot read. Because each deployment
+      # names its own inbox, a REAL customer reply can only ever reach
+      # production; staging is exercised by writing to `staging@` directly.
       #
       # Sharing one token across both would mean a leak in either environment
       # arms the other's webhook, and sharing one subscription would deliver
@@ -163,19 +166,17 @@ jobs:
         env:
           SES_INBOUND_TOKEN: ${{ secrets.SES_INBOUND_TOKEN }}
           SES_INBOUND_TOPIC_ARN: ${{ secrets.SES_INBOUND_TOPIC_ARN }}
+          # Not a secret, and deliberately literal: hardcoding it here is what
+          # guarantees production can never be handed staging's inbox.
+          SES_REPLY_TO_EMAIL: inbox@reply.subhsandesh.in
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 120s
-          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN
+          envs: SES_INBOUND_TOKEN,SES_INBOUND_TOPIC_ARN,SES_REPLY_TO_EMAIL
           script: |
             set -eu
-
-            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
-              echo "SES_INBOUND_TOKEN is not set — skipping. The inbound webhook stays closed (404)."
-              exit 0
-            fi
 
             ENV_FILE=/opt/dilse/.env.backend
 
@@ -193,6 +194,20 @@ jobs:
 
             SUDO=""
             [ -w "$ENV_FILE" ] || SUDO="sudo"
+
+            # Written whether or not the webhook token exists. The token only
+            # controls whether SES may POST a reply in; this address controls
+            # whether the reply is ever ADDRESSED here. Skipping it alongside
+            # the token is what left production sending mail that asked for a
+            # reply at an address nothing watches.
+            $SUDO sed -i '/^SES_REPLY_TO_EMAIL=/d' "$ENV_FILE"
+            printf 'SES_REPLY_TO_EMAIL=%s\n' "$SES_REPLY_TO_EMAIL" | $SUDO tee -a "$ENV_FILE" >/dev/null
+            echo "Replies will be addressed to: $SES_REPLY_TO_EMAIL"
+
+            if [ -z "${SES_INBOUND_TOKEN:-}" ]; then
+              echo "SES_INBOUND_TOKEN is not set — the inbound webhook stays closed (404)."
+              exit 0
+            fi
 
             $SUDO sed -i '/^SES_INBOUND_TOKEN=/d; /^SES_INBOUND_TOPIC_ARN=/d' "$ENV_FILE"
             printf 'SES_INBOUND_TOKEN=%s\nSES_INBOUND_TOPIC_ARN=%s\n' \

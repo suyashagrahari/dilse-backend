@@ -35,7 +35,12 @@ import {
   draftThreadReply,
 } from "../services/threadReplyAi.service";
 import { replySubject, rfcMessageIdFor, threadingHeadersFor } from "../services/emailThread.service";
-import { sendSesEmail, sesConfigured, SesSendError } from "../services/ses.service";
+import {
+  sendSesEmail,
+  sesConfigured,
+  SesSendError,
+  threadReplyToAddress,
+} from "../services/ses.service";
 import PageFeedback from "../models/PageFeedback";
 
 const PAGE_SIZE_MAX = 100;
@@ -396,7 +401,9 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
         subject,
         text: `${body}\n\n—\n${env.SES_FROM_NAME} · ${env.SES_FROM_EMAIL}`,
         from: env.SES_FROM_EMAIL,
-        replyTo: env.SES_FROM_EMAIL,
+        // NOT the From address — apex mail is GoDaddy's, so a reply sent back
+        // to feedback@ never reaches this panel. See config/env.ts.
+        replyTo: threadReplyToAddress(),
         headers: {
           "In-Reply-To": threading.inReplyTo,
           References: threading.references,

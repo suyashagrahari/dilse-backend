@@ -127,9 +127,27 @@ see `senderOf` in `src/controllers/sesInbound.controller.ts`.
    The subscription confirms itself: SNS posts a `SubscriptionConfirmation`,
    and the webhook visits the `SubscribeURL` for you.
 
-7. **Add the forwarding rule** at the mail provider:
-   `feedback@subhsandesh.in` → also deliver to `inbox@reply.subhsandesh.in`.
-   Keep delivering to the mailbox as well, so a human can still read it.
+7. **Nothing to do at the mail provider.** This step used to ask for a
+   forwarding rule — `feedback@subhsandesh.in` → `inbox@reply.subhsandesh.in`
+   — and that was the weakest link in the whole pipeline.
+
+   The apex MX belongs to GoDaddy, because it carries all company mail, so a
+   reply addressed to `feedback@` was delivered into the `support@` mailbox and
+   SES never saw it. Worse, the failure was invisible from our side: the send
+   succeeded, the panel looked correctly wired, and only the creator's half of
+   the conversation was quietly missing. And GoDaddy will not let one address
+   be both an alias and a forward, so the rule this step asked for could not
+   reliably be created in the first place.
+
+   Instead, outbound mail names the SES receiving address in its **Reply-To**
+   header (`SES_REPLY_TO_EMAIL`, written by both deploy workflows). A reply then
+   goes straight to `reply.subhsandesh.in`, whose MX is SES — no forward, no
+   GoDaddy hop, nothing outside this repository to keep in sync. `feedback@`
+   stays the From address, so the branding is unchanged.
+
+   A side effect worth having: because each deployment names its own inbox,
+   a real customer reply can only reach production, and a reply to a staging
+   test can only reach staging.
 
 8. **The IAM policy needs nothing new.** Receiving is done by SES itself
    publishing to SNS, not by our credentials. The `ses:SendEmail` policy in
