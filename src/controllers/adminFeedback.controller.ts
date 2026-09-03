@@ -39,7 +39,7 @@ import { sendFeedbackReplyEmail } from "../utils/mailer";
 import { audit } from "../services/adminAudit";
 import { appendMessage, latestThreadForPage, openThread } from "../services/threadStore.service";
 import EmailThread from "../models/EmailThread";
-import { subjectKey } from "../services/emailThread.service";
+import { subjectKey, threadingHeadersFor } from "../services/emailThread.service";
 import {
   AiRefusedError,
   AiUnavailableError,
@@ -352,6 +352,46 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // ── Find the conversation first, but only to READ it ───────────────────
+    //
+    // The mail needs `In-Reply-To` and `References` pointing at the last
+    // message that has an id, and those have to be on the message when it is
+    // sent — they cannot be added afterwards. So the lookup moves above the
+    // send while the WRITE stays below it.
+    //
+    // Without this, our second reply to the same person referenced nothing:
+    // their mail client showed two unrelated emails, and their answer to
+    // either carried no id we recognised.
+    //
+    // A failure here must not stop the reply going out — threading is a
+    // nicety, an unsent support reply is not. Hence the empty fallback.
+    let existing: { _id: mongoose.Types.ObjectId; messages?: unknown[] } | null = null;
+    try {
+      existing = await EmailThread.findOne({
+        kind: "feedback",
+        userEmail: doc.userEmail.toLowerCase(),
+        subjectKey: feedbackThreadSubjectKey(subject),
+      })
+        .sort({ seq: -1 })
+        .lean<{ _id: mongoose.Types.ObjectId; messages?: unknown[] }>();
+    } catch (error) {
+      console.error("Could not read the conversation before replying:", error);
+    }
+
+    const threading = threadingHeadersFor(
+      ((existing?.messages || []) as {
+        direction?: string;
+        rfcMessageId?: string;
+        rfcMessageIdSource?: string;
+        references?: string[];
+      }[]).map((m) => ({
+        direction: m.direction === "outbound" ? ("outbound" as const) : ("inbound" as const),
+        rfcMessageId: m.rfcMessageId,
+        rfcMessageIdSource: m.rfcMessageIdSource as "received" | "reconstructed" | "" | undefined,
+        references: m.references,
+      }))
+    );
+
     // ── Send BEFORE recording ──────────────────────────────────────────────
     //
     // Deliberately this order. If the mail fails, nothing is written and the
@@ -365,6 +405,7 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
       body,
       rating: doc.rating,
       templateLabel: doc.templateLabel || "",
+      headers: { inReplyTo: threading.inReplyTo, references: threading.references },
     });
 
     doc.replies.push({
@@ -392,13 +433,9 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
     // missing conversation entry is a display problem, telling a super admin
     // the reply failed would invite them to send it twice.
     try {
-      let thread = await EmailThread.findOne({
-        kind: "feedback",
-        userEmail: doc.userEmail.toLowerCase(),
-        subjectKey: feedbackThreadSubjectKey(subject),
-      })
-        .sort({ seq: -1 })
-        .lean<{ _id: mongoose.Types.ObjectId }>();
+      // The same row read above, not a second query — and `null` there means
+      // there is genuinely none, so this opens one.
+      let thread: { _id: mongoose.Types.ObjectId } | null = existing;
 
       if (!thread) {
         const opened = await openThread(
@@ -439,14 +476,20 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
         // to, and that difference was previously invisible in the panel.
         fromAddress: sent.fromAddress,
         aiAssisted,
-        // Resend does not report the RFC Message-ID it wrote, and unlike SES
-        // there is no documented pattern to reconstruct one from. So this
-        // message carries no id: the thread still holds together on the
-        // subject line, and it becomes exact the moment the creator replies
-        // and gives us a real id to anchor to.
-        rfcMessageId: "",
-        rfcMessageIdSource: "",
-        source: "resend",
+        // ── The id of what we just sent, when we know it ────────────────────
+        //
+        // This used to be hardcoded to "" because feedback replies went via
+        // Resend, which reports no Message-ID. That cost the top rung of the
+        // inbound matching ladder: with no id to point `In-Reply-To` at, a
+        // creator's reply could only be matched by their account email, so
+        // anyone replying from a different address landed in Unmatched.
+        //
+        // Feedback replies now go via SES first, which returns an id that
+        // reconstructs the real header exactly. It is still "" on the Resend
+        // fallback path — honestly empty rather than a guess.
+        rfcMessageId: sent.rfcMessageId,
+        rfcMessageIdSource: sent.rfcMessageId ? "reconstructed" : "",
+        source: sent.via === "ses" ? "ses" : "resend",
       });
     } catch (error) {
       console.error("Sent the feedback reply but failed to record the conversation:", error);
