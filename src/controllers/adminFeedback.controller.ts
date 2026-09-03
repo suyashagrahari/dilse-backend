@@ -358,7 +358,7 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
     // panel still shows the ticket as unanswered, which is true. The reverse
     // order — record, then send — would show a reply that never left the
     // building, and the person reading the panel would have no way to know.
-    await sendFeedbackReplyEmail({
+    const sent = await sendFeedbackReplyEmail({
       to: doc.userEmail,
       toName: doc.userName || "",
       subject,
@@ -433,6 +433,11 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
         subject,
         body,
         byEmail: req.userEmail || "",
+        // Answered by the mailer rather than repeated here, so the conversation
+        // can say which address the creator actually saw. Feedback replies go
+        // out as support@, not the feedback@ that conversation replies default
+        // to, and that difference was previously invisible in the panel.
+        fromAddress: sent.fromAddress,
         aiAssisted,
         // Resend does not report the RFC Message-ID it wrote, and unlike SES
         // there is no documented pattern to reconstruct one from. So this

@@ -418,12 +418,17 @@ export async function sendFeedbackReplyEmail(opts: {
   /** Shown back to them so the email explains itself. */
   rating: number;
   templateLabel: string;
-}): Promise<void> {
+}): Promise<{ fromAddress: string }> {
   const { to, subject, body, rating, templateLabel } = opts;
+
+  // Named once and answered to the caller, so the conversation record can say
+  // which address the reply went out as without keeping a second copy of this
+  // literal that drifts the first time it changes here.
+  const fromAddress = "support@subhsandesh.in";
 
   if (!resend) {
     console.log(`\n[FEEDBACK REPLY — no RESEND_API_KEY] To: ${to} | Subject: ${subject}\n${body}\n`);
-    return;
+    return { fromAddress };
   }
 
   const esc = (s: string) =>
@@ -448,7 +453,7 @@ export async function sendFeedbackReplyEmail(opts: {
     : `${stars} rating`;
 
   await resend.emails.send({
-    from: "SubhSandesh Support <support@subhsandesh.in>",
+    from: `SubhSandesh Support <${fromAddress}>`,
     to,
     // ── Why Reply-To is the SES inbox, not support@ and not feedback@ ──
     //
@@ -543,4 +548,6 @@ export async function sendFeedbackReplyEmail(opts: {
 </body>
 </html>`,
   });
+
+  return { fromAddress };
 }
