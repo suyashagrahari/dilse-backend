@@ -20,8 +20,10 @@
 // These tests pin the two to each other rather than to a literal, because what
 // matters is that they cannot drift apart again.
 
-import { test } from "node:test";
+import { describe, it, test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { subjectKey } from "../services/emailThread.service";
 import { feedbackThreadSubjectKey } from "./adminFeedback.controller";
@@ -87,4 +89,73 @@ test("an empty or punctuation-only subject does not become a wildcard key", () =
   assert.equal(feedbackThreadSubjectKey("   "), "");
   assert.equal(feedbackThreadSubjectKey("Re:"), "");
   assert.equal(feedbackThreadSubjectKey("Re: Re:"), "");
+});
+
+// ─── The same bug, reachable a second way ────────────────────────────────────
+//
+// Fixing the subject key was not enough on its own. Moving the conversation
+// lookup ABOVE the send — so `In-Reply-To` could be on the outgoing message —
+// introduced a second route to the identical outcome, and it is worth an
+// assertion because it is invisible in review.
+//
+// The pre-send read has its own try/catch, because a failure to read must not
+// stop a support reply going out. That leaves `existing === null` meaning two
+// different things:
+//
+//   · there is genuinely no conversation yet        → open one
+//   · the read threw and we never found out         → DO NOT open one
+//
+// Treating the second as the first opens a duplicate conversation with the
+// same person — precisely the forking this file exists to prevent, arrived at
+// from the other direction. So the two cases are tracked apart and a failed
+// read is retried at recording time.
+//
+// Asserted against the source because the branch needs a thrown database read
+// to reach, and `config/env` is computed once at first import so the module
+// cannot be re-imported with a failing mongoose. Same constraint as
+// `otpFallback.test.ts`.
+
+describe("a failed pre-send lookup must not look like 'no conversation'", () => {
+  const SRC = readFileSync(join(__dirname, "adminFeedback.controller.ts"), "utf8");
+
+  function sendReply(): string {
+    const start = SRC.indexOf("export const sendReply");
+    assert.ok(start > 0, "sendReply must exist");
+    const end = SRC.indexOf("\n};", start);
+    return SRC.slice(start, end);
+  }
+
+  it("tracks whether the lookup actually ran", () => {
+    const fn = sendReply();
+    assert.match(fn, /let lookedUp = false;/);
+    assert.match(fn, /lookedUp = true;/, "must be set only after the read returns");
+  });
+
+  it("retries the lookup rather than assuming there is none", () => {
+    const fn = sendReply();
+    assert.match(
+      fn,
+      /lookedUp\s*\?\s*existing\s*:\s*await findFeedbackThread\(\)/,
+      "an unanswered question must not become 'there is no conversation'"
+    );
+  });
+
+  it("uses one query definition for both the pre-send read and the retry", () => {
+    // Two copies of the filter is how the original bug happened. One
+    // definition, used twice.
+    //
+    // The thing counted is the KEY expression, not the string `kind:
+    // "feedback"` — that also appears in the `openThread` call, where it names
+    // the kind of thread being created rather than filtering a query. A first
+    // draft of this test conflated the two and failed on correct code.
+    const fn = sendReply();
+    assert.match(fn, /const findFeedbackThread = \(\) =>/);
+    const uses = fn.match(/findFeedbackThread\(\)/g) || [];
+    assert.ok(uses.length >= 2, `expected at least two uses, found ${uses.length}`);
+    assert.equal(
+      (fn.match(/subjectKey: feedbackThreadSubjectKey\(subject\)/g) || []).length,
+      1,
+      "the lookup filter must be written exactly once"
+    );
+  });
 });

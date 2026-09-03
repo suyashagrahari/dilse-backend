@@ -365,15 +365,31 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
     //
     // A failure here must not stop the reply going out — threading is a
     // nicety, an unsent support reply is not. Hence the empty fallback.
-    let existing: { _id: mongoose.Types.ObjectId; messages?: unknown[] } | null = null;
-    try {
-      existing = await EmailThread.findOne({
+    type ThreadRow = { _id: mongoose.Types.ObjectId; messages?: unknown[] };
+    const findFeedbackThread = () =>
+      EmailThread.findOne({
         kind: "feedback",
         userEmail: doc.userEmail.toLowerCase(),
         subjectKey: feedbackThreadSubjectKey(subject),
       })
         .sort({ seq: -1 })
-        .lean<{ _id: mongoose.Types.ObjectId; messages?: unknown[] }>();
+        .lean<ThreadRow>();
+
+    let existing: ThreadRow | null = null;
+    // ── WHY THIS FLAG EXISTS ──────────────────────────────────────────────────
+    //
+    // `existing === null` is ambiguous on its own: it means EITHER there is no
+    // conversation yet OR this read threw and we never found out. The recording
+    // step below opens a new thread when there is none — so treating a failed
+    // read as "none" would open a duplicate, which is precisely the forking bug
+    // this commit set out to fix, reintroduced by a different route.
+    //
+    // So the two cases are kept apart, and a failed read is retried below
+    // rather than assumed away.
+    let lookedUp = false;
+    try {
+      existing = await findFeedbackThread();
+      lookedUp = true;
     } catch (error) {
       console.error("Could not read the conversation before replying:", error);
     }
@@ -433,9 +449,12 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
     // missing conversation entry is a display problem, telling a super admin
     // the reply failed would invite them to send it twice.
     try {
-      // The same row read above, not a second query — and `null` there means
-      // there is genuinely none, so this opens one.
-      let thread: { _id: mongoose.Types.ObjectId } | null = existing;
+      // Reuse the row read before sending. If that read never completed, ask
+      // again now — an unanswered question must not become "there is none",
+      // because that opens a second conversation with the same person.
+      let thread: { _id: mongoose.Types.ObjectId } | null = lookedUp
+        ? existing
+        : await findFeedbackThread();
 
       if (!thread) {
         const opened = await openThread(
