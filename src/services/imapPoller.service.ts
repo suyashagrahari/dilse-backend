@@ -167,6 +167,11 @@ export async function pollOnce(): Promise<PollResult> {
   // creator's reply.
   const ours = [
     String(env.SES_FROM_EMAIL || "").toLowerCase(),
+    // The address our outbound mail asks for replies at. `senderFrom` prefers
+    // `Reply-To`, and that is now one of ours, so a copy of our own mail
+    // sitting in this shared inbox would otherwise be read back as a creator
+    // writing to themselves inside their own conversation.
+    String(env.SES_REPLY_TO_EMAIL || "").toLowerCase(),
     String(env.IMAP_USER || "").toLowerCase(),
     ...wanted,
   ].filter(Boolean);

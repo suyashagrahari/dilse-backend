@@ -86,6 +86,29 @@ function headerValue(headers: Map<string, unknown>, name: string): string {
 }
 
 /**
+ * Every address that is US, and so can never be the author of an inbound
+ * message.
+ *
+ * More than one, and the list has to stay complete. `Reply-To` is preferred
+ * over `From` below, and our own mail now carries our RECEIVING address in
+ * `Reply-To` — so a forwarded copy of something we sent arrives with our
+ * address sitting in the very field that is consulted first. Excluding only
+ * the From address, as this did, was enough while Reply-To and From were the
+ * same address; the moment they diverged it stopped being enough.
+ */
+export function ourAddresses(): string[] {
+  return [
+    env.SES_FROM_EMAIL,
+    env.SES_REPLY_TO_EMAIL,
+    env.SES_OTP_FROM_EMAIL,
+  ]
+    .map((a) => String(a || "").toLowerCase().trim())
+    // The env values may carry a display name; only the address matters.
+    .map((a) => (a.match(/[^\s<>,;"]+@[^\s<>,;"]+\.[^\s<>,;"]+/) || [""])[0])
+    .filter(Boolean);
+}
+
+/**
  * Who actually wrote this, given a forwarded copy may have rewritten `From`.
  *
  * Order matters: `Reply-To` is what the ORIGINAL sender's client set and a
@@ -95,17 +118,24 @@ function headerValue(headers: Map<string, unknown>, name: string): string {
 export function senderOf(
   replyTo: string,
   from: string,
-  envelopeFrom: string
+  envelopeFrom: string,
+  ours: string[] = ourAddresses()
 ): string {
   for (const candidate of [replyTo, from, envelopeFrom]) {
-    const match = String(candidate || "").match(/[^\s<>,;"]+@[^\s<>,;"]+\.[^\s<>,;"]+/);
-    if (!match) continue;
-    const addr = match[0].toLowerCase().replace(/[.,;]+$/, "");
-    // Our own address is not a sender. On a forwarded copy it is exactly what
-    // `From` says, and accepting it would attribute every reply to ourselves
-    // and match it against a thread belonging to nobody.
-    if (addr === String(env.SES_FROM_EMAIL || "").toLowerCase()) continue;
-    return addr;
+    // Every address in the field, not just the first. A forwarded copy can
+    // carry both our address and the real author's in one header, and taking
+    // only the first would stop at ours and fall through to the next field —
+    // losing an author that was sitting right there.
+    const found = String(candidate || "").match(/[^\s<>,;"]+@[^\s<>,;"]+\.[^\s<>,;"]+/g);
+    if (!found) continue;
+    for (const raw of found) {
+      const addr = raw.toLowerCase().replace(/[.,;]+$/, "");
+      // Our own address is not a sender. On a forwarded copy it is exactly
+      // what `From` says, and accepting it would attribute every reply to
+      // ourselves and match it against a thread belonging to nobody.
+      if (ours.includes(addr)) continue;
+      return addr;
+    }
   }
   return "";
 }
