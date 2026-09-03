@@ -428,6 +428,7 @@ export function shapeThread(t: {
     rawBody?: string;
     at: Date;
     byEmail?: string;
+    fromAddress?: string;
     aiAssisted?: boolean;
     rfcMessageIdSource?: string;
     source: string;
@@ -454,6 +455,9 @@ export function shapeThread(t: {
       rawBody: m.trimmed ? m.rawBody || "" : "",
       at: m.at,
       byEmail: m.byEmail || "",
+      // Which of our addresses this went out as. Empty on inbound mail and on
+      // anything sent before replies could choose.
+      fromAddress: m.fromAddress || "",
       aiAssisted: m.aiAssisted === true,
       confidence: m.rfcMessageIdSource || "",
       source: m.source,

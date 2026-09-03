@@ -24,6 +24,7 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import EmailThread from "../models/EmailThread";
+import { listSenderOptions, resolveSenderAddress } from "../services/replySenders";
 import { stripQuotedReply } from "../services/emailThread.service";
 import { appendMessage } from "../services/threadStore.service";
 import { shapeThread } from "./adminDraft.controller";
@@ -130,6 +131,18 @@ export const getThread = async (req: Request, res: Response): Promise<void> => {
 
     res.json({
       success: true,
+      // ── The composer's own facts, answered here rather than guessed ────────
+      //
+      // The panel had no idea what address a reply left from. It sent one and
+      // hoped. Both of these travel WITH the conversation for the same reason
+      // `getMyCreations` sends each row its own editorRoute: the client cannot
+      // hold a correct copy of something only the server knows, and a stale
+      // copy of "which addresses can we send as" is a bounced reply.
+      senderOptions: listSenderOptions(),
+      // Fixed, and shown so the split reads as deliberate. A reply comes FROM
+      // feedback@ or support@ but must come BACK to reply.subhsandesh.in —
+      // apex mail is GoDaddy's and this application cannot read it.
+      replyToAddress: threadReplyToAddress(),
       data: {
         ...shapeThread(thread as never),
         userName: (thread as { userName?: string }).userName || "",
@@ -381,6 +394,10 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // An id, never an address — see services/replySenders.ts. An unknown value
+    // falls back to the default rather than refusing the send.
+    const fromAddress = resolveSenderAddress(req.body?.senderId);
+
     const subject = replySubject(t.subject || "").slice(0, 300);
     const threading = threadingHeadersFor(
       (t.messages || []).map((m) => ({
@@ -399,10 +416,14 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
       const result = await sendSesEmail({
         to,
         subject,
-        text: `${body}\n\n—\n${env.SES_FROM_NAME} · ${env.SES_FROM_EMAIL}`,
-        from: env.SES_FROM_EMAIL,
-        // NOT the From address — apex mail is GoDaddy's, so a reply sent back
-        // to feedback@ never reaches this panel. See config/env.ts.
+        // The signature names the address it actually came from, so a recipient
+        // reading on a phone — where the From line is often just "SubhSandesh"
+        // — can still tell support from feedback.
+        text: `${body}\n\n—\n${env.SES_FROM_NAME} · ${fromAddress}`,
+        from: fromAddress,
+        // NOT the From address, and NOT selectable — apex mail is GoDaddy's, so
+        // a reply sent back to feedback@ or support@ never reaches this panel.
+        // Only reply.subhsandesh.in is delivered to SES. See config/env.ts.
         replyTo: threadReplyToAddress(),
         headers: {
           "In-Reply-To": threading.inReplyTo,
@@ -427,6 +448,7 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
       subject,
       body,
       byEmail: req.userEmail || "",
+      fromAddress,
       aiAssisted,
       providerMessageId: messageId,
       rfcMessageId: rfcMessageIdFor(messageId, env.SES_REGION),

@@ -39,6 +39,7 @@ import { sendFeedbackReplyEmail } from "../utils/mailer";
 import { audit } from "../services/adminAudit";
 import { appendMessage, latestThreadForPage, openThread } from "../services/threadStore.service";
 import EmailThread from "../models/EmailThread";
+import { subjectKey } from "../services/emailThread.service";
 import {
   AiRefusedError,
   AiUnavailableError,
@@ -79,6 +80,34 @@ function filterQuery(filter: string): Record<string, unknown> {
  * request because the panel renders them together and two round trips would let
  * the count and the rows disagree on screen.
  */
+/**
+ * The subject key the feedback→conversation lookup uses.
+ *
+ * ── WHY THIS DELEGATES INSTEAD OF NORMALISING ───────────────────────────────
+ *
+ * It used to do its own: strip one leading `re:`, trim, lowercase. `openThread`
+ * meanwhile stores `subjectKey(subject)`, which also collapses runs of
+ * whitespace and strips STACKED `Re:`/`Fwd:` prefixes.
+ *
+ * The subject here is hand-typed by a super admin, so the gap was reachable by
+ * typing. "Thanks  for the feedback" with two spaces produced a different key
+ * from the one stored for "Thanks for the feedback", the lookup missed, and a
+ * SECOND conversation was opened with the same person about the same thing —
+ * with their original feedback comment re-appended as its opening message.
+ * Twelve typed spellings of one subject produced five distinct keys.
+ *
+ * Nothing errored. The panel just filled with near-identical conversations,
+ * and because an inbound reply matches on `userEmail + subjectKey` sorted by
+ * `seq` descending, it landed on the newest fragment while the earlier ones sat
+ * there looking abandoned.
+ *
+ * So there is one normaliser now, and it is the one the write uses. A test
+ * pins them to each other rather than to a literal, so they cannot drift again.
+ */
+export function feedbackThreadSubjectKey(subject: string): string {
+  return subjectKey(subject);
+}
+
 export const getFeedbackList = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
@@ -366,7 +395,7 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
       let thread = await EmailThread.findOne({
         kind: "feedback",
         userEmail: doc.userEmail.toLowerCase(),
-        subjectKey: subject.replace(/^\s*re\s*:\s*/i, "").trim().toLowerCase(),
+        subjectKey: feedbackThreadSubjectKey(subject),
       })
         .sort({ seq: -1 })
         .lean<{ _id: mongoose.Types.ObjectId }>();
