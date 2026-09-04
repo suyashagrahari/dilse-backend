@@ -44,6 +44,7 @@ import {
   threadReplyToAddress,
 } from "../services/ses.service";
 import PageFeedback from "../models/PageFeedback";
+import { parseSortOrder, sortSpec } from "../utils/listSort";
 
 const PAGE_SIZE_MAX = 100;
 const PASTE_MAX = 20_000;
@@ -59,6 +60,7 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
     const limit = Math.min(PAGE_SIZE_MAX, Math.max(1, parseInt(String(req.query.limit || "25"), 10) || 25));
 
     const filter: Record<string, unknown> = {};
+    const sort = parseSortOrder(req.query.sort);
     const kind = String(req.query.kind || "").trim();
     if (kind === "draft" || kind === "feedback" || kind === "inbound") filter.kind = kind;
     if (String(req.query.unread || "") === "1") filter.unread = true;
@@ -74,7 +76,12 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
 
     const [rows, total, unreadTotal] = await Promise.all([
       EmailThread.find(filter)
-        .sort({ lastMessageAt: -1 })
+        // `lastMessageAt`, not `createdAt`: a thread opened in March that
+        // somebody answered an hour ago IS the most recent conversation, and
+        // sorting these by when they were opened would bury the reply that
+        // needs answering. Oldest first therefore means "waiting longest",
+        // which is the useful reading of the other end.
+        .sort(sortSpec("lastMessageAt", sort))
         .skip((page - 1) * limit)
         .limit(limit)
         .select("-messages.rawBody -messages.html")
@@ -114,6 +121,7 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
         })),
         total,
         unreadTotal,
+        sort,
         page,
         limit,
         pages: Math.max(1, Math.ceil(total / limit)),
