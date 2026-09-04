@@ -25,6 +25,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import EmailThread from "../models/EmailThread";
 import { listSenderOptions, resolveSenderAddress } from "../services/replySenders";
+import { resolveProfileUserIds } from "../services/profileLink.service";
 import { stripQuotedReply } from "../services/emailThread.service";
 import { appendMessage } from "../services/threadStore.service";
 import { shapeThread } from "./adminDraft.controller";
@@ -84,10 +85,24 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
       EmailThread.countDocuments({ unread: true }),
     ]);
 
+    // ── Whose profile each conversation opens ─────────────────────────────
+    //
+    // One query for the page. `userId` alone would miss exactly the rows that
+    // most need it: an unmatched inbound thread has NO userId — that is what
+    // unmatched means, somebody wrote in and nothing we held matched them — so
+    // it is resolved from the address instead. `User.email` is unique,
+    // lowercase and indexed, so that is exact rather than a guess.
+    const profileIds = await resolveProfileUserIds(
+      rows.map((t) => ({
+        userId: (t as { userId?: unknown }).userId,
+        userEmail: (t as { userEmail?: unknown }).userEmail,
+      }))
+    );
+
     res.json({
       success: true,
       data: {
-        threads: rows.map((t) => ({
+        threads: rows.map((t, i) => ({
           ...shapeThread(t as never),
           userName: (t as { userName?: string }).userName || "",
           userEmail: (t as { userEmail?: string }).userEmail || "",
@@ -95,6 +110,7 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
           templateType: (t as { templateType?: string }).templateType || "",
           pageId: (t as { pageId?: unknown }).pageId ? String((t as { pageId: unknown }).pageId) : "",
           kind: (t as { kind?: string }).kind || "draft",
+          profileUserId: profileIds[i] || "",
         })),
         total,
         unreadTotal,
@@ -129,6 +145,13 @@ export const getThread = async (req: Request, res: Response): Promise<void> => {
       await EmailThread.updateOne({ _id: id }, { $set: { unread: false } });
     }
 
+    const [profileUserId] = await resolveProfileUserIds([
+      {
+        userId: (thread as { userId?: unknown }).userId,
+        userEmail: (thread as { userEmail?: unknown }).userEmail,
+      },
+    ]);
+
     res.json({
       success: true,
       // ── The composer's own facts, answered here rather than guessed ────────
@@ -151,6 +174,9 @@ export const getThread = async (req: Request, res: Response): Promise<void> => {
         templateType: (thread as { templateType?: string }).templateType || "",
         pageId: (thread as { pageId?: unknown }).pageId ? String((thread as { pageId: unknown }).pageId) : "",
         kind: (thread as { kind?: string }).kind || "draft",
+        // Resolved the same way as in the list, so opening a conversation
+        // cannot disagree with the row that led to it.
+        profileUserId: profileUserId,
       },
     });
   } catch (error) {

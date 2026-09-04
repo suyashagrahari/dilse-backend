@@ -40,6 +40,7 @@ import { audit } from "../services/adminAudit";
 import { appendMessage, latestThreadForPage, openThread } from "../services/threadStore.service";
 import EmailThread from "../models/EmailThread";
 import { subjectKey, threadingHeadersFor } from "../services/emailThread.service";
+import { resolveProfileUserIds } from "../services/profileLink.service";
 import {
   AiRefusedError,
   AiUnavailableError,
@@ -165,10 +166,29 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
     const starCounts: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
     for (const row of byStar) starCounts[String(row._id)] = row.count;
 
+    // ── Whose profile each row opens ──────────────────────────────────────
+    //
+    // One query for the page, not one per row. `userId` alone is not enough:
+    // it is a plain ObjectId ref with no cascade, so a deleted account leaves
+    // the row pointing at nothing and a link built from it 404s — which reads
+    // as this panel being broken rather than as the account being gone.
+    //
+    // A row whose account no longer exists gets `""` and simply shows no
+    // button.
+    const profileIds = await resolveProfileUserIds(
+      (items as { userId?: unknown; userEmail?: unknown }[]).map((i) => ({
+        userId: i.userId,
+        userEmail: i.userEmail,
+      }))
+    );
+
     res.json({
       success: true,
       data: {
-        items,
+        items: (items as Record<string, unknown>[]).map((item, i) => ({
+          ...item,
+          profileUserId: profileIds[i] || "",
+        })),
         pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
         stats: {
           count: s.count || 0,
