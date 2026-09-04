@@ -71,10 +71,16 @@ import { slugForTemplateType } from "../config/templateSlugs";
 import {
   classifyStall,
   daysSince,
+  humanizeFieldPath,
   summarizeDraft,
   type DraftSummary,
   type StallVerdict,
 } from "../services/draftInsight.service";
+import {
+  DEFAULT_SENDER_ID,
+  listSenderOptions,
+  resolveSenderAddress,
+} from "../services/replySenders";
 import {
   AiRefusedError,
   AiUnavailableError,
@@ -129,7 +135,24 @@ interface DraftRow {
   wordCount: number;
   photoCount: number;
   nudgedAt: string | null;
+  /**
+   * The account whose admin profile this row opens, or "".
+   *
+   * Not `userId`: that id can point at a deleted account, and a link built
+   * from one 404s — which reads as the panel being broken rather than as the
+   * account being gone. See profileLink.service.
+   */
+  profileUserId: string;
+  /** The template's own public route, so the panel can show what they were making. */
+  templateSlug: string;
+  /** How many of the template's fields are still empty. Exact, not capped. */
+  missingCount: number;
+  /** The first few of them, in words: "Recipient name", "Photo". */
+  missingFields: string[];
 }
+
+/** How many missing-field names a row carries. The panel shows 3 and counts the rest. */
+const ROW_MISSING_FIELDS = 6;
 
 /** The one link the email may carry. See the note where it is used. */
 function profileUrl(): string {
@@ -145,6 +168,7 @@ async function buildRow(
     orders: Map<string, string[]>;
     nudges: Map<string, Date>;
     pricing: Map<string, { isFree: boolean; finalPricePaise: number }>;
+    profileIds: Map<string, string>;
     summary: DraftSummary;
     verdict: StallVerdict;
   }
@@ -174,6 +198,14 @@ async function buildRow(
     wordCount: ctx.summary.wordCount,
     photoCount: ctx.summary.photoCount,
     nudgedAt: nudge ? nudge.toISOString() : null,
+    profileUserId: ctx.profileIds.get(pageId) ?? "",
+    templateSlug: slugForTemplateType(entry.templateType),
+    // Derived from the counts, not from the name list, which the service caps
+    // at 40 — a template with 60 empty fields would otherwise report 40.
+    missingCount: Math.max(0, ctx.summary.totalFields - ctx.summary.filledFields),
+    missingFields: ctx.summary.missingFieldNames
+      .slice(0, ROW_MISSING_FIELDS)
+      .map(humanizeFieldPath),
   };
 }
 
@@ -192,6 +224,20 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
     const filter = String(req.query.filter || "all");
     const wantType = String(req.query.templateType || "").trim().toLowerCase();
     const search = String(req.query.search || "").trim().toLowerCase();
+    /**
+     * One person's drafts only.
+     *
+     * Added for the Drafts tab on the admin user profile. It narrows the Mongo
+     * query rather than filtering the fan-out afterwards, so that screen costs
+     * 43 tiny indexed lookups instead of reading 43 × 400 documents to throw
+     * almost all of them away — and it is immune to the `capped` limitation,
+     * because one person never has 400 drafts in a single template.
+     */
+    const wantUser = String(req.query.userId || "").trim();
+    if (wantUser && !mongoose.Types.ObjectId.isValid(wantUser)) {
+      res.status(400).json({ success: false, error: "Invalid userId" });
+      return;
+    }
 
     const registry = wantType
       ? TEMPLATE_REGISTRY.filter((t) => t.templateType === wantType)
@@ -207,15 +253,18 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
     // Full documents, because completeness cannot be computed from a projection
     // — it is a count over every field the template defines. They are small
     // (text and S3 URLs; no binary), which is what makes this affordable.
+    const where: Record<string, unknown> = { isPublished: false };
+    if (wantUser) where.userId = new mongoose.Types.ObjectId(wantUser);
+
     const perModel = await Promise.all(
       registry.map(async (entry) => {
         const [docs, total] = await Promise.all([
           entry.model
-            .find({ isPublished: false })
+            .find(where)
             .sort({ createdAt: -1 })
             .limit(PER_MODEL_FETCH)
             .lean() as unknown as Promise<Record<string, unknown>[]>,
-          entry.model.countDocuments({ isPublished: false }),
+          entry.model.countDocuments(where),
         ]);
         return { entry, docs, total, capped: total > PER_MODEL_FETCH };
       })
@@ -262,6 +311,26 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
     );
     const pricingMap = new Map(pricingEntries);
 
+    // ── Whose profile does each row open? ─────────────────────────────────
+    //
+    // `userMap` is already the answer. It is the result of one
+    // `User.find({ _id: { $in: … } })`, so a userId present in it is an account
+    // that EXISTS — which is the whole thing a profile link has to be sure of,
+    // because one built from a dangling ref opens a 404 that reads as this
+    // panel being broken rather than as the account being gone.
+    //
+    // So no `resolveProfileUserIds` call here, unlike the feedback and
+    // conversation panels. Those need it because an unmatched thread has no
+    // userId at all and has to be resolved by email; a draft always has one,
+    // and a draft whose owner cannot be read is dropped from the list a few
+    // lines below anyway — it cannot be written to.
+    const profileIds = new Map<string, string>(
+      flat.map(({ doc }) => {
+        const owner = String(doc.userId ?? "");
+        return [String(doc._id), userMap.has(owner) ? owner : ""];
+      })
+    );
+
     // ── Phase 3: classify ─────────────────────────────────────────────────
     let rows: DraftRow[] = await Promise.all(
       flat.map(async ({ entry, doc }) => {
@@ -276,7 +345,10 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
         return buildRow(
           { templateType: entry.templateType, templateLabel: entry.label },
           doc,
-          { users: userMap, orders: orderMap, nudges: nudgeMap, pricing: pricingMap, summary, verdict }
+          {
+            users: userMap, orders: orderMap, nudges: nudgeMap, pricing: pricingMap,
+            profileIds, summary, verdict,
+          }
         );
       })
     );
@@ -474,6 +546,9 @@ export const getDraftDetail = async (req: Request, res: Response): Promise<void>
 
     const existing = await DraftNudge.findOne({ pageId: loaded.pageId }).lean();
     const threads = await threadsForPage(loaded.pageId);
+    // `loadDraft` answers 404 when the creator's account is gone, so reaching
+    // here is proof it exists and the raw id is safe to link.
+    const profileUserId = String(loaded.doc.userId ?? "");
     const recent = await DraftNudge.findOne({
       userId: new mongoose.Types.ObjectId(String(loaded.doc.userId)),
       sentAt: { $gte: new Date(Date.now() - USER_COOLDOWN_DAYS * 86_400_000) },
@@ -488,7 +563,19 @@ export const getDraftDetail = async (req: Request, res: Response): Promise<void>
         templateType: loaded.entry.templateType,
         templateLabel: loaded.entry.label,
         user: { name: loaded.user.name || "", email: loaded.user.email || "" },
+        // The admin profile this draft's creator opens, or "" when the account
+        // is gone. The panel hides the button rather than linking to a 404.
+        profileUserId: profileUserId || "",
+        templateSlug: slugForTemplateType(loaded.entry.templateType),
         summary: loaded.summary,
+        // What they never filled in, in words. Names only — see the note on
+        // `missingFieldNames`: an empty field discloses nothing, which is why
+        // this list is not filtered the way the filled one is.
+        missingFields: loaded.summary.missingFieldNames.map(humanizeFieldPath),
+        missingCount: Math.max(
+          0,
+          loaded.summary.totalFields - loaded.summary.filledFields
+        ),
         verdict: loaded.verdict,
         daysIdle: loaded.daysIdle,
         alreadyContacted: existing
@@ -500,6 +587,18 @@ export const getDraftDetail = async (req: Request, res: Response): Promise<void>
         sesConfigured: sesConfigured(),
         // Named so the panel can show what the recipient will actually see.
         fromEmail: env.SES_FROM_EMAIL,
+        // ── Which address this may go out as ──────────────────────────────
+        //
+        // The same closed list of ids the conversation panel offers, for the
+        // same reason: a follow-up about a payment that failed and one about a
+        // half-finished Rakhi card do not want the same return address, and
+        // until now this composer sent from `feedback@` with no way to see it
+        // beforehand, let alone choose.
+        senderOptions: listSenderOptions(),
+        defaultSenderId: DEFAULT_SENDER_ID,
+        // Where a reply lands, whichever From is chosen. Not selectable and
+        // shown next to the picker so the split reads as deliberate.
+        replyToAddress: threadReplyToAddress(),
         // Whether a reply will appear here on its own, or has to be pasted.
         // The panel says which, because "paste a reply" is confusing advice
         // when the poller is already collecting them.
@@ -575,6 +674,17 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
     const body = String(req.body?.body ?? "").replace(/\r\n/g, "\n").trim().slice(0, BODY_MAX);
     const aiAssisted = req.body?.aiAssisted === true;
     const force = req.body?.force === true;
+    /**
+     * Which of our verified addresses this leaves from.
+     *
+     * An ID, never an address — see replySenders.ts: SES sends only from a
+     * verified identity, and the value is interpolated into a mail header,
+     * where a newline is header injection. An unknown id falls back to the
+     * default rather than refusing, because a follow-up that will not send
+     * because a dropdown carried something odd is worse than one sent from the
+     * address it would have used anyway.
+     */
+    const fromAddress = resolveSenderAddress(req.body?.senderId);
 
     const rawMode = String(req.body?.threadMode ?? "").trim().toLowerCase();
     if (rawMode && rawMode !== "same" && rawMode !== "new") {
@@ -697,14 +807,20 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
         // arrived, which is exactly right for first contact and wrong on the
         // third message of a conversation the person is actively having with
         // us — there it reads as a form letter.
+        // Every place the address appears reads the CHOSEN one. Sending as
+        // support@ while the signature and the footer both say feedback@ is a
+        // worse failure than not offering the choice: the recipient sees two
+        // different addresses in one email and neither is obviously the right
+        // one to answer.
+        from: fromAddress,
         text:
           threadMode === "same"
-            ? `${body}\n\n—\n${env.SES_FROM_NAME} · ${env.SES_FROM_EMAIL}`
-            : `${body}\n\n—\nYou are receiving this because you started a page on SubhSandesh and did not finish it. Reply to this email if you would rather we did not write again.\n${env.SES_FROM_EMAIL}`,
+            ? `${body}\n\n—\n${env.SES_FROM_NAME} · ${fromAddress}`
+            : `${body}\n\n—\nYou are receiving this because you started a page on SubhSandesh and did not finish it. Reply to this email if you would rather we did not write again.\n${fromAddress}`,
         html: renderDraftNudgeHtml({
           body,
           templateLabel: loaded.entry.label,
-          fromEmail: env.SES_FROM_EMAIL,
+          fromEmail: fromAddress,
           profileUrl: profileUrl(),
           isReply: threadMode === "same",
         }),
@@ -797,6 +913,10 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
         // A guess at the header SES wrote, not a fact — see rfcMessageIdFor.
         rfcMessageId: rfcMessageIdFor(messageId, env.SES_REGION),
         rfcMessageIdSource: messageId ? "reconstructed" : "",
+        // Distinct from byEmail, which is the admin who typed it. This is the
+        // address the creator sees, and the one they will reply to if they
+        // ignore the Reply-To.
+        fromAddress,
         inReplyTo: threading.inReplyTo,
         references: threading.references ? threading.references.split(/\s+/) : [],
         source: "ses",
@@ -811,12 +931,12 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
       targetUserEmail: to,
       targetPageId: loaded.pageId,
       targetTemplateType: loaded.entry.templateType,
-      reason: `${loaded.verdict.reason}${aiAssisted ? " · AI-assisted draft, approved and sent" : " · written by hand"}${force ? " · FORCED past the cooldown" : ""}${threadMode === "same" ? ` · replied in thread ${thread?.threadKey || "?"} (${threading.confidence})` : " · new thread"}${theyReplied ? " · answering their reply, guards not applicable" : ""}`,
+      reason: `${loaded.verdict.reason} · as ${fromAddress}${aiAssisted ? " · AI-assisted draft, approved and sent" : " · written by hand"}${force ? " · FORCED past the cooldown" : ""}${threadMode === "same" ? ` · replied in thread ${thread?.threadKey || "?"} (${threading.confidence})` : " · new thread"}${theyReplied ? " · answering their reply, guards not applicable" : ""}`,
     });
 
     res.json({
       success: true,
-      message: `Sent to ${to}`,
+      message: `Sent to ${to} from ${fromAddress}`,
       data: {
         sentAt: new Date(),
         messageId,
@@ -824,6 +944,7 @@ export const sendDraftEmail = async (req: Request, res: Response): Promise<void>
         threadMode,
         threadId: thread ? String(thread._id) : "",
         threadConfidence: threading.confidence,
+        fromAddress,
       },
     });
   } catch (error) {

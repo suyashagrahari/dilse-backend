@@ -85,6 +85,19 @@ export interface DraftSummary {
   totalFields: number;
   /** Names of filled fields, minus anything identifying a third party. */
   filledFieldNames: string[];
+  /**
+   * Names of fields still EMPTY — what they have not filled in yet.
+   *
+   * ── WHY THIS ONE IS NOT FILTERED FOR THIRD PARTIES ────────────────────────
+   *
+   * `filledFieldNames` withholds `recipientName`, `toEmail` and friends because
+   * "recipientName is filled" is a fact about somebody who never used the
+   * product. An EMPTY field is the opposite: naming it discloses nothing at
+   * all, because there is nothing there. "They never typed who it is for" is
+   * exactly what somebody looking at a stalled draft needs to know, and it is
+   * knowable without reading a single character they wrote.
+   */
+  missingFieldNames: string[];
   /** How much they actually wrote, across every text field. */
   wordCount: number;
   photoCount: number;
@@ -124,10 +137,14 @@ export function summarizeDraft(
   let words = 0;
   let photos = 0;
   const filledNames: string[] = [];
+  const missingNames: string[] = [];
 
   for (const path of paths) {
     const value = doc[path];
-    if (isEmptyValue(value)) continue;
+    if (isEmptyValue(value)) {
+      missingNames.push(path);
+      continue;
+    }
 
     filled++;
     if (!THIRD_PARTY_PATHS.test(path)) filledNames.push(path);
@@ -159,9 +176,64 @@ export function summarizeDraft(
     filledFields: filled,
     totalFields: paths.length,
     filledFieldNames: filledNames.slice(0, 40),
+    missingFieldNames: missingNames.slice(0, 40),
     wordCount: words,
     photoCount: photos,
   };
+}
+
+/**
+ * A schema path as a person would say it: `recipientName` → "Recipient name".
+ *
+ * Lives here rather than in the panel so the vocabulary is one thing. The panel
+ * prints these, and a future email that wants to say "you never added a photo"
+ * has to mean the same field by the same words.
+ *
+ * The special cases are the ones a generic split gets wrong or leaves cryptic —
+ * abbreviations the schemas use (`msg`, `img`, `bg`) and paths whose literal
+ * de-camel-casing reads badly ("Photo url").
+ */
+const FIELD_WORDS: Record<string, string> = {
+  msg: "message",
+  msgs: "messages",
+  img: "photo",
+  imgs: "photos",
+  image: "photo",
+  images: "photos",
+  photo: "photo",
+  url: "",
+  urls: "",
+  src: "",
+  bg: "background",
+  desc: "description",
+  dob: "date of birth",
+  qty: "quantity",
+  cta: "button",
+  yt: "YouTube",
+  id: "",
+};
+
+export function humanizeFieldPath(path: string): string {
+  const words = String(path || "")
+    // `memories.0.caption` → `memories caption`; the array itself is what is
+    // counted, but a caller may still hand over a sub-path.
+    .replace(/\.\d+\./g, " ")
+    .replace(/\./g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => (w in FIELD_WORDS ? FIELD_WORDS[w] : w))
+    .filter(Boolean);
+
+  // Collapse "photo photo" from e.g. `photoImage`, and drop a trailing
+  // duplicate left by removing a noise word.
+  const deduped = words.filter((w, i) => w !== words[i - 1]);
+  if (deduped.length === 0) return path;
+
+  const label = deduped.join(" ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 export interface StallInputs {
