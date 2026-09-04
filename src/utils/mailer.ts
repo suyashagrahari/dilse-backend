@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { sendSesEmail, threadReplyToAddress } from "../services/ses.service";
 import { env } from "../config/env";
+import { rfcMessageIdFor } from "../services/emailThread.service";
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
@@ -410,6 +411,27 @@ function escapeHtml(s: string): string {
 // The layout is shared with that email on purpose: same shell, same signature
 // block, same cream-and-gold. Only the subject, the context strip and the
 // footer differ.
+/**
+ * What actually happened to a feedback reply.
+ *
+ * `rfcMessageId` is the point of this whole shape. See the note on provider
+ * order inside the function.
+ */
+export interface FeedbackReplyOutcome {
+  /** The address it went out as, so the conversation record need not guess. */
+  fromAddress: string;
+  /** Which provider sent it, or "" if nothing was configured. */
+  via: "ses" | "resend" | "";
+  /**
+   * The RFC Message-ID of what we sent, in `<…>` form — or "" when unknowable.
+   *
+   * Only SES yields one: it returns an id from which the real header value can
+   * be reconstructed exactly. Resend reports no Message-ID and documents no
+   * pattern, so a Resend send honestly carries "" rather than a guess.
+   */
+  rfcMessageId: string;
+}
+
 export async function sendFeedbackReplyEmail(opts: {
   to: string;
   toName: string;
@@ -418,13 +440,21 @@ export async function sendFeedbackReplyEmail(opts: {
   /** Shown back to them so the email explains itself. */
   rating: number;
   templateLabel: string;
-}): Promise<void> {
+  /**
+   * `In-Reply-To` and `References`, when the conversation already has a
+   * message to anchor to.
+   *
+   * Absent on the first reply to a piece of in-app feedback: the creator's
+   * comment arrived through a form, not as mail, so there is no id to point at.
+   */
+  headers?: { inReplyTo?: string; references?: string };
+}): Promise<FeedbackReplyOutcome> {
   const { to, subject, body, rating, templateLabel } = opts;
 
-  if (!resend) {
-    console.log(`\n[FEEDBACK REPLY — no RESEND_API_KEY] To: ${to} | Subject: ${subject}\n${body}\n`);
-    return;
-  }
+  // Named once and answered to the caller, so the conversation record can say
+  // which address the reply went out as without keeping a second copy of this
+  // literal that drifts the first time it changes here.
+  const fromAddress = "support@subhsandesh.in";
 
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -447,23 +477,9 @@ export async function sendFeedbackReplyEmail(opts: {
     ? `${stars} on your ${esc(templateLabel)} page`
     : `${stars} rating`;
 
-  await resend.emails.send({
-    from: "SubhSandesh Support <support@subhsandesh.in>",
-    to,
-    // ── Why Reply-To is the SES inbox, not support@ and not feedback@ ──
-    //
-    // From stays support@ because that is who is writing. But the REPLY has
-    // to land somewhere the app can read, and that is neither of the apex
-    // addresses: apex mail is GoDaddy's, so a reply to support@ OR to
-    // feedback@ arrives in a mailbox nothing watches, and the conversation
-    // view shows only our side — reading as if they had never replied.
-    //
-    // `threadReplyToAddress()` is the address SES itself receives on for this
-    // deployment. See `SES_REPLY_TO_EMAIL` in config/env.ts.
-    replyTo: threadReplyToAddress(),
-    subject,
-    text: `${body}\n\n—\nYou left us ${stars} feedback${templateLabel ? ` after making your ${templateLabel} page` : ""}. Reply to this email to continue the conversation.\nsupport@subhsandesh.in | subhsandesh.in`,
-    html: `<!DOCTYPE html>
+  const text = `${body}\n\n—\nYou left us ${stars} feedback${templateLabel ? ` after making your ${templateLabel} page` : ""}. Reply to this email to continue the conversation.\nsupport@subhsandesh.in | subhsandesh.in`;
+
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -541,6 +557,85 @@ export async function sendFeedbackReplyEmail(opts: {
   </table>
 
 </body>
-</html>`,
+</html>`;
+
+  // ── Why SES goes FIRST here, and Resend second ─────────────────────────────
+  //
+  // The opposite order from `sendOtpEmail`, deliberately.
+  //
+  // A feedback reply is one half of a conversation, and the other half arrives
+  // as email. Matching an inbound reply to the right conversation works best
+  // off the `In-Reply-To` header, which means we have to KNOW the Message-ID of
+  // what we sent. SES returns an id from which the real header value
+  // reconstructs exactly; Resend reports no Message-ID at all and documents no
+  // pattern to build one from.
+  //
+  // Sending through Resend therefore cost us the top rung of the inbound
+  // matching ladder for every feedback reply. What was left all required the
+  // creator to reply FROM the address on their account — so anyone replying
+  // from a different address landed in Unmatched, looking like a stranger
+  // writing in. Conversation replies never had this problem, because they
+  // already went via SES.
+  //
+  // Resend stays as the fallback rather than being removed: it is a working
+  // customer-facing path, and a support reply that fails to send is worse than
+  // one whose id we cannot record. A Resend send honestly reports `""`.
+  const replyTo = threadReplyToAddress();
+  const headers = opts.headers?.inReplyTo || opts.headers?.references
+    ? {
+        ...(opts.headers.inReplyTo ? { "In-Reply-To": opts.headers.inReplyTo } : {}),
+        ...(opts.headers.references ? { References: opts.headers.references } : {}),
+      }
+    : undefined;
+
+  // ── 1. SES ────────────────────────────────────────────────────────────────
+  try {
+    const result = await sendSesEmail({
+      to,
+      subject,
+      text,
+      html,
+      from: fromAddress,
+      fromName: "SubhSandesh Support",
+      // NOT support@ and NOT feedback@. Apex mail is GoDaddy's, so a reply to
+      // either arrives in a mailbox nothing watches and the conversation view
+      // shows only our side — reading as if they never replied. This is the
+      // address SES itself receives on for this deployment.
+      replyTo,
+      headers,
+    });
+    if (result.outcome === "sent") {
+      return {
+        fromAddress,
+        via: "ses",
+        rfcMessageId: rfcMessageIdFor(result.messageId || "", env.SES_REGION),
+      };
+    }
+    // "skipped" — SES is not configured here. Fall through to Resend.
+  } catch (error) {
+    console.warn(
+      `Feedback reply to ${to} did not go via SES, trying Resend: ${(error as Error)?.message || "threw"}`
+    );
+  }
+
+  // ── 2. Resend ─────────────────────────────────────────────────────────────
+  if (!resend) {
+    console.log(`\n[FEEDBACK REPLY — no provider configured] To: ${to} | Subject: ${subject}\n${body}\n`);
+    return { fromAddress, via: "", rfcMessageId: "" };
+  }
+
+  await resend.emails.send({
+    from: `SubhSandesh Support <${fromAddress}>`,
+    to,
+    replyTo,
+    subject,
+    text,
+    html,
+    ...(headers ? { headers } : {}),
   });
+
+  // No id: see the note above. The conversation still holds together on the
+  // subject line, and becomes exact the moment the creator replies and gives
+  // us a real id to anchor to.
+  return { fromAddress, via: "resend", rfcMessageId: "" };
 }

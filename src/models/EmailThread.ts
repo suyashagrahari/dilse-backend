@@ -47,6 +47,18 @@ export interface IThreadMessage {
   at: Date;
   /** Which super admin sent it. Empty for inbound. */
   byEmail: string;
+  /**
+   * The address this message left FROM.
+   *
+   * Distinct from `byEmail`, which is the admin who typed it. Replies can now
+   * go out as feedback@ or support@, and "which address did we answer them
+   * from" is not answerable after the fact without recording it — the From on
+   * the sent mail is not stored anywhere else.
+   *
+   * Empty on every message written before this existed, and on inbound mail,
+   * where the sender is the thread's own `userEmail`.
+   */
+  fromAddress: string;
   aiAssisted: boolean;
 
   /** SES's own id for the accepted message, as returned by the API. */
@@ -107,6 +119,7 @@ const threadMessageSchema = new Schema<IThreadMessage>(
 
     at: { type: Date, default: Date.now },
     byEmail: { type: String, default: "", lowercase: true, trim: true },
+    fromAddress: { type: String, default: "", lowercase: true, trim: true, maxlength: 180 },
     aiAssisted: { type: Boolean, default: false },
 
     providerMessageId: { type: String, default: "" },

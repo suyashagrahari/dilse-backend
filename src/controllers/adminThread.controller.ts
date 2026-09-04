@@ -24,6 +24,8 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import EmailThread from "../models/EmailThread";
+import { listSenderOptions, resolveSenderAddress } from "../services/replySenders";
+import { resolveProfileUserIds } from "../services/profileLink.service";
 import { stripQuotedReply } from "../services/emailThread.service";
 import { appendMessage } from "../services/threadStore.service";
 import { shapeThread } from "./adminDraft.controller";
@@ -42,6 +44,7 @@ import {
   threadReplyToAddress,
 } from "../services/ses.service";
 import PageFeedback from "../models/PageFeedback";
+import { parseSortOrder, sortSpec } from "../utils/listSort";
 
 const PAGE_SIZE_MAX = 100;
 const PASTE_MAX = 20_000;
@@ -57,6 +60,7 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
     const limit = Math.min(PAGE_SIZE_MAX, Math.max(1, parseInt(String(req.query.limit || "25"), 10) || 25));
 
     const filter: Record<string, unknown> = {};
+    const sort = parseSortOrder(req.query.sort);
     const kind = String(req.query.kind || "").trim();
     if (kind === "draft" || kind === "feedback" || kind === "inbound") filter.kind = kind;
     if (String(req.query.unread || "") === "1") filter.unread = true;
@@ -72,7 +76,12 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
 
     const [rows, total, unreadTotal] = await Promise.all([
       EmailThread.find(filter)
-        .sort({ lastMessageAt: -1 })
+        // `lastMessageAt`, not `createdAt`: a thread opened in March that
+        // somebody answered an hour ago IS the most recent conversation, and
+        // sorting these by when they were opened would bury the reply that
+        // needs answering. Oldest first therefore means "waiting longest",
+        // which is the useful reading of the other end.
+        .sort(sortSpec("lastMessageAt", sort))
         .skip((page - 1) * limit)
         .limit(limit)
         .select("-messages.rawBody -messages.html")
@@ -83,10 +92,24 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
       EmailThread.countDocuments({ unread: true }),
     ]);
 
+    // ── Whose profile each conversation opens ─────────────────────────────
+    //
+    // One query for the page. `userId` alone would miss exactly the rows that
+    // most need it: an unmatched inbound thread has NO userId — that is what
+    // unmatched means, somebody wrote in and nothing we held matched them — so
+    // it is resolved from the address instead. `User.email` is unique,
+    // lowercase and indexed, so that is exact rather than a guess.
+    const profileIds = await resolveProfileUserIds(
+      rows.map((t) => ({
+        userId: (t as { userId?: unknown }).userId,
+        userEmail: (t as { userEmail?: unknown }).userEmail,
+      }))
+    );
+
     res.json({
       success: true,
       data: {
-        threads: rows.map((t) => ({
+        threads: rows.map((t, i) => ({
           ...shapeThread(t as never),
           userName: (t as { userName?: string }).userName || "",
           userEmail: (t as { userEmail?: string }).userEmail || "",
@@ -94,9 +117,11 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
           templateType: (t as { templateType?: string }).templateType || "",
           pageId: (t as { pageId?: unknown }).pageId ? String((t as { pageId: unknown }).pageId) : "",
           kind: (t as { kind?: string }).kind || "draft",
+          profileUserId: profileIds[i] || "",
         })),
         total,
         unreadTotal,
+        sort,
         page,
         limit,
         pages: Math.max(1, Math.ceil(total / limit)),
@@ -128,8 +153,27 @@ export const getThread = async (req: Request, res: Response): Promise<void> => {
       await EmailThread.updateOne({ _id: id }, { $set: { unread: false } });
     }
 
+    const [profileUserId] = await resolveProfileUserIds([
+      {
+        userId: (thread as { userId?: unknown }).userId,
+        userEmail: (thread as { userEmail?: unknown }).userEmail,
+      },
+    ]);
+
     res.json({
       success: true,
+      // ── The composer's own facts, answered here rather than guessed ────────
+      //
+      // The panel had no idea what address a reply left from. It sent one and
+      // hoped. Both of these travel WITH the conversation for the same reason
+      // `getMyCreations` sends each row its own editorRoute: the client cannot
+      // hold a correct copy of something only the server knows, and a stale
+      // copy of "which addresses can we send as" is a bounced reply.
+      senderOptions: listSenderOptions(),
+      // Fixed, and shown so the split reads as deliberate. A reply comes FROM
+      // feedback@ or support@ but must come BACK to reply.subhsandesh.in —
+      // apex mail is GoDaddy's and this application cannot read it.
+      replyToAddress: threadReplyToAddress(),
       data: {
         ...shapeThread(thread as never),
         userName: (thread as { userName?: string }).userName || "",
@@ -138,6 +182,9 @@ export const getThread = async (req: Request, res: Response): Promise<void> => {
         templateType: (thread as { templateType?: string }).templateType || "",
         pageId: (thread as { pageId?: unknown }).pageId ? String((thread as { pageId: unknown }).pageId) : "",
         kind: (thread as { kind?: string }).kind || "draft",
+        // Resolved the same way as in the list, so opening a conversation
+        // cannot disagree with the row that led to it.
+        profileUserId: profileUserId,
       },
     });
   } catch (error) {
@@ -381,6 +428,10 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // An id, never an address — see services/replySenders.ts. An unknown value
+    // falls back to the default rather than refusing the send.
+    const fromAddress = resolveSenderAddress(req.body?.senderId);
+
     const subject = replySubject(t.subject || "").slice(0, 300);
     const threading = threadingHeadersFor(
       (t.messages || []).map((m) => ({
@@ -399,10 +450,14 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
       const result = await sendSesEmail({
         to,
         subject,
-        text: `${body}\n\n—\n${env.SES_FROM_NAME} · ${env.SES_FROM_EMAIL}`,
-        from: env.SES_FROM_EMAIL,
-        // NOT the From address — apex mail is GoDaddy's, so a reply sent back
-        // to feedback@ never reaches this panel. See config/env.ts.
+        // The signature names the address it actually came from, so a recipient
+        // reading on a phone — where the From line is often just "SubhSandesh"
+        // — can still tell support from feedback.
+        text: `${body}\n\n—\n${env.SES_FROM_NAME} · ${fromAddress}`,
+        from: fromAddress,
+        // NOT the From address, and NOT selectable — apex mail is GoDaddy's, so
+        // a reply sent back to feedback@ or support@ never reaches this panel.
+        // Only reply.subhsandesh.in is delivered to SES. See config/env.ts.
         replyTo: threadReplyToAddress(),
         headers: {
           "In-Reply-To": threading.inReplyTo,
@@ -427,6 +482,7 @@ export const replyToThread = async (req: Request, res: Response): Promise<void> 
       subject,
       body,
       byEmail: req.userEmail || "",
+      fromAddress,
       aiAssisted,
       providerMessageId: messageId,
       rfcMessageId: rfcMessageIdFor(messageId, env.SES_REGION),

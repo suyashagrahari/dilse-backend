@@ -155,6 +155,8 @@ export interface AppendInput {
   html?: string;
   at?: Date;
   byEmail?: string;
+  /** The address the message left FROM. Outbound only. */
+  fromAddress?: string;
   aiAssisted?: boolean;
   providerMessageId?: string;
   rfcMessageId?: string;
@@ -185,6 +187,7 @@ export async function appendMessage(
     html: input.html || "",
     at,
     byEmail: (input.byEmail || "").toLowerCase(),
+    fromAddress: (input.fromAddress || "").toLowerCase(),
     aiAssisted: input.aiAssisted === true,
     providerMessageId: input.providerMessageId || "",
     rfcMessageId: normalizeMessageId(input.rfcMessageId || ""),

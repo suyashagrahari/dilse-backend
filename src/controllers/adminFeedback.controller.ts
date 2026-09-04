@@ -39,11 +39,14 @@ import { sendFeedbackReplyEmail } from "../utils/mailer";
 import { audit } from "../services/adminAudit";
 import { appendMessage, latestThreadForPage, openThread } from "../services/threadStore.service";
 import EmailThread from "../models/EmailThread";
+import { subjectKey, threadingHeadersFor } from "../services/emailThread.service";
+import { resolveProfileUserIds } from "../services/profileLink.service";
 import {
   AiRefusedError,
   AiUnavailableError,
   draftFeedbackReply,
 } from "../services/feedbackReply.service";
+import { parseSortOrder, sortSpec } from "../utils/listSort";
 
 const PAGE_SIZE_MAX = 100;
 const REPLY_MIN = 20;
@@ -79,6 +82,34 @@ function filterQuery(filter: string): Record<string, unknown> {
  * request because the panel renders them together and two round trips would let
  * the count and the rows disagree on screen.
  */
+/**
+ * The subject key the feedback→conversation lookup uses.
+ *
+ * ── WHY THIS DELEGATES INSTEAD OF NORMALISING ───────────────────────────────
+ *
+ * It used to do its own: strip one leading `re:`, trim, lowercase. `openThread`
+ * meanwhile stores `subjectKey(subject)`, which also collapses runs of
+ * whitespace and strips STACKED `Re:`/`Fwd:` prefixes.
+ *
+ * The subject here is hand-typed by a super admin, so the gap was reachable by
+ * typing. "Thanks  for the feedback" with two spaces produced a different key
+ * from the one stored for "Thanks for the feedback", the lookup missed, and a
+ * SECOND conversation was opened with the same person about the same thing —
+ * with their original feedback comment re-appended as its opening message.
+ * Twelve typed spellings of one subject produced five distinct keys.
+ *
+ * Nothing errored. The panel just filled with near-identical conversations,
+ * and because an inbound reply matches on `userEmail + subjectKey` sorted by
+ * `seq` descending, it landed on the newest fragment while the earlier ones sat
+ * there looking abandoned.
+ *
+ * So there is one normaliser now, and it is the one the write uses. A test
+ * pins them to each other rather than to a literal, so they cannot drift again.
+ */
+export function feedbackThreadSubjectKey(subject: string): string {
+  return subjectKey(subject);
+}
+
 export const getFeedbackList = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
@@ -89,6 +120,7 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
     const filter = String(req.query.filter || "all");
     const slug = String(req.query.slug || "").trim().toLowerCase();
     const rating = parseInt(String(req.query.rating || ""), 10);
+    const sort = parseSortOrder(req.query.sort);
 
     const query: Record<string, unknown> = { ...filterQuery(filter) };
     if (slug) query.templateSlug = slug;
@@ -96,7 +128,9 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
 
     const [items, total, stats, byStar, byTemplate] = await Promise.all([
       PageFeedback.find(query)
-        .sort({ createdAt: -1 })
+        // Oldest first turns this from "what just came in" into a queue, which
+        // is how the un-replied backlog gets cleared instead of grown.
+        .sort(sortSpec("createdAt", sort))
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
@@ -136,10 +170,30 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
     const starCounts: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
     for (const row of byStar) starCounts[String(row._id)] = row.count;
 
+    // ── Whose profile each row opens ──────────────────────────────────────
+    //
+    // One query for the page, not one per row. `userId` alone is not enough:
+    // it is a plain ObjectId ref with no cascade, so a deleted account leaves
+    // the row pointing at nothing and a link built from it 404s — which reads
+    // as this panel being broken rather than as the account being gone.
+    //
+    // A row whose account no longer exists gets `""` and simply shows no
+    // button.
+    const profileIds = await resolveProfileUserIds(
+      (items as { userId?: unknown; userEmail?: unknown }[]).map((i) => ({
+        userId: i.userId,
+        userEmail: i.userEmail,
+      }))
+    );
+
     res.json({
       success: true,
       data: {
-        items,
+        items: (items as Record<string, unknown>[]).map((item, i) => ({
+          ...item,
+          profileUserId: profileIds[i] || "",
+        })),
+        sort,
         pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
         stats: {
           count: s.count || 0,
@@ -323,19 +377,76 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // ── Find the conversation first, but only to READ it ───────────────────
+    //
+    // The mail needs `In-Reply-To` and `References` pointing at the last
+    // message that has an id, and those have to be on the message when it is
+    // sent — they cannot be added afterwards. So the lookup moves above the
+    // send while the WRITE stays below it.
+    //
+    // Without this, our second reply to the same person referenced nothing:
+    // their mail client showed two unrelated emails, and their answer to
+    // either carried no id we recognised.
+    //
+    // A failure here must not stop the reply going out — threading is a
+    // nicety, an unsent support reply is not. Hence the empty fallback.
+    type ThreadRow = { _id: mongoose.Types.ObjectId; messages?: unknown[] };
+    const findFeedbackThread = () =>
+      EmailThread.findOne({
+        kind: "feedback",
+        userEmail: doc.userEmail.toLowerCase(),
+        subjectKey: feedbackThreadSubjectKey(subject),
+      })
+        .sort({ seq: -1 })
+        .lean<ThreadRow>();
+
+    let existing: ThreadRow | null = null;
+    // ── WHY THIS FLAG EXISTS ──────────────────────────────────────────────────
+    //
+    // `existing === null` is ambiguous on its own: it means EITHER there is no
+    // conversation yet OR this read threw and we never found out. The recording
+    // step below opens a new thread when there is none — so treating a failed
+    // read as "none" would open a duplicate, which is precisely the forking bug
+    // this commit set out to fix, reintroduced by a different route.
+    //
+    // So the two cases are kept apart, and a failed read is retried below
+    // rather than assumed away.
+    let lookedUp = false;
+    try {
+      existing = await findFeedbackThread();
+      lookedUp = true;
+    } catch (error) {
+      console.error("Could not read the conversation before replying:", error);
+    }
+
+    const threading = threadingHeadersFor(
+      ((existing?.messages || []) as {
+        direction?: string;
+        rfcMessageId?: string;
+        rfcMessageIdSource?: string;
+        references?: string[];
+      }[]).map((m) => ({
+        direction: m.direction === "outbound" ? ("outbound" as const) : ("inbound" as const),
+        rfcMessageId: m.rfcMessageId,
+        rfcMessageIdSource: m.rfcMessageIdSource as "received" | "reconstructed" | "" | undefined,
+        references: m.references,
+      }))
+    );
+
     // ── Send BEFORE recording ──────────────────────────────────────────────
     //
     // Deliberately this order. If the mail fails, nothing is written and the
     // panel still shows the ticket as unanswered, which is true. The reverse
     // order — record, then send — would show a reply that never left the
     // building, and the person reading the panel would have no way to know.
-    await sendFeedbackReplyEmail({
+    const sent = await sendFeedbackReplyEmail({
       to: doc.userEmail,
       toName: doc.userName || "",
       subject,
       body,
       rating: doc.rating,
       templateLabel: doc.templateLabel || "",
+      headers: { inReplyTo: threading.inReplyTo, references: threading.references },
     });
 
     doc.replies.push({
@@ -363,13 +474,12 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
     // missing conversation entry is a display problem, telling a super admin
     // the reply failed would invite them to send it twice.
     try {
-      let thread = await EmailThread.findOne({
-        kind: "feedback",
-        userEmail: doc.userEmail.toLowerCase(),
-        subjectKey: subject.replace(/^\s*re\s*:\s*/i, "").trim().toLowerCase(),
-      })
-        .sort({ seq: -1 })
-        .lean<{ _id: mongoose.Types.ObjectId }>();
+      // Reuse the row read before sending. If that read never completed, ask
+      // again now — an unanswered question must not become "there is none",
+      // because that opens a second conversation with the same person.
+      let thread: { _id: mongoose.Types.ObjectId } | null = lookedUp
+        ? existing
+        : await findFeedbackThread();
 
       if (!thread) {
         const opened = await openThread(
@@ -404,15 +514,26 @@ export const sendReply = async (req: Request, res: Response): Promise<void> => {
         subject,
         body,
         byEmail: req.userEmail || "",
+        // Answered by the mailer rather than repeated here, so the conversation
+        // can say which address the creator actually saw. Feedback replies go
+        // out as support@, not the feedback@ that conversation replies default
+        // to, and that difference was previously invisible in the panel.
+        fromAddress: sent.fromAddress,
         aiAssisted,
-        // Resend does not report the RFC Message-ID it wrote, and unlike SES
-        // there is no documented pattern to reconstruct one from. So this
-        // message carries no id: the thread still holds together on the
-        // subject line, and it becomes exact the moment the creator replies
-        // and gives us a real id to anchor to.
-        rfcMessageId: "",
-        rfcMessageIdSource: "",
-        source: "resend",
+        // ── The id of what we just sent, when we know it ────────────────────
+        //
+        // This used to be hardcoded to "" because feedback replies went via
+        // Resend, which reports no Message-ID. That cost the top rung of the
+        // inbound matching ladder: with no id to point `In-Reply-To` at, a
+        // creator's reply could only be matched by their account email, so
+        // anyone replying from a different address landed in Unmatched.
+        //
+        // Feedback replies now go via SES first, which returns an id that
+        // reconstructs the real header exactly. It is still "" on the Resend
+        // fallback path — honestly empty rather than a guess.
+        rfcMessageId: sent.rfcMessageId,
+        rfcMessageIdSource: sent.rfcMessageId ? "reconstructed" : "",
+        source: sent.via === "ses" ? "ses" : "resend",
       });
     } catch (error) {
       console.error("Sent the feedback reply but failed to record the conversation:", error);

@@ -20,6 +20,7 @@ import {
   classifyStall,
   daysSince,
   summarizeDraft,
+  humanizeFieldPath,
   type DraftSummary,
 } from "./draftInsight.service";
 import { buildNudgePrompt, nudgeIntent, parseNudgeDraft } from "./draftNudgeAi.service";
@@ -51,6 +52,7 @@ const summaryOf = (over: Partial<DraftSummary> = {}): DraftSummary => ({
   filledFields: 5,
   totalFields: 10,
   filledFieldNames: [],
+  missingFieldNames: [],
   wordCount: 40,
   photoCount: 0,
   ...over,
@@ -91,6 +93,33 @@ describe("summarizeDraft", () => {
     assert.ok(!s.filledFieldNames.includes("recipientEmail"), "recipientEmail was named");
     assert.ok(s.filledFieldNames.includes("message"), "a safe field name should survive");
     assert.ok(!JSON.stringify(s).includes("Rohit"));
+  });
+
+  it("names the fields that are still EMPTY, third-party ones included", () => {
+    // The privacy rule is about disclosure, and an empty field discloses
+    // nothing — "they never typed who it is for" is the single most useful
+    // thing to know about a stalled draft. See the note on missingFieldNames.
+    const s = summarizeDraft(entry, { senderName: "Priya", message: "hi" });
+    assert.ok(s.missingFieldNames.includes("recipientName"));
+    assert.ok(s.missingFieldNames.includes("photoUrl"));
+    assert.ok(!s.missingFieldNames.includes("message"), "a filled field must not be listed as missing");
+    assert.ok(!s.missingFieldNames.includes("senderName"));
+  });
+
+  it("accounts for every field exactly once, filled or missing", () => {
+    // The two lists are a partition, so "4 of 6 filled" and a missing list of
+    // 2 can never disagree in the panel.
+    const s = summarizeDraft(entry, { senderName: "Priya", message: "hi" });
+    assert.equal(s.filledFields + s.missingFieldNames.length, s.totalFields);
+  });
+
+  it("lists no missing fields for a complete draft", () => {
+    const s = summarizeDraft(entry, {
+      senderName: "A", recipientName: "B", recipientEmail: "b@x.com",
+      message: "hi", photoUrl: "https://cdn/x.jpg", memories: ["one"],
+    });
+    assert.deepEqual(s.missingFieldNames, []);
+    assert.equal(s.completeness, 100);
   });
 
   it("counts words but not URLs", () => {
@@ -358,5 +387,37 @@ describe("daysSince", () => {
     assert.equal(daysSince("2027-01-01T00:00:00Z", now), 0);
     assert.equal(daysSince(undefined, now), 0);
     assert.equal(daysSince("not a date", now), 0);
+  });
+});
+
+describe("humanizeFieldPath", () => {
+  it("says a camelCase path the way a person would", () => {
+    assert.equal(humanizeFieldPath("recipientName"), "Recipient name");
+    assert.equal(humanizeFieldPath("senderName"), "Sender name");
+  });
+
+  it("drops noise words that mean nothing to a reader", () => {
+    // "Photo url" and "Background image src" are the literal answers and both
+    // read as database columns rather than as things somebody did not fill in.
+    assert.equal(humanizeFieldPath("photoUrl"), "Photo");
+    assert.equal(humanizeFieldPath("bgImageSrc"), "Background photo");
+  });
+
+  it("expands the abbreviations the schemas actually use", () => {
+    assert.equal(humanizeFieldPath("msg"), "Message");
+    assert.equal(humanizeFieldPath("ytUrl"), "YouTube");
+  });
+
+  it("flattens a sub-path", () => {
+    assert.equal(humanizeFieldPath("memories.0.caption"), "Memories caption");
+    assert.equal(humanizeFieldPath("theme.color"), "Theme color");
+  });
+
+  it("never returns an empty label", () => {
+    // A path made entirely of noise words would otherwise humanise to "",
+    // which in the panel is a chip with nothing in it.
+    assert.equal(humanizeFieldPath("url"), "url");
+    assert.equal(humanizeFieldPath("id"), "id");
+    assert.equal(humanizeFieldPath(""), "");
   });
 });
