@@ -105,6 +105,7 @@ import {
   threadsForPage,
 } from "../services/threadStore.service";
 import { renderDraftNudgeHtml } from "../utils/draftNudgeEmail";
+import { parseSortOrder, sortSpec } from "../utils/listSort";
 import { audit } from "../services/adminAudit";
 import { env } from "../config/env";
 
@@ -233,6 +234,7 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
      * almost all of them away — and it is immune to the `capped` limitation,
      * because one person never has 400 drafts in a single template.
      */
+    const sort = parseSortOrder(req.query.sort);
     const wantUser = String(req.query.userId || "").trim();
     if (wantUser && !mongoose.Types.ObjectId.isValid(wantUser)) {
       res.status(400).json({ success: false, error: "Invalid userId" });
@@ -256,12 +258,19 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
     const where: Record<string, unknown> = { isPublished: false };
     if (wantUser) where.userId = new mongoose.Types.ObjectId(wantUser);
 
+    // ── The fan-out is fetched in the order being ASKED for ───────────────
+    //
+    // Not fetched newest-first and reversed afterwards. Each collection only
+    // hands over its first `PER_MODEL_FETCH` rows, so a newest-first sample
+    // sorted backwards gives "the oldest of the newest 400" — which is not the
+    // oldest draft, and is confidently wrong rather than merely capped. Asking
+    // Mongo for the right end means the sample is the right end.
     const perModel = await Promise.all(
       registry.map(async (entry) => {
         const [docs, total] = await Promise.all([
           entry.model
             .find(where)
-            .sort({ createdAt: -1 })
+            .sort(sortSpec("createdAt", sort))
             .limit(PER_MODEL_FETCH)
             .lean() as unknown as Promise<Record<string, unknown>[]>,
           entry.model.countDocuments(where),
@@ -375,8 +384,14 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
       default: break;
     }
 
-    // Newest first, as chosen: the list is "what just happened", not a queue.
-    rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    // Merge the 43 already-sorted samples. Newest first by default — the list
+    // is "what just happened" — or oldest first, which turns it into a queue
+    // and is how a backlog actually gets worked through.
+    rows.sort((a, b) => {
+      if (a.createdAt === b.createdAt) return a.pageId < b.pageId ? 1 : -1;
+      const newestFirst = a.createdAt < b.createdAt ? 1 : -1;
+      return sort === "oldest" ? -newestFirst : newestFirst;
+    });
 
     const matched = rows.length;
     const pageRows = rows.slice((page - 1) * limit, (page - 1) * limit + limit);
@@ -401,6 +416,7 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
           contacted: all.filter((r) => r.nudgedAt).length,
           capped,
         },
+        sort,
         templates: TEMPLATE_REGISTRY.map((t) => ({
           templateType: t.templateType,
           label: t.label,

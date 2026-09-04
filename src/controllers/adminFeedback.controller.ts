@@ -46,6 +46,7 @@ import {
   AiUnavailableError,
   draftFeedbackReply,
 } from "../services/feedbackReply.service";
+import { parseSortOrder, sortSpec } from "../utils/listSort";
 
 const PAGE_SIZE_MAX = 100;
 const REPLY_MIN = 20;
@@ -119,6 +120,7 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
     const filter = String(req.query.filter || "all");
     const slug = String(req.query.slug || "").trim().toLowerCase();
     const rating = parseInt(String(req.query.rating || ""), 10);
+    const sort = parseSortOrder(req.query.sort);
 
     const query: Record<string, unknown> = { ...filterQuery(filter) };
     if (slug) query.templateSlug = slug;
@@ -126,7 +128,9 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
 
     const [items, total, stats, byStar, byTemplate] = await Promise.all([
       PageFeedback.find(query)
-        .sort({ createdAt: -1 })
+        // Oldest first turns this from "what just came in" into a queue, which
+        // is how the un-replied backlog gets cleared instead of grown.
+        .sort(sortSpec("createdAt", sort))
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
@@ -189,6 +193,7 @@ export const getFeedbackList = async (req: Request, res: Response): Promise<void
           ...item,
           profileUserId: profileIds[i] || "",
         })),
+        sort,
         pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
         stats: {
           count: s.count || 0,

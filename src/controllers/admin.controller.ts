@@ -10,6 +10,7 @@ import { sendContactReplyEmail } from "../utils/mailer";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { templateLabel } from "../config/templateCatalog";
 import { hiddenSlugs } from "../config/templateVisibility";
+import { parseSortOrder, sortSpec } from "../utils/listSort";
 
 // Every template, derived from the one list that says which templates exist.
 //
@@ -510,6 +511,7 @@ export const getContactInquiries = async (req: Request, res: Response): Promise<
     const page = Math.max(parseInt(req.query.page as string) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const filter = req.query.filter as string; // "all" | "unread" | "read"
+    const sort = parseSortOrder(req.query.sort);
 
     const query: Record<string, unknown> = {};
     if (filter === "unread") query.isRead = false;
@@ -517,7 +519,7 @@ export const getContactInquiries = async (req: Request, res: Response): Promise<
 
     const [items, total, unreadCount] = await Promise.all([
       ContactInquiry.find(query)
-        .sort({ createdAt: -1 })
+        .sort(sortSpec("createdAt", sort))
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
@@ -530,6 +532,7 @@ export const getContactInquiries = async (req: Request, res: Response): Promise<
       data: {
         items,
         unreadCount,
+        sort,
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       },
     });
