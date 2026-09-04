@@ -362,9 +362,20 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
       })
     );
 
-    // A draft with no readable owner cannot be written to, and showing it as a
-    // row with an empty email is an invitation to click Send and get an error.
+    // ── Drafts with no readable owner ─────────────────────────────────────
+    //
+    // Dropped, because one cannot be written to and showing it as a row with an
+    // empty email is an invitation to click Send and get an error.
+    //
+    // But COUNTED, and reported. `stats.totalDrafts` is the unfiltered total
+    // across all 43 collections, so a silent drop made the header disagree with
+    // the list — "20 drafts" above a list of eighteen, with nothing to explain
+    // the other two. A super admin reading that has no way to tell a hidden row
+    // from a bug in the panel. It is zero in production today; the point is
+    // that when it stops being zero it says so instead of quietly shrinking.
+    const beforeOwnerFilter = rows.length;
     rows = rows.filter((r) => r.userEmail);
+    const hiddenNoOwner = beforeOwnerFilter - rows.length;
 
     if (search) {
       rows = rows.filter(
@@ -415,6 +426,7 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
           freeStalled: all.filter((r) => !r.blockedByPrice).length,
           contacted: all.filter((r) => r.nudgedAt).length,
           capped,
+          hiddenNoOwner,
         },
         sort,
         templates: TEMPLATE_REGISTRY.map((t) => ({
