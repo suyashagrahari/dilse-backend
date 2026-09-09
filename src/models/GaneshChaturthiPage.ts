@@ -36,6 +36,22 @@ export interface IWishRow {
 }
 
 export interface IVargani {
+  /**
+   * Who is collecting — a mandal's name, a building, a flat number.
+   *
+   * ── WHY THIS EXISTS AS A FIELD AND NOT AS A FIXED HEADING ─────────────────
+   *
+   * The block was headed "For the pandal" for everybody, and that is wrong for
+   * roughly half of the people who would use it. A sarvajanik mandal collecting
+   * for a public pandal and one cousin sending another some money for the
+   * sweets are both legitimate uses of the same three fields, and reading "For
+   * the pandal" over a personal UPI ID makes the sender look like they are
+   * fronting a collection they are not part of.
+   *
+   * With a name in here the heading becomes that name. Empty, the block heads
+   * itself neutrally instead — see the client's `VarganiSection`.
+   */
+  title: string;
   upiId: string;
   qrImageUrl: string;
   note: string;
@@ -119,6 +135,7 @@ const ganeshChaturthiPageSchema = new Schema<IGaneshChaturthiPage>(
     },
 
     vargani: {
+      title: { type: String, default: "" },
       upiId: { type: String, default: "" },
       qrImageUrl: { type: String, default: "" },
       note: { type: String, default: "" },

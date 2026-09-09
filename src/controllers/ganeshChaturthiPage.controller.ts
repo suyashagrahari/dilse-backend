@@ -33,6 +33,8 @@ function sanitizeWishes(input: unknown): IWishRow[] {
 function sanitizeVargani(input: unknown): IVargani {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   return {
+    // The heading of the block, so it has to fit on one line beside the code.
+    title: str(o.title, 48).trim(),
     upiId: str(o.upiId, 120).trim(),
     // 600 chars fits a CDN URL and firmly does not fit a base64 data URL — the
     // cap is the backstop for the decision in `components/upload.ts` to store a

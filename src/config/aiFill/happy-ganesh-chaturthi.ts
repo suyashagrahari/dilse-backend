@@ -202,6 +202,18 @@ export const ganeshChaturthi: AiFillTemplateSchema = {
         "The right-hand column for row 4 — the punchline, in three or four words, lower case. Under 30 characters. Return null if row 4 is empty.",
     },
 
+    // ── `vargani.title` IS NOT ON THIS SCHEMA ──────────────────────────────
+    //
+    // It is the name of a mandal, a building or a household — a proper noun for
+    // a real organisation. The nameplate field this schema used to carry was
+    // removed for exactly this reason after three tries against the live model:
+    // asked for a household name by a story that contained none, it assembled
+    // "Rohit Nivas" from the sender's first name, then "Pune Ghar" from his
+    // city, then a surname that appears nowhere in the story at all.
+    //
+    // A fabricated organisation name over a real person's real UPI ID is worse
+    // than a fabricated one over a mandap. It is two words to type and the block
+    // reads correctly without it.
     {
       path: "vargani.note",
       label: "A line with the payment code",
