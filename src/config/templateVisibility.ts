@@ -37,15 +37,17 @@ import { isApexDeployment } from "./env";
 /**
  * Templates that stay hidden until an admin turns them on, per deployment.
  *
- * These two are here because they are new and dated: Raksha Bandhan 2026 is
- * 28 August, and a festival page is worth showing when it is ready and not a
- * day before. Everything else in the app predates this mechanism and is live by
- * default — do not add existing templates here to "tidy up", it would hide them
- * from production the moment their admin rows are ever deleted.
+ * These three are here because they are new and dated: Raksha Bandhan 2026 is
+ * 28 August and Ganesh Chaturthi 2026 is 14 September, and a festival page is
+ * worth showing when it is ready and not a day before. Everything else in the
+ * app predates this mechanism and is live by default — do not add existing
+ * templates here to "tidy up", it would hide them from production the moment
+ * their admin rows are ever deleted.
  */
 export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-rakshabandhan-to-brother",
   "happy-rakshabandhan-to-sister",
+  "happy-ganesh-chaturthi",
 ]);
 
 /**

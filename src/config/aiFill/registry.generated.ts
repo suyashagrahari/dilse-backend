@@ -20,6 +20,7 @@ import { darling } from "./darling";
 import { dateInvitation } from "./date-invitation";
 import { dedication } from "./dedication";
 import { flags } from "./flags";
+import { ganeshChaturthi } from "./happy-ganesh-chaturthi";
 import { holdMyHand } from "./hold-my-hand";
 import { kundliMilan } from "./kundli-milan";
 import { legalNotice } from "./legal-notice";
@@ -91,4 +92,5 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   profilePro,
   rakshaBandhan,
   rakshaBandhanSister,
+  ganeshChaturthi,
 ];

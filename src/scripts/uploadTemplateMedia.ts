@@ -54,6 +54,16 @@ const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
+  // ── AUDIO ─────────────────────────────────────────────────────────────────
+  //
+  // Added for the Ganesh Chaturthi aarti track. Without an entry here the file
+  // uploads as `application/octet-stream`, and Safari refuses to play an
+  // <audio> source served with that type — the element loads, fires no error
+  // the page can see, and simply stays silent. The failure is invisible on
+  // Chrome, which sniffs the bytes, so it ships.
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
 };
 
 function publicBase(): string {

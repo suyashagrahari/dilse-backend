@@ -60,6 +60,7 @@ import contributionRoutes from "./contribution.routes";
 import activityRoutes from "./activity.routes";
 import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
 import rakshaBandhanSisterPageRoutes from "./rakshaBandhanSisterPage.routes";
+import ganeshChaturthiPageRoutes from "./ganeshChaturthiPage.routes";
 import { protect } from "../middleware/auth";
 import { guardBannedContent } from "../services/bannedContent";
 import { requireAdmin, requireSuperAdmin } from "../middleware/adminAuth";
@@ -129,6 +130,7 @@ router.use("/raksha-bandhan-pages", rakshaBandhanPageRoutes);
 // the two pages store different halves of the ritual and neither can render the
 // other's fields.
 router.use("/raksha-bandhan-sister-pages", rakshaBandhanSisterPageRoutes);
+router.use("/ganesh-chaturthi-pages", ganeshChaturthiPageRoutes);
 // Anonymous friends post here, addressed only by shareId. Everything it can
 // reach is gated by config/contributionTemplates.ts.
 router.use("/contributions", contributionRoutes);
