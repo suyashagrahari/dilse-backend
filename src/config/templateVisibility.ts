@@ -37,17 +37,30 @@ import { isApexDeployment } from "./env";
 /**
  * Templates that stay hidden until an admin turns them on, per deployment.
  *
- * These three are here because they are new and dated: Raksha Bandhan 2026 is
- * 28 August and Ganesh Chaturthi 2026 is 14 September, and a festival page is
- * worth showing when it is ready and not a day before. Everything else in the
- * app predates this mechanism and is live by default — do not add existing
- * templates here to "tidy up", it would hide them from production the moment
- * their admin rows are ever deleted.
+ * These two are here because they are new and dated: Raksha Bandhan 2026 is
+ * 28 August, and a festival page is worth showing when it is ready and not a
+ * day before. Everything else in the app predates this mechanism and is live by
+ * default — do not add existing templates here to "tidy up", it would hide them
+ * from production the moment their admin rows are ever deleted.
+ *
+ * ── WHY GANESH CHATURTHI IS NOT IN THIS LIST ANY MORE ───────────────────────
+ *
+ * It has shipped, which is exactly the condition the note above the list gives
+ * for taking a slug out again. It is in the gallery on the apex today, its
+ * guide is published at /guides/happy-ganesh-chaturthi, and the walkthrough is
+ * public on YouTube and Instagram with the template's URL in the description.
+ *
+ * Leaving it in would not have held anything back — it would have BROKEN it.
+ * The routes in ganeshChaturthiPage.routes.ts gate POST / and POST /:id/publish
+ * on this, so on the apex, with no admin row, every publish would answer
+ * 403 TEMPLATE_NOT_LIVE. Publishing is already failing in production for the
+ * simpler reason that these routes were never deployed at all; shipping them
+ * with the slug still listed would have swapped one failure for another and
+ * made it look like the deploy had not worked.
  */
 export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-rakshabandhan-to-brother",
   "happy-rakshabandhan-to-sister",
-  "happy-ganesh-chaturthi",
 ]);
 
 /**
