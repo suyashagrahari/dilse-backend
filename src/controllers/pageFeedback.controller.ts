@@ -171,3 +171,167 @@ export const submitFeedback = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ success: false, error: "Could not save your feedback" });
   }
 };
+
+// ─── The public wall ─────────────────────────────────────────────────────────
+//
+// `GET /api/feedback/public` — what creators said, on a page anybody can read
+// without signing in.
+//
+// ── WHAT IS DELIBERATELY NOT IN THE RESPONSE ────────────────────────────────
+//
+// This is the whole reason the projection below is written out field by field
+// rather than as an exclusion list. A row in this collection also carries
+// `userEmail`, `pageUrl`, `ipAddress`, `userAgent`, `adminNotes` and the full
+// `replies` thread, and every one of those would be a genuine leak:
+//
+//   · `pageUrl` is a LINK TO SOMEBODY'S PRIVATE CARD — a birthday page made for
+//     one person, some of them password-protected. Publishing the feedback next
+//     to the URL it is about would turn a testimonials page into a directory of
+//     strangers' private pages. This is the most serious of the five and the
+//     reason the projection is a whitelist: an exclusion list silently leaks
+//     whatever field is added to the model next.
+//   · `userEmail` and `ipAddress` are personal data with no business here.
+//   · `adminNotes` and `replies` are internal support correspondence.
+//
+// ── AND WHY THE NAME IS CUT DOWN ────────────────────────────────────────────
+//
+// First name only, and nothing at all when what we hold does not look like a
+// name someone chose to be called. People signed up to make a card, not to be
+// quoted on a marketing page under their full legal name, and a wall of first
+// names reads warmer than one of full ones anyway.
+//
+// ── THE COMMENT FILTER ──────────────────────────────────────────────────────
+//
+// A comment containing an email address or a URL is published as a rating with
+// no words. Two reasons, and the first is the real one: people put their own
+// contact details in feedback boxes ("call me on…", "my page is at…"), and
+// republishing that is the same leak as `userEmail` wearing different clothes.
+// The second is that it is also what link spam looks like. The rating still
+// counts towards the average — their opinion is not discarded, only their
+// phone number.
+//
+// None of this is moderation. There is no approval step, so a genuinely abusive
+// comment would appear here the moment it is written. That is a real gap and it
+// wants an admin toggle on the row; it is called out rather than quietly
+// half-solved.
+
+/**
+ * Looks like a way to contact somebody: an email, a URL, a bare domain, or a
+ * phone number.
+ *
+ * The phone half is the one that is easy to forget and was: the first version
+ * caught "my page is at example.com" and published "call me on 9876543210"
+ * word for word. Eight or more digits, allowing the spaces, dashes and brackets
+ * people actually type, is long enough to miss a year ("in 2009"), a price, or
+ * a count, and short enough to catch every real number including a landline.
+ * The masked form ("98xxxxxx") is caught too — somebody writing that is just as
+ * clearly handing out a number.
+ */
+const CONTACTISH = new RegExp(
+  [
+    /\S+@\S+\.\S+/.source,                                   // email
+    /https?:\/\//.source,                                      // explicit link
+    /\bwww\./.source,                                          // bare www
+    /\b[a-z0-9-]+\.(com|in|net|org|co|io|me)\b/.source,        // bare domain
+    /\+?\d[\d\s().-]{6,}\d/.source,                            // phone number
+    /\d{2,}\s*x{3,}/.source,                                    // a masked one
+  ].join("|"),
+  "i"
+);
+
+/** The first name, or "" when what we hold is not one. */
+function publicName(raw: string): string {
+  const name = String(raw ?? "").trim();
+  if (!name) return "";
+  const first = name.split(/\s+/)[0];
+  if (first.length > 18) return "";
+  // An email local-part or a handle is a login, not something to be called.
+  if (/[@_.]|\d{3}/.test(first)) return "";
+  return first;
+}
+
+export const listPublicFeedback = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const q = req.query as Record<string, string | undefined>;
+
+    // ── Filters ───────────────────────────────────────────────────────────
+    const ratingParam = String(q.rating ?? "all").toLowerCase();
+    const rating = /^[1-5]$/.test(ratingParam) ? Number(ratingParam) : null;
+    const withWords = String(q.words ?? "") === "1";
+    const sort = String(q.sort ?? "recent").toLowerCase();
+
+    const limit = Math.min(Math.max(Number(q.limit) || 24, 1), 60);
+    const skip = Math.max(Number(q.skip) || 0, 0);
+
+    const match: Record<string, unknown> = {};
+    if (rating !== null) match.rating = rating;
+    // ── "Only with words" has to mean words the READER will see ───────────
+    //
+    // A row whose comment is stripped for containing contact details is
+    // published as a rating with no text, so filtering on "comment is not
+    // empty" alone promised words and delivered three cards saying "Rated 4 out
+    // of 5". The same pattern that does the stripping does the filtering, so
+    // the two cannot disagree — which is also why it is one constant and not
+    // two copies.
+    if (withWords) match.comment = { $nin: ["", null], $not: CONTACTISH };
+
+    // ── The stats are over EVERYTHING, never the filtered slice ───────────
+    //
+    // An average that moves when you tap "5 stars" is not an average, it is a
+    // tautology. The summary describes the whole body of feedback; the list
+    // below it is what the filters act on.
+    const [rows, distribution, total] = await Promise.all([
+      PageFeedback.find(match)
+        .select("userName rating comment templateLabel createdAt")
+        .sort(sort === "rating" ? { rating: -1, createdAt: -1 } : { createdAt: -1 })
+        .skip(skip)
+        .limit(limit + 1)
+        .lean(),
+      PageFeedback.aggregate([{ $group: { _id: "$rating", n: { $sum: 1 } } }]),
+      PageFeedback.countDocuments(match),
+    ]);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const d of distribution) {
+      const star = Number((d as { _id: unknown })._id);
+      if (star >= 1 && star <= 5) counts[star] = Number((d as { n: unknown }).n) || 0;
+    }
+    const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
+    const sum = Object.entries(counts).reduce((a, [star, n]) => a + Number(star) * n, 0);
+
+    res.json({
+      success: true,
+      data: {
+        // Whitelisted field by field. See the note above before adding to this.
+        items: page.map((r) => {
+          const row = r as unknown as {
+            _id: unknown; userName: string; rating: number; comment: string;
+            templateLabel: string; createdAt: Date;
+          };
+          const comment = String(row.comment ?? "").trim();
+          return {
+            id: String(row._id),
+            name: publicName(row.userName),
+            rating: Number(row.rating) || 0,
+            comment: CONTACTISH.test(comment) ? "" : comment,
+            template: String(row.templateLabel ?? ""),
+            createdAt: row.createdAt,
+          };
+        }),
+        hasMore,
+        matched: total,
+        stats: {
+          total: allCount,
+          average: allCount ? Math.round((sum / allCount) * 10) / 10 : 0,
+          counts,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("List public feedback error:", error);
+    res.status(500).json({ success: false, error: "Could not load feedback" });
+  }
+};

@@ -41,6 +41,7 @@ import storyRoutes from "./story.routes";
 import shareRoutes from "./share.routes";
 import myPageRoutes from "./myPage.routes";
 import feedbackRoutes from "./feedback.routes";
+import publicFeedbackRoutes from "./publicFeedback.routes";
 import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
 import contactRoutes from "./contact.routes";
@@ -147,6 +148,12 @@ router.use("/my-pages", protect, myPageRoutes);
 router.use("/media", mediaRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/contact", contactRoutes);
+// The public wall of what creators said. Mounted BEFORE the protected
+// `/feedback` below, because Express matches in order and the broader prefix
+// would otherwise run `protect` on a page that must work signed out. It is
+// read-only and its projection is a whitelist — see the controller for what is
+// deliberately withheld, `pageUrl` above all.
+router.use("/feedback/public", publicFeedbackRoutes);
 // Post-publish feedback from the creator. `protect` because a reply is an
 // email, so a rating with no account behind it is a dead end — and because the
 // address replied to must come from the session rather than the payload.
