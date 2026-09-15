@@ -30,6 +30,22 @@ const sanitizeMemories = (raw: unknown): IMemory[] => {
 const sanitizeHeroArt = (raw: unknown): HeroArt =>
   typeof raw === "string" && HERO_ART.includes(raw as HeroArt) ? (raw as HeroArt) : "ring";
 
+/**
+ * The built-in melodies, by id. Kept as a plain list rather than imported from
+ * the client so the server has no opinion about how they are synthesised — it
+ * only refuses to store an id the template would not recognise.
+ *
+ * "auto" is the default and means "pick one per visit", which is what an
+ * unconfigured preview does.
+ */
+const MUSIC_TRACKS = ["auto", "slow-dance", "first-light", "forever"] as const;
+const sanitizeTrack = (raw: unknown): string =>
+  typeof raw === "string" && (MUSIC_TRACKS as readonly string[]).includes(raw) ? raw : "auto";
+
+/** Marriage proposal, or asking someone to be yours. Anything else is neither. */
+const sanitizePerspective = (raw: unknown): string =>
+  raw === "relationship" ? "relationship" : "marriage";
+
 type ProposalBody = {
   senderName?: unknown;
   recipientName?: unknown;
@@ -44,6 +60,8 @@ type ProposalBody = {
   secretNote?: unknown;
   metDate?: unknown;
   musicUrl?: unknown;
+  musicTrack?: unknown;
+  perspective?: unknown;
   password?: unknown;
 };
 
@@ -66,6 +84,8 @@ export const createProposalPage = async (req: Request, res: Response): Promise<v
       secretNote: str(b.secretNote, 3000),
       metDate: str(b.metDate, 24),
       musicUrl: str(b.musicUrl, 2000),
+      musicTrack: sanitizeTrack(b.musicTrack),
+      perspective: sanitizePerspective(b.perspective),
       password: str(b.password, 128),
     });
 
@@ -124,6 +144,8 @@ export const updateProposalPage = async (req: Request, res: Response): Promise<v
     if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
     if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
     if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.musicTrack       !== undefined) page.musicTrack       = sanitizeTrack(b.musicTrack);
+    if (b.perspective      !== undefined) page.perspective      = sanitizePerspective(b.perspective);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

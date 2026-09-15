@@ -44,10 +44,23 @@ export interface IProposalPage extends Document {
    */
   metDate: string;
   /**
-   * Optional URL of a track to loop behind the page. Empty string means the
-   * template falls back to its built-in WebAudio melody.
+   * Optional URL of a track to loop behind the page. Also carries a YouTube
+   * link, which the template plays through the official IFrame player rather
+   * than fetching. Empty string means the built-in melody named by
+   * `musicTrack` plays instead.
    */
   musicUrl: string;
+  /**
+   * Which built-in melody plays when `musicUrl` is empty. "auto" picks one at
+   * random per visit, which is what an unconfigured preview does.
+   */
+  musicTrack: string;
+  /**
+   * Who is being asked, and therefore which set of words the template speaks:
+   * "marriage" proposes, "relationship" asks someone to be theirs. Every
+   * default string in the template has two versions; this chooses between them.
+   */
+  perspective: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -83,6 +96,8 @@ const proposalPageSchema = new Schema<IProposalPage>(
     secretNote: { type: String, default: "", maxlength: 3000 },
     metDate: { type: String, default: "", maxlength: 24 },
     musicUrl: { type: String, default: "", maxlength: 2000 },
+    musicTrack: { type: String, default: "auto", maxlength: 40 },
+    perspective: { type: String, enum: ["marriage", "relationship"], default: "marriage" },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
