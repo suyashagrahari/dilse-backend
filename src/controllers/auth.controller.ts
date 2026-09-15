@@ -243,6 +243,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           subdomain: user.subdomain,
           points: user.points,
           referralCode: user.referralCode,
+          // ── WHY createdAt IS ON EVERY AUTH PAYLOAD, NOT JUST /auth/me ────
+          //
+          // The client tells a returning creator from a brand-new one by the
+          // age of their account — see `lib/welcome/welcomeBus.ts` there. It
+          // only ever had this field from `GET /auth/me`, which is fetched on
+          // boot; but the case that matters most is the one that never boots
+          // with a session, because signing in is what the publish button
+          // interrupts. Somebody who taps Publish, signs in, and has the
+          // publish resume behind them gets their user object from THIS
+          // response, or from Google, OTP or a token refresh — and a payload
+          // missing the field reads as "we cannot tell", which silences the
+          // greeting for precisely the returning creators it is for.
+          //
+          // So all five carry it. It is a public timestamp of the viewer's own
+          // account, already returned by /auth/me and /auth/profile.
+          createdAt: user.createdAt,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -478,6 +494,7 @@ export const googleAuth = async (
           subdomain: user.subdomain,
           points: freshUser?.points ?? 0,
           referralCode: freshUser?.referralCode ?? "",
+          createdAt: freshUser?.createdAt ?? user.createdAt,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -558,6 +575,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
           subdomain: user.subdomain,
           points: freshUser?.points ?? 0,
           referralCode: freshUser?.referralCode ?? "",
+          createdAt: freshUser?.createdAt ?? user.createdAt,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -976,6 +994,7 @@ export const refreshToken = async (
           theme: user.theme,
           role: user.role,
           subdomain: user.subdomain,
+          createdAt: user.createdAt,
         },
       },
     });
