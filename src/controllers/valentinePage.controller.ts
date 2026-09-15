@@ -105,7 +105,15 @@ export const getSharedValentinePage = async (req: Request, res: Response): Promi
   try {
     const page = await ValentinePage.findOne({ shareId: req.params.shareId, isPublished: true });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
-    res.json({ success: true, data: page, templateType: "valentine" });
+
+    // Shaped like the other forty-five share handlers rather than sending the
+    // document straight out. This model has no password field TODAY, which is
+    // the only reason `data: page` was not already a leak — and exactly why it
+    // is not left that way. The day somebody adds one here, this handler would
+    // have published it silently.
+    const pageObj = page.toObject();
+    const { password: _pw, passwordRaw: _pr, ...safeData } = pageObj as unknown as Record<string, unknown>;
+    res.json({ success: true, data: safeData, templateType: "valentine" });
   } catch (error) {
     console.error("Get shared valentine page error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch page" });

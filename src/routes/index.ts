@@ -63,12 +63,27 @@ import rakshaBandhanPageRoutes from "./rakshaBandhanPage.routes";
 import rakshaBandhanSisterPageRoutes from "./rakshaBandhanSisterPage.routes";
 import ganeshChaturthiPageRoutes from "./ganeshChaturthiPage.routes";
 import { protect } from "../middleware/auth";
+import { scrubPrivate } from "../middleware/scrubPrivate";
 import { guardBannedContent } from "../services/bannedContent";
 import { requireAdmin, requireSuperAdmin } from "../middleware/adminAuth";
 import { endImpersonation } from "../controllers/superAdmin.controller";
 import { getPublicTemplateVisibility } from "../controllers/templateVisibility.controller";
 
 const router = Router();
+
+// ── Nothing private leaves, whatever a controller forgets ──────────────────
+//
+// FIRST, above every route, so it covers the ones added after it too. A short
+// list of keys that are never legitimate in any response — the bcrypt hash, the
+// OTP, the IP and user-agent kept for abuse investigations, private support
+// notes — is deleted on the way out.
+//
+// It is a second line, not the first: 45 of the 48 public read handlers already
+// strip the page password by hand. That hand-written repetition is exactly what
+// this guards, because forgetting one copy is silent and what leaks is a secret
+// rather than a layout. See middleware/scrubPrivate for why `email` is
+// deliberately NOT on the list and is policed at build time instead.
+router.use(scrubPrivate);
 
 // Pages belonging to banned accounts answer 404 everywhere they are served —
 // the central share resolver and all 43 per-template share endpoints alike.
