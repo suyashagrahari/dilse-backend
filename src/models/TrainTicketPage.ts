@@ -198,9 +198,32 @@ trainTicketPageSchema.pre("save", async function (next) {
 
 trainTicketPageSchema.methods.comparePassword = async function (candidate: string): Promise<boolean> {
   if (!this.password) return true;
-  // Trimmed on both sides. One viewer sends untrimmed input, and the stored
-  // value is trimmed at save time — so comparing raw would reintroduce the bug.
-  return bcrypt.compare((candidate || "").trim(), this.password);
+
+  const raw = candidate || "";
+  const trimmed = raw.trim();
+
+  // Trimmed first: that is what every page saved since passwords began being
+  // trimmed at hash time actually stores.
+  if (await bcrypt.compare(trimmed, this.password)) return true;
+
+  // ── THEN EXACTLY AS TYPED, FOR PAGES OLDER THAN THAT FIX ──────────────────
+  //
+  // A page published before passwords were trimmed hashed the string WITH its
+  // whitespace — "sunflower " — because no builder trimmed and every phone
+  // keyboard offers a space after a word. Trimming the candidate here is what
+  // then took away the only key that opened it: the sender's own password
+  // stopped working on their own page, and so did the trimmed version. There
+  // was no string the recipient could type.
+  //
+  // scripts/repair-page-passwords.js re-hashes those rows from `passwordRaw`,
+  // but it needs someone to run it against production, and a row whose
+  // passwordRaw is missing cannot be repaired at all. This costs one extra
+  // comparison and needs nobody to remember anything.
+  //
+  // Skipped when the two strings are equal, so an ordinary wrong password is
+  // still exactly one bcrypt comparison.
+  if (raw === trimmed) return false;
+  return bcrypt.compare(raw, this.password);
 };
 
 export default mongoose.model<ITrainTicketPage>("TrainTicketPage", trainTicketPageSchema);
