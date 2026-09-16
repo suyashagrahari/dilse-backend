@@ -12,12 +12,12 @@ const upload = multer({
     fileSize: 20 * 1024 * 1024,
   },
   fileFilter: (_req, file, cb: FileFilterCallback) => {
+    // A first, deliberately loose pass. `isAllowedUploadMime` lets through the
+    // empty and octet-stream types a phone sends for a file it cannot name, so
+    // the controller can sniff the bytes and give a real answer. Everything this
+    // does stop is stopped before 20MB of it is buffered into memory.
     if (!isAllowedUploadMime(file.mimetype)) {
-      cb(
-        new Error(
-          "Unsupported file type. Allowed: jpg, jpeg, png, webp, gif, avif, mp3, wav, webm, ogg, mp4, aac, m4a"
-        )
-      );
+      cb(new Error("That file is not an image or an audio clip."));
       return;
     }
     cb(null, true);

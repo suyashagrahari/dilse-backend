@@ -12,6 +12,7 @@
     "upload:bouquet-media": "tsx src/scripts/uploadBouquetMedia.ts",
     "upload:template-media": "tsx src/scripts/uploadTemplateMedia.ts",
     "upload:guide-media": "tsx src/scripts/uploadGuideMedia.ts",
+    "repair:inline-media": "tsx src/scripts/repairInlineMedia.ts",
     "test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
     "leak:check": "node scripts/leak-check.mjs",
     "thread:test": "node scripts/thread-integration.js"

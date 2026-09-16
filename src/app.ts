@@ -88,8 +88,18 @@ app.use(
 
 // ── Body parsers ───────────────────────────────────────────────────────────
 app.use(cookieParser());
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+// ── WHY 40MB ────────────────────────────────────────────────────────────────
+// A page is saved as one JSON document with its media inline as base64, which
+// costs a third more than the bytes themselves: the 20MB audio ceiling in
+// mediaProcessor needs ~27MB of room, before a single photo is counted. At 15MB
+// a long voice note was rejected as a bare 413 with no CORS headers, which the
+// browser reports as a network failure — so the editor said "check your
+// connection" for a file that was simply too big to describe.
+//
+// nginx caps the request first (`client_max_body_size` in nginx/backend.conf).
+// Raising this alone changes nothing until the box is raised to match.
+app.use(express.json({ limit: "40mb" }));
+app.use(express.urlencoded({ extended: true, limit: "40mb" }));
 
 // ── HTTP request logging ───────────────────────────────────────────────────
 if (!env.IS_PROD) {
