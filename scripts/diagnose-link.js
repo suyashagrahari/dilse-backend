@@ -130,6 +130,105 @@ function reportPage(entry, page, ownerBySubdomain) {
   return problems.length;
 }
 
+/**
+ * Diagnose a link over the PUBLIC API, with no database and no credentials.
+ *
+ * ── WHY THIS MODE EXISTS ────────────────────────────────────────────────────
+ *
+ * The database is not always reachable from where the question is being asked —
+ * a laptop without the production URI, a support person who should not have it,
+ * or a sandbox that refuses the connection. Almost every distinction that
+ * matters is visible from outside anyway, because it is exactly what the
+ * recipient's browser sees:
+ *
+ *   404            → not published, or deleted
+ *   200 + password → the page is there and the gate is the problem
+ *   200            → the page opens; the link they were given is the wrong one
+ *
+ * The one thing it cannot see is whether a stored password carries whitespace,
+ * since the hash never leaves the server. `--password=` closes that: verifying
+ * the same string trimmed and untrimmed tells the two apart definitively,
+ * because a legacy row opens for exactly one of them.
+ */
+async function diagnoseLive(shareId, password, apiBase) {
+  const API = apiBase || "https://api.subhsandesh.in/api";
+  console.log(`=== live check: ${shareId} ===`);
+  console.log(`  api        : ${API}`);
+  console.log(`  apex link  : https://subhsandesh.in/${shareId}`);
+
+  let res;
+  try {
+    res = await fetch(`${API}/share/${shareId}`);
+  } catch (e) {
+    console.log(`  could not reach the API: ${e.message}`);
+    return;
+  }
+
+  if (res.status === 404) {
+    console.log("  share API  : 404 Page not found\n");
+    console.log("  => The page is NOT PUBLISHED, or it was deleted.");
+    console.log("     Every share route filters on { isPublished: true }. This is the single");
+    console.log("     most common cause: the page was built but publish never completed.");
+    console.log("     Ask them to open it from My Creations and press Publish/Share again.");
+    return;
+  }
+  if (!res.ok) {
+    console.log(`  share API  : ${res.status} — the API is unhappy, not the page.`);
+    return;
+  }
+
+  const body = await res.json();
+  const d = body.data || {};
+  console.log(`  share API  : 200 OK`);
+  console.log(`  template   : ${body.templateType}`);
+  console.log(`  from → to  : ${d.senderName || "?"} → ${d.recipientName || "?"}`);
+  console.log(`  created    : ${d.createdAt || "?"}`);
+  console.log(`  views      : ${d.viewCount != null ? d.viewCount : "?"}`);
+  console.log(`  password   : ${body.hasPassword ? "SET" : "none"}`);
+
+  if (!body.hasPassword) {
+    console.log("\n  => The page is published and opens for anyone with the link.");
+    console.log("     If they still cannot open it, the URL they were given is not this one.");
+    return;
+  }
+  if (!password) {
+    console.log("\n  => Published, but password-gated. Re-run with --password='their password'");
+    console.log("     to find out whether the stored hash carries stray whitespace.");
+    return;
+  }
+
+  // A legacy row opens for exactly one of these two; a healthy row opens for
+  // both; a wrong password opens for neither.
+  const base = body.templateType === "proposal" ? "proposal-pages" : null;
+  const verify = async (candidate) => {
+    const url = base
+      ? `${API}/${base}/share/${shareId}/verify`
+      : `${API}/share/${shareId}/verify`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password: candidate }),
+    });
+    return r.status;
+  };
+
+  const trimmed = password.trim();
+  const asTyped = await verify(password);
+  const asTrimmed = password === trimmed ? asTyped : await verify(trimmed);
+  console.log(`\n  verify as typed   (${JSON.stringify(password)}) -> ${asTyped}`);
+  console.log(`  verify trimmed    (${JSON.stringify(trimmed)}) -> ${asTrimmed}`);
+
+  if (asTyped === 200 || asTrimmed === 200) {
+    console.log("\n  => This password DOES open the page. The gate is not the problem —");
+    console.log("     they are typing something else, or opening a different link.");
+  } else {
+    console.log("\n  => Neither form opens it. Either the password is not what you think,");
+    console.log("     or this row predates the trim fix and its hash carries whitespace");
+    console.log("     that nothing typed can reproduce. That case needs:");
+    console.log("       node scripts/repair-page-passwords.js --uri='…' --write --i-mean-production");
+  }
+}
+
 (async () => {
   // The target is never inferred — same rule as repair-page-passwords.js, and
   // for the same reason: every copy of .env carries PROD_MONGODB_URI.
@@ -138,8 +237,16 @@ function reportPage(entry, page, ownerBySubdomain) {
   const target = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
   const shareId = extractShareId(target);
 
+  // No database needed, and none is opened.
+  if (process.argv.includes("--live") && shareId) {
+    await diagnoseLive(shareId, arg("password"), arg("api"));
+    return;
+  }
+
   if (!uri || (!shareId && !email)) {
     console.error("Read-only. Diagnoses why a share link will not open.\n");
+    console.error("  node scripts/diagnose-link.js --live <link>          (no database needed)");
+    console.error("  node scripts/diagnose-link.js --live <link> --password='their password'");
     console.error("  node scripts/diagnose-link.js --uri='mongodb://…/dbname' <link-or-shareId>");
     console.error("  node scripts/diagnose-link.js --uri='…' --email=someone@example.com\n");
     if (target && !shareId) {
