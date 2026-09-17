@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import HoldMyHandPage, { IHoldLine, HoldMode } from "../models/HoldMyHandPage";
+import HoldMyHandPage, { IHoldLine, HoldMode, IMemoryCard } from "../models/HoldMyHandPage";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 
@@ -45,6 +45,29 @@ const sanitizeHoldLines = (raw: unknown, durationMs: number): IHoldLine[] => {
     .sort((a, b) => a.atMs - b.atMs);
 };
 
+/** Six keepsake cards at most — beyond that the letter stops being the point. */
+const MAX_MEMORIES = 6;
+
+/**
+ * `imageUrl` is deliberately NOT passed through `str()`: an uploaded photo is
+ * still a data URL at this point (the media transform replaces it with a CDN
+ * URL on the way in), and a length cap would cut it into a broken image. A card
+ * with no picture is dropped rather than stored as an empty frame.
+ */
+const sanitizeMemories = (raw: unknown): IMemoryCard[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_MEMORIES)
+    .map((m) => {
+      const o = (m ?? {}) as Record<string, unknown>;
+      return {
+        imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : "",
+        note: str(o.note, 220),
+      };
+    })
+    .filter((m) => m.imageUrl.trim().length > 0);
+};
+
 const sanitizeStrings = (raw: unknown, max: number, len: number): string[] => {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -64,6 +87,7 @@ type HoldMyHandBody = {
   releaseLines?: unknown;
   ghostFragments?: unknown;
   letter?: unknown;
+  memories?: unknown;
   password?: unknown;
 };
 
@@ -84,6 +108,7 @@ export const createHoldMyHandPage = async (req: Request, res: Response): Promise
       releaseLines: sanitizeStrings(b.releaseLines, MAX_RELEASE_LINES, 160),
       ghostFragments: sanitizeStrings(b.ghostFragments, MAX_GHOSTS, 200),
       letter: str(b.letter, 4000),
+      memories: sanitizeMemories(b.memories),
       password: str(b.password, 128),
     });
 
@@ -141,6 +166,7 @@ export const updateHoldMyHandPage = async (req: Request, res: Response): Promise
     if (b.releaseLines  !== undefined) page.releaseLines  = sanitizeStrings(b.releaseLines, MAX_RELEASE_LINES, 160);
     if (b.ghostFragments!== undefined) page.ghostFragments= sanitizeStrings(b.ghostFragments, MAX_GHOSTS, 200);
     if (b.letter        !== undefined) page.letter        = str(b.letter, 4000);
+    if (b.memories      !== undefined) page.memories      = sanitizeMemories(b.memories);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

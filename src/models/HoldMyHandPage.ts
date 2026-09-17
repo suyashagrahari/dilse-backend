@@ -17,6 +17,11 @@ export interface IHoldLine {
  */
 export type HoldMode = "kind" | "evil";
 
+export interface IMemoryCard {
+  imageUrl: string;
+  note: string;
+}
+
 export interface IHoldMyHandPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
@@ -44,6 +49,8 @@ export interface IHoldMyHandPage extends Document {
   ghostFragments: string[];
   /** The full letter, revealed only at 100%. */
   letter: string;
+  /** Photo cards shown beneath the letter — the two of them, with a line each. */
+  memories: IMemoryCard[];
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -62,6 +69,20 @@ const holdLineSchema = new Schema<IHoldLine>(
   { _id: false }
 );
 
+/**
+ * `imageUrl` carries no maxlength for the same reason `photoUrl` does not: the
+ * photo arrives as a data URL and is replaced with its CDN URL by the media
+ * transform on the way in. A cap here would truncate the one before the other
+ * had a chance to run, and store a broken image.
+ */
+const memoryCardSchema = new Schema<IMemoryCard>(
+  {
+    imageUrl: { type: String, default: "" },
+    note: { type: String, default: "", maxlength: 220 },
+  },
+  { _id: false }
+);
+
 const holdMyHandPageSchema = new Schema<IHoldMyHandPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -76,6 +97,7 @@ const holdMyHandPageSchema = new Schema<IHoldMyHandPage>(
     releaseLines: { type: [String], default: [] },
     ghostFragments: { type: [String], default: [] },
     letter: { type: String, default: "", maxlength: 4000 },
+    memories: { type: [memoryCardSchema], default: [] },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
