@@ -58,6 +58,7 @@ import {
   updateThread,
 } from "../controllers/adminThread.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
+import { getRecurringUsers } from "../controllers/adminRetention.controller";
 
 const router = Router();
 
@@ -70,6 +71,9 @@ router.get("/analytics/top-pages", getTopPages);
 router.get("/analytics/recent-activity", getRecentActivity);
 
 // User management
+// Who came back on a different day and made another page. Super-admin only:
+// it reads every creator's activity across every template.
+router.get("/users/recurring", requireSuperAdmin, getRecurringUsers);
 router.get("/users", getAllUsers);
 router.get("/users/:userId", getUserDetail);
 router.patch("/users/:userId/role", changeUserRole);
