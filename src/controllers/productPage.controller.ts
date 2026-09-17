@@ -14,6 +14,7 @@ import ProductPage, {
 } from "../models/ProductPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 /**
  * NOTHING IN THIS FILE PARSES MONEY. `price.amount`, `price.original` and
@@ -336,7 +337,7 @@ export const updateProductPage = async (req: Request, res: Response): Promise<vo
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = !!b.contributorsEnabled;
     // Absent or empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, PRODUCT_LIMITS.password) !== "") {
-      page.password = str(b.password, PRODUCT_LIMITS.password);
+      applyPagePassword(page, b.password, PRODUCT_LIMITS.password);
     }
 
     await page.save();

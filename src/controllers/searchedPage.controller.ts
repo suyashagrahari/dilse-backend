@@ -10,6 +10,7 @@ import SearchedPage, {
 } from "../models/SearchedPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -334,7 +335,7 @@ export const updateSearchedPage = async (req: Request, res: Response): Promise<v
     if (b.alternateResults !== undefined) page.alternateResults = await sanitizeAlternateResults(b.alternateResults, req.userId);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, SEARCHED_LIMITS.password) !== "") {
-      page.password = str(b.password, SEARCHED_LIMITS.password);
+      applyPagePassword(page, b.password, SEARCHED_LIMITS.password);
     }
 
     await page.save();

@@ -14,6 +14,7 @@ import AppPage, {
 } from "../models/AppPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 /**
  * NOTHING IN THIS FILE PARSES `meta.size`, `meta.price` OR `rating.count`.
@@ -332,7 +333,7 @@ export const updateAppPage = async (req: Request, res: Response): Promise<void> 
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = !!b.contributorsEnabled;
     // Absent or empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, APP_LIMITS.password) !== "") {
-      page.password = str(b.password, APP_LIMITS.password);
+      applyPagePassword(page, b.password, APP_LIMITS.password);
     }
 
     await page.save();

@@ -8,6 +8,7 @@ import LoveflixPage, {
 } from "../models/LoveflixPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -295,7 +296,7 @@ export const updateLoveflixPage = async (req: Request, res: Response): Promise<v
     }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, LOVEFLIX_LIMITS.password) !== "") {
-      page.password = str(b.password, LOVEFLIX_LIMITS.password);
+      applyPagePassword(page, b.password, LOVEFLIX_LIMITS.password);
     }
 
     await page.save();

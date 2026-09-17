@@ -4,6 +4,7 @@ import ReceptionPage from "../models/ReceptionPage";
 import { env } from "../config/env";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -75,7 +76,7 @@ export const updateReceptionPage = async (req: Request, res: Response): Promise<
   try {
     const fields = [
       "brideName", "groomName", "receptionDate", "venue", "venueAddress", "venueMapQuery",
-      "venueTimings", "tagline", "heroImage", "bride", "groom", "families", "galleryImages", "sharePhoto", "password",
+      "venueTimings", "tagline", "heroImage", "bride", "groom", "families", "galleryImages", "sharePhoto",
     ];
 
     const page = await ReceptionPage.findOne({ _id: req.params.id, userId: req.userId });
@@ -94,6 +95,10 @@ export const updateReceptionPage = async (req: Request, res: Response): Promise<
         (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
     }
+
+    // Never through the loop: an empty value there would silently remove
+    // the gate on an ordinary edit. See services/pagePassword.
+    applyPagePassword(page, updates.password);
 
     await page.save();
     res.json({ success: true, data: page });

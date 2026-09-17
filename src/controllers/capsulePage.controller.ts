@@ -14,6 +14,7 @@ import CapsulePage, {
 } from "../models/CapsulePage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -438,7 +439,7 @@ export const updateCapsulePage = async (req: Request, res: Response): Promise<vo
     if (b.openedAt    !== undefined) page.openedAt    = str(b.openedAt, CAPSULE_LIMITS.timestamp);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, CAPSULE_LIMITS.password) !== "") {
-      page.password = str(b.password, CAPSULE_LIMITS.password);
+      applyPagePassword(page, b.password, CAPSULE_LIMITS.password);
     }
 
     await page.save();

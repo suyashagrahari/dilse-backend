@@ -8,6 +8,7 @@ import UsPage, {
 } from "../models/UsPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -263,7 +264,7 @@ export const updateUsPage = async (req: Request, res: Response): Promise<void> =
     if (b.pinnedPostIds !== undefined) page.pinnedPostIds = sanitizeStrings(b.pinnedPostIds, US_LIMITS.maxPinned, US_LIMITS.postId);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, US_LIMITS.password) !== "") {
-      page.password = str(b.password, US_LIMITS.password);
+      applyPagePassword(page, b.password, US_LIMITS.password);
     }
 
     await page.save();

@@ -4,6 +4,7 @@ import ChristianWeddingPage from "../models/ChristianWeddingPage";
 import { env } from "../config/env";
 import { transformMediaPayload, uploadAudioDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -166,7 +167,7 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
       "brideName", "groomName", "weddingDate", "venue", "blessing",
       "bridePhoto", "brideDescription", "brideTags", "brideFamilyParents", "brideFamilyGrandparents",
       "groomPhoto", "groomDescription", "groomTags", "groomFamilyParents", "groomFamilyGrandparents",
-      "events", "galleryImages", "sharePhoto", "password", "templateVariant",
+      "events", "galleryImages", "sharePhoto",  "templateVariant",
     ];
 
     const page = await ChristianWeddingPage.findOne({ _id: req.params.id, userId: req.userId });
@@ -189,6 +190,10 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
         (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
     }
+
+    // Never through the loop: an empty value there would silently remove
+    // the gate on an ordinary edit. See services/pagePassword.
+    applyPagePassword(page, updates.password);
 
     await page.save();
     res.json({ success: true, data: page });

@@ -8,6 +8,7 @@ import ProfileProPage, {
   IRecommendation,
 } from "../models/ProfileProPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 // ─── Endorsements — CRUD ─────────────────────────────────────────────────────
@@ -240,7 +241,7 @@ export const updateProfileProPage = async (req: Request, res: Response): Promise
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = b.contributorsEnabled !== false;
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, PROFILE_LIMITS.password) !== "") {
-      page.password = str(b.password, PROFILE_LIMITS.password);
+      applyPagePassword(page, b.password, PROFILE_LIMITS.password);
     }
 
     await page.save();

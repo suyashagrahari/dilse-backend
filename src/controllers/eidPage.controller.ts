@@ -3,6 +3,7 @@ import EidPage from "../models/EidPage";
 import { env } from "../config/env";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 export const createEidPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -109,7 +110,7 @@ export const updateEidPage = async (req: Request, res: Response): Promise<void> 
     if (updates.urduSubtitle !== undefined) page.urduSubtitle = updates.urduSubtitle;
     if (updates.englishSubtitle !== undefined) page.englishSubtitle = updates.englishSubtitle;
     if (updates.eidDate !== undefined) page.eidDate = updates.eidDate;
-    if (updates.password !== undefined) page.password = updates.password;
+    applyPagePassword(page, updates.password);
 
     await page.save();
     res.json({ success: true, data: page });

@@ -11,6 +11,7 @@ import WatchPage, {
 } from "../models/WatchPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -316,7 +317,7 @@ export const updateWatchPage = async (req: Request, res: Response): Promise<void
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = b.contributorsEnabled === true;
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, WATCH_LIMITS.password) !== "") {
-      page.password = str(b.password, WATCH_LIMITS.password);
+      applyPagePassword(page, b.password, WATCH_LIMITS.password);
     }
 
     await page.save();

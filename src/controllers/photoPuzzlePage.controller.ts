@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import PhotoPuzzlePage, { FinalPieceMode, PUZZLE_LIMITS } from "../models/PhotoPuzzlePage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -180,7 +181,7 @@ export const updatePhotoPuzzlePage = async (req: Request, res: Response): Promis
     if (b.closingLine       !== undefined) page.closingLine       = str(b.closingLine, PUZZLE_LIMITS.closingLine);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, PUZZLE_LIMITS.password) !== "") {
-      page.password = str(b.password, PUZZLE_LIMITS.password);
+      applyPagePassword(page, b.password, PUZZLE_LIMITS.password);
     }
 
     await page.save();

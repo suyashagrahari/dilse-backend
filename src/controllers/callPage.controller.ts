@@ -9,6 +9,7 @@ import CallPage, {
 } from "../models/CallPage";
 import { uploadAudioDataUrl, uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -233,7 +234,7 @@ export const updateCallPage = async (req: Request, res: Response): Promise<void>
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = b.contributorsEnabled === true;
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, CALL_LIMITS.password) !== "") {
-      page.password = str(b.password, CALL_LIMITS.password);
+      applyPagePassword(page, b.password, CALL_LIMITS.password);
     }
 
     await page.save();

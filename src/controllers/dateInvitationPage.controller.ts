@@ -8,6 +8,7 @@ import DateInvitationPage, {
 } from "../models/DateInvitationPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -257,7 +258,7 @@ export const updateDateInvitationPage = async (req: Request, res: Response): Pro
     if (b.closingLine   !== undefined) page.closingLine   = str(b.closingLine, DATE_INVITE_LIMITS.closingLine);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, DATE_INVITE_LIMITS.password) !== "") {
-      page.password = str(b.password, DATE_INVITE_LIMITS.password);
+      applyPagePassword(page, b.password, DATE_INVITE_LIMITS.password);
     }
 
     await page.save();

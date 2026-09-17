@@ -11,6 +11,7 @@ import StreakPage, {
 } from "../models/StreakPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -478,7 +479,7 @@ export const updateStreakPage = async (req: Request, res: Response): Promise<voi
     if (b.microLetters !== undefined) page.microLetters = sanitizeMicroLetters(b.microLetters);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, STREAK_LIMITS.password) !== "") {
-      page.password = str(b.password, STREAK_LIMITS.password);
+      applyPagePassword(page, b.password, STREAK_LIMITS.password);
     }
 
     await page.save();

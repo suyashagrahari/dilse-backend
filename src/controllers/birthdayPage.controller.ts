@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import BirthdayPage from "../models/BirthdayPage";
 import { env } from "../config/env";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 export const createBirthdayPage = async (req: Request, res: Response): Promise<void> => {
@@ -71,7 +72,7 @@ export const updateBirthdayPage = async (req: Request, res: Response): Promise<v
     if (photos !== undefined) page.photos = photos;
     if (musicTrack !== undefined) page.musicTrack = musicTrack;
     if (theme !== undefined) page.theme = theme;
-    if (password !== undefined) page.password = password;
+    applyPagePassword(page, password);
 
     await page.save();
     res.json({ success: true, data: page });

@@ -3,6 +3,7 @@ import HoliPage from "../models/HoliPage";
 import { env } from "../config/env";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { applyPagePassword } from "../services/pagePassword";
 
 export const createHoliPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -109,7 +110,7 @@ export const updateHoliPage = async (req: Request, res: Response): Promise<void>
     if (updates.hindiSubtitle !== undefined) page.hindiSubtitle = updates.hindiSubtitle;
     if (updates.englishSubtitle !== undefined) page.englishSubtitle = updates.englishSubtitle;
     if (updates.holiDate !== undefined) page.holiDate = updates.holiDate;
-    if (updates.password !== undefined) page.password = updates.password;
+    applyPagePassword(page, updates.password);
 
     await page.save();
     res.json({ success: true, data: page });
