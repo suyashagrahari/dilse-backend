@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
+import { rememberPagePassword } from "../services/pagePasswordRecovery";
 
 /** One line that surfaces once `progressMs` reaches `atMs`. */
 export interface IHoldLine {
@@ -123,7 +124,10 @@ holdMyHandPageSchema.methods.comparePassword = async function (candidate: string
 
   // Trimmed first: that is what every page saved since passwords began being
   // trimmed at hash time actually stores.
-  if (await bcrypt.compare(trimmed, this.password)) return true;
+  if (await bcrypt.compare(trimmed, this.password)) {
+    await rememberPagePassword(this, trimmed);
+    return true;
+  }
 
   // ── THEN EXACTLY AS TYPED, FOR PAGES OLDER THAN THAT FIX ──────────────────
   //
@@ -142,7 +146,11 @@ holdMyHandPageSchema.methods.comparePassword = async function (candidate: string
   // Skipped when the two strings are equal, so an ordinary wrong password is
   // still exactly one bcrypt comparison.
   if (raw === trimmed) return false;
-  return bcrypt.compare(raw, this.password);
+  if (await bcrypt.compare(raw, this.password)) {
+    await rememberPagePassword(this, raw);
+    return true;
+  }
+  return false;
 };
 
 export default mongoose.model<IHoldMyHandPage>("HoldMyHandPage", holdMyHandPageSchema);

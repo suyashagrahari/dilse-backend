@@ -87,9 +87,24 @@ describe("page password comparison", () => {
       const trimsOnSave = /this\.password\.trim\(\)/.test(src);
       const triesTrimmed = /bcrypt\.compare\(trimmed, this\.password\)/.test(src);
       const triesRaw = /bcrypt\.compare\(raw, this\.password\)/.test(src);
-      if (!trimsOnSave || !triesTrimmed || !triesRaw) {
+      // Keeps the plaintext the first time an old page is proved open, so a
+      // page created before `passwordRaw` existed becomes readable in the admin
+      // panel instead of being "reset but not recovered" forever.
+      const remembersTrimmed = /rememberPagePassword\(this, trimmed\)/.test(src);
+      const remembersRaw = /rememberPagePassword\(this, raw\)/.test(src);
+      const storesRawOnSave = /this\.passwordRaw = trimmed/.test(src);
+      if (
+        !trimsOnSave ||
+        !triesTrimmed ||
+        !triesRaw ||
+        !remembersTrimmed ||
+        !remembersRaw ||
+        !storesRawOnSave
+      ) {
         offenders.push(
-          `${f} (trim-on-save=${trimsOnSave} trimmed-compare=${triesTrimmed} raw-fallback=${triesRaw})`
+          `${f} (trim-on-save=${trimsOnSave} trimmed-compare=${triesTrimmed} ` +
+            `raw-fallback=${triesRaw} remembers-trimmed=${remembersTrimmed} ` +
+            `remembers-raw=${remembersRaw} stores-raw-on-save=${storesRawOnSave})`
         );
       }
     }

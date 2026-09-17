@@ -231,15 +231,24 @@ export const revealPagePassword = async (req: Request, res: Response): Promise<v
       return;
     }
     if (!supportsPasswordRaw(entry) || !obj.passwordRaw) {
-      // Hash-only templates, and pages written before `passwordRaw` existed.
-      // bcrypt is one-way, so the honest answer is that it cannot be shown —
-      // the recovery path is to reset it.
+      // Pages written before `passwordRaw` existed hold the hash and nothing
+      // else, and bcrypt is one way — so it genuinely cannot be shown yet.
+      //
+      // "Yet" is the part worth saying. `services/pagePasswordRecovery` keeps
+      // the plaintext the first time a recipient proves it correct, so this
+      // resolves itself the next time the page is actually opened. Telling the
+      // admin that is the difference between a dead end and a wait, and stops
+      // a password being reset — which breaks the link the sender already sent
+      // — when simply waiting would have answered it.
       res.json({
         success: true,
         data: {
           hasPassword: true,
           password: null,
-          reason: "Stored as a one-way hash for this page; it can be reset but not recovered.",
+          reason:
+            "Created before passwords were kept in readable form, so only the one-way hash exists. " +
+            "It will appear here the first time the recipient opens the page with it. " +
+            "Reset it only if they cannot.",
         },
       });
       return;
