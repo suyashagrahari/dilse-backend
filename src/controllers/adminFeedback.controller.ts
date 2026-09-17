@@ -45,8 +45,10 @@ import {
   AiRefusedError,
   AiUnavailableError,
   draftFeedbackReply,
+  sanitizeGuidance,
 } from "../services/feedbackReply.service";
 import { parseSortOrder, sortSpec } from "../utils/listSort";
+import { TEMPLATE_REGISTRY } from "../services/templateRegistry";
 
 const PAGE_SIZE_MAX = 100;
 const REPLY_MIN = 20;
@@ -300,16 +302,65 @@ export const deleteFeedback = async (req: Request, res: Response): Promise<void>
  * generate, dislike it, and generate again without leaving a trail of
  * half-answered tickets.
  */
+/**
+ * What else this person has made, most-used template first.
+ *
+ * One aggregation per template collection — the same shape the retention screen
+ * uses, and for the same reason: there is no central record of "a page was
+ * created". It runs only when a super admin presses Generate, so the cost is a
+ * click rather than a page load, and a failure is swallowed: a draft written
+ * from the rating and the comment alone is the behaviour this always had, and
+ * losing background context is not worth failing the button over.
+ */
+async function creatorHistory(
+  userId: unknown
+): Promise<{ templates: { templateLabel: string; count: number }[]; total: number }> {
+  const empty = { templates: [], total: 0 };
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) return empty;
+  try {
+    const id = new mongoose.Types.ObjectId(String(userId));
+    const counts = await Promise.all(
+      TEMPLATE_REGISTRY.map(async (entry) => {
+        if (!entry.model.schema.path("userId")) return null;
+        const count = await entry.model.countDocuments({ userId: id });
+        return count ? { templateLabel: entry.label, count } : null;
+      })
+    );
+    const templates = counts
+      .filter((c): c is { templateLabel: string; count: number } => c !== null)
+      .sort((a, b) => b.count - a.count);
+    return { templates, total: templates.reduce((a, t) => a + t.count, 0) };
+  } catch (error) {
+    console.error("Creator history lookup failed:", error);
+    return empty;
+  }
+}
+
 export const draftReply = async (req: Request, res: Response): Promise<void> => {
   try {
     const doc = await loadOr404(req, res);
     if (!doc) return;
+
+    // ── Everything else this person has built ────────────────────────────
+    //
+    // Asked for here rather than stored on the feedback row, because a row
+    // written in March should not freeze what was true in March — the reply is
+    // being written now. `userId` is a plain ref with no cascade, so a deleted
+    // account simply yields nothing and the draft falls back to the rating and
+    // the comment, which is what it always had.
+    const history = await creatorHistory(doc.userId);
 
     const draft = await draftFeedbackReply({
       rating: doc.rating,
       comment: doc.comment || "",
       templateLabel: doc.templateLabel || "",
       userName: doc.userName || "",
+      // Typed by a super admin in the panel: "ask why it was only two stars and
+      // what would have made it five". Trusted as an instruction, but ranked
+      // below the prompt's hard rules — see the service.
+      guidance: sanitizeGuidance((req.body as { guidance?: unknown })?.guidance),
+      history: history.templates,
+      pagesTotal: history.total,
     });
 
     res.json({ success: true, data: draft });
