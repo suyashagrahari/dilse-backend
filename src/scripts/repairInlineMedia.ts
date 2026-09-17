@@ -32,43 +32,30 @@ import mongoose from "mongoose";
 import { env } from "../config/env";
 import { parseAnyDataUrl, sniffMedia } from "../services/mediaSniff";
 import { uploadMediaBuffer } from "../services/mediaProcessor.service";
+import { TEMPLATE_REGISTRY } from "../services/templateRegistry";
 
-import ApologyDashboardPage from "../models/ApologyDashboardPage";
-import BirthdayGfPage from "../models/BirthdayGfPage";
-import CallPage from "../models/CallPage";
-import ChristianWeddingPage from "../models/ChristianWeddingPage";
-import DarlingPage from "../models/DarlingPage";
-import DedicationPage from "../models/DedicationPage";
-import LoveGfPage from "../models/LoveGfPage";
-import MissYouGfPage from "../models/MissYouGfPage";
-import ProposalPage from "../models/ProposalPage";
-import RewindPage from "../models/RewindPage";
-import ShaadiCardPage from "../models/ShaadiCardPage";
 
 const APPLY = process.argv.includes("--apply");
 const ONLY = (process.argv.find((a) => a.startsWith("--only=")) || "").split("=")[1] || "";
 
 /**
- * The models that hold audio, each with the template slug its S3 folder uses.
+ * Every template that can hold media, with the slug its S3 folder uses.
+ *
+ * ── WHY THIS IS DERIVED AND NOT A LIST ──────────────────────────────────────
+ *
+ * This was eleven models written out by hand, which was right when only eleven
+ * controllers uploaded to S3. Now that all of them do, a hand list is a list
+ * that silently under-reports: a template missing from it is scanned by nothing
+ * and reported clean, which is the one failure mode a repair tool must not
+ * have. `TEMPLATE_REGISTRY` is already the single list of which templates
+ * exist, so adding a template to that list is all it takes to be repaired.
  *
  * The models themselves, not their names: mongoose lowercases the WHOLE name to
- * pluralise (`ApologyDashboardPage` → `apologydashboardpages`), so any collection
- * name derived by hand here would quietly scan nothing and report a clean bill
- * of health for a database full of inline blobs.
+ * pluralise (`ApologyDashboardPage` -> `apologydashboardpages`), so any
+ * collection name derived by hand here would quietly scan nothing.
  */
-const MODELS: Array<{ model: mongoose.Model<unknown>; template: string }> = [
-  { model: ApologyDashboardPage as unknown as mongoose.Model<unknown>, template: "apology-dashboard" },
-  { model: BirthdayGfPage as unknown as mongoose.Model<unknown>, template: "birthday-gf" },
-  { model: CallPage as unknown as mongoose.Model<unknown>, template: "call" },
-  { model: ChristianWeddingPage as unknown as mongoose.Model<unknown>, template: "christian-wedding" },
-  { model: DarlingPage as unknown as mongoose.Model<unknown>, template: "darling" },
-  { model: DedicationPage as unknown as mongoose.Model<unknown>, template: "dedication" },
-  { model: LoveGfPage as unknown as mongoose.Model<unknown>, template: "love-gf" },
-  { model: MissYouGfPage as unknown as mongoose.Model<unknown>, template: "missyou-gf" },
-  { model: ProposalPage as unknown as mongoose.Model<unknown>, template: "proposal" },
-  { model: RewindPage as unknown as mongoose.Model<unknown>, template: "rewind" },
-  { model: ShaadiCardPage as unknown as mongoose.Model<unknown>, template: "shaadi-card" },
-];
+const MODELS: Array<{ model: mongoose.Model<unknown>; template: string }> =
+  TEMPLATE_REGISTRY.map((t) => ({ model: t.model, template: t.templateType }));
 
 interface Found {
   path: string;
