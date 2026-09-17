@@ -1,12 +1,49 @@
 import { Request, Response } from "express";
 import ProposalPage, { IMemory, HeroArt } from "../models/ProposalPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const MAX_MEMORIES = 6;
 const HERO_ART: HeroArt[] = ["ring", "rose", "bouquet"];
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
+
+/**
+ * Move every uploaded photo and any recorded audio onto S3 before the document
+ * is written, replacing each data URL with its CDN URL.
+ *
+ * ── WHY THIS IS NOT OPTIONAL ────────────────────────────────────────────────
+ *
+ * Without it the base64 is stored in Mongo verbatim and then sent to the
+ * recipient inside the share JSON, which is how one real page reached 858 KB —
+ * 856 KB of it four inlined JPEGs. The recipient's phone must download all of
+ * it before the password box can render: measured at 17s on 4G and 47s on a
+ * weak signal. Nobody waits that long, so the link reads as broken, and the
+ * sender is told their password is wrong when the password was never reached.
+ *
+ * ── WHY IT RUNS BEFORE THE `str()` CAPS ─────────────────────────────────────
+ *
+ * `musicUrl` is capped at 2000 characters. A base64 audio data URL is far
+ * longer than that, so capping first would store a truncated prefix — a string
+ * that is still a plausible-looking data URL and decodes to nothing. Uploading
+ * first means the cap only ever sees a short CDN URL.
+ *
+ * `sanitizeMemories` leaves `imageUrl` uncapped for the same reason, which is
+ * why the photos can be passed through it before this runs.
+ */
+const uploadMedia = async (
+  memories: IMemory[],
+  musicUrl: unknown,
+  userId: string | undefined
+): Promise<{ memories: IMemory[]; musicUrl: string }> =>
+  transformMediaPayload(
+    {
+      memories,
+      musicUrl: typeof musicUrl === "string" ? musicUrl : "",
+    },
+    { template: "proposal", userId }
+  );
 
 /**
  * `imageUrl` is left uncapped on purpose: an uploaded photo arrives as an inline
@@ -69,6 +106,8 @@ export const createProposalPage = async (req: Request, res: Response): Promise<v
   try {
     const b = req.body as ProposalBody;
 
+    const media = await uploadMedia(sanitizeMemories(b.memories), b.musicUrl, req.userId);
+
     const page = await ProposalPage.create({
       userId: req.userId,
       senderName: str(b.senderName, 80),
@@ -76,14 +115,14 @@ export const createProposalPage = async (req: Request, res: Response): Promise<v
       gateTitle: str(b.gateTitle, 160),
       gateButtonLabel: str(b.gateButtonLabel, 60),
       memoryLaneTitle: str(b.memoryLaneTitle, 160),
-      memories: sanitizeMemories(b.memories),
+      memories: media.memories,
       askHeadline: str(b.askHeadline, 200),
       heroArt: sanitizeHeroArt(b.heroArt),
       yesLabel: str(b.yesLabel, 60),
       celebrationTitle: str(b.celebrationTitle, 200),
       secretNote: str(b.secretNote, 3000),
       metDate: str(b.metDate, 24),
-      musicUrl: str(b.musicUrl, 2000),
+      musicUrl: str(media.musicUrl, 2000),
       musicTrack: sanitizeTrack(b.musicTrack),
       perspective: sanitizePerspective(b.perspective),
       password: str(b.password, 128),
@@ -136,14 +175,22 @@ export const updateProposalPage = async (req: Request, res: Response): Promise<v
     if (b.gateTitle        !== undefined) page.gateTitle        = str(b.gateTitle, 160);
     if (b.gateButtonLabel  !== undefined) page.gateButtonLabel  = str(b.gateButtonLabel, 60);
     if (b.memoryLaneTitle  !== undefined) page.memoryLaneTitle  = str(b.memoryLaneTitle, 160);
-    if (b.memories         !== undefined) page.memories         = sanitizeMemories(b.memories);
+    // Both media fields go up together, so an edit that changes only one of them
+    // still leaves the other exactly as it was stored.
+    const media = await uploadMedia(
+      b.memories !== undefined ? sanitizeMemories(b.memories) : [],
+      b.musicUrl !== undefined ? b.musicUrl : "",
+      req.userId
+    );
+
+    if (b.memories         !== undefined) page.memories         = media.memories;
     if (b.askHeadline      !== undefined) page.askHeadline      = str(b.askHeadline, 200);
     if (b.heroArt          !== undefined) page.heroArt          = sanitizeHeroArt(b.heroArt);
     if (b.yesLabel         !== undefined) page.yesLabel         = str(b.yesLabel, 60);
     if (b.celebrationTitle !== undefined) page.celebrationTitle = str(b.celebrationTitle, 200);
     if (b.secretNote       !== undefined) page.secretNote       = str(b.secretNote, 3000);
     if (b.metDate          !== undefined) page.metDate          = str(b.metDate, 24);
-    if (b.musicUrl         !== undefined) page.musicUrl         = str(b.musicUrl, 2000);
+    if (b.musicUrl         !== undefined) page.musicUrl         = str(media.musicUrl, 2000);
     if (b.musicTrack       !== undefined) page.musicTrack       = sanitizeTrack(b.musicTrack);
     if (b.perspective      !== undefined) page.perspective      = sanitizePerspective(b.perspective);
     // Empty password on update means "unchanged", not "remove the gate".

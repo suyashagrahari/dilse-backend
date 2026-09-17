@@ -2,10 +2,11 @@ import { Request, Response } from "express";
 import BirthdayPage from "../models/BirthdayPage";
 import { env } from "../config/env";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 export const createBirthdayPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, wishes, photos, musicTrack, theme, password } = req.body;
+    const { recipientName, senderName, personalMessage, wishes, photos, musicTrack, theme, password } = await transformMediaPayload(req.body, { template: "birthday", userId: req.userId });
     if (!recipientName) {
       res.status(400).json({ success: false, error: "Recipient name is required" });
       return;
@@ -56,7 +57,7 @@ export const getBirthdayPage = async (req: Request, res: Response): Promise<void
 
 export const updateBirthdayPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, wishes, photos, musicTrack, theme, password } = req.body;
+    const { recipientName, senderName, personalMessage, wishes, photos, musicTrack, theme, password } = await transformMediaPayload(req.body, { template: "birthday", userId: req.userId });
     const page = await BirthdayPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) {
       res.status(404).json({ success: false, error: "Page not found" });

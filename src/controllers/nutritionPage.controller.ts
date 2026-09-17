@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import NutritionPage, { INutrient, IVitamin } from "../models/NutritionPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 // ─── Nutrition Facts — CRUD ──────────────────────────────────────────────────
 //
@@ -93,7 +94,7 @@ type NutritionBody = {
 
 export const createNutritionPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = (req.body || {}) as NutritionBody;
+    const b = (await transformMediaPayload(req.body || {}, { template: "nutrition", userId: req.userId })) as NutritionBody;
 
     const page = await NutritionPage.create({
       userId: req.userId,
@@ -152,7 +153,7 @@ export const getNutritionPage = async (req: Request, res: Response): Promise<voi
 
 export const updateNutritionPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = (req.body || {}) as NutritionBody;
+    const b = (await transformMediaPayload(req.body || {}, { template: "nutrition", userId: req.userId })) as NutritionBody;
 
     const page = await NutritionPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }

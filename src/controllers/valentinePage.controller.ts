@@ -2,10 +2,11 @@ import { Request, Response } from "express";
 import ValentinePage from "../models/ValentinePage";
 import { env } from "../config/env";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 export const createValentinePage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, promises, photos, theme } = req.body;
+    const { recipientName, senderName, personalMessage, promises, photos, theme } = await transformMediaPayload(req.body, { template: "valentine", userId: req.userId });
     if (!recipientName) {
       res.status(400).json({ success: false, error: "Recipient name is required" });
       return;
@@ -44,7 +45,7 @@ export const getValentinePage = async (req: Request, res: Response): Promise<voi
 
 export const updateValentinePage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { recipientName, senderName, personalMessage, promises, photos, theme } = req.body;
+    const { recipientName, senderName, personalMessage, promises, photos, theme } = await transformMediaPayload(req.body, { template: "valentine", userId: req.userId });
     const page = await ValentinePage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 

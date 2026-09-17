@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import GaneshChaturthiPage from "../models/GaneshChaturthiPage";
 import type { IWishRow, IVargani } from "../models/GaneshChaturthiPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const MAX_WISHES = 6;
 const MAX_GREETING_LINES = 4;
@@ -65,7 +66,7 @@ function buildContent(b: Record<string, unknown>) {
 
 export const createGaneshChaturthiPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const content = buildContent(req.body || {});
+    const content = buildContent(await transformMediaPayload(req.body || {}, { template: "ganesh-chaturthi", userId: req.userId }));
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     const page = await GaneshChaturthiPage.create({ userId: req.userId, ...content, password });
     res.status(201).json({ success: true, data: page });
@@ -107,7 +108,7 @@ export const updateGaneshChaturthiPage = async (req: Request, res: Response): Pr
     const page = await GaneshChaturthiPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const b = (req.body || {}) as Record<string, unknown>;
+    const b = (await transformMediaPayload(req.body || {}, { template: "ganesh-chaturthi", userId: req.userId })) as Record<string, unknown>;
     const content = buildContent(b);
     page.recipientName = content.recipientName;
     page.senderName = content.senderName;

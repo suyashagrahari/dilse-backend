@@ -275,3 +275,33 @@ export const transformMediaPayload = async <T>(
 
   return (await transformNode(payload)) as T;
 };
+
+/**
+ * Upload one media field and return the URL to store in its place.
+ *
+ * ── WHY A SINGLE-FIELD FORM EXISTS ──────────────────────────────────────────
+ *
+ * Most templates carry one photograph — `photoUrl`, `imageUrl`, `qrImageUrl` —
+ * assigned in both create and update. Written out longhand that is a four-line
+ * `transformMediaPayload` call in twenty places, and the shape of the wrapper
+ * object is the sort of detail that gets copied slightly wrong once and stores
+ * a data URL forever.
+ *
+ * Returns "" for anything that is not a string, matching what the call sites
+ * were already doing with `typeof x === "string" ? x : ""`.
+ *
+ * A value that is already a URL passes straight through — `transformMediaPayload`
+ * only touches strings beginning `data:` — so this is safe to call on every
+ * save, including one where the user did not change the picture.
+ */
+export const uploadMediaField = async (
+  value: unknown,
+  template: string,
+  userId: string | undefined
+): Promise<string> => {
+  const out = await transformMediaPayload(
+    { value: typeof value === "string" ? value : "" },
+    { template, userId }
+  );
+  return out.value;
+};

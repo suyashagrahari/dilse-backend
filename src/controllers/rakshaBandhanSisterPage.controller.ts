@@ -8,6 +8,7 @@ import type {
   RakhiStyle,
 } from "../models/RakshaBandhanSisterPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 /**
  * The five rakhi ids the client offers her, mirrored from `RAKHI_STYLES` in
@@ -157,7 +158,7 @@ export const createRakshaBandhanSisterPage = async (
   res: Response
 ): Promise<void> => {
   try {
-    const content = buildContent(req.body || {});
+    const content = buildContent(await transformMediaPayload(req.body || {}, { template: "raksha-bandhan-sister", userId: req.userId }));
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     const page = await RakshaBandhanSisterPage.create({
       userId: req.userId,
@@ -220,7 +221,7 @@ export const updateRakshaBandhanSisterPage = async (
     });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const b = (req.body || {}) as Record<string, unknown>;
+    const b = (await transformMediaPayload(req.body || {}, { template: "raksha-bandhan-sister", userId: req.userId })) as Record<string, unknown>;
     const content = buildContent(b);
     page.sisterName = content.sisterName;
     page.brotherName = content.brotherName;

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import HoldMyHandPage, { IHoldLine, HoldMode } from "../models/HoldMyHandPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const MAX_HOLD_LINES = 24;
 const MAX_RELEASE_LINES = 16;
@@ -68,7 +69,7 @@ type HoldMyHandBody = {
 
 export const createHoldMyHandPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = req.body as HoldMyHandBody;
+    const b = (await transformMediaPayload(req.body, { template: "hold-my-hand", userId: req.userId })) as HoldMyHandBody;
     const durationMs = clampDuration(b.durationMs);
 
     const page = await HoldMyHandPage.create({
@@ -123,7 +124,7 @@ export const getHoldMyHandPage = async (req: Request, res: Response): Promise<vo
 
 export const updateHoldMyHandPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = req.body as HoldMyHandBody;
+    const b = (await transformMediaPayload(req.body, { template: "hold-my-hand", userId: req.userId })) as HoldMyHandBody;
 
     const page = await HoldMyHandPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }

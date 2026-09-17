@@ -8,6 +8,7 @@ import ChallanPage, {
   IChallanSettlementMethod,
 } from "../models/ChallanPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const MAX_OFFENCES = 10;
 const MAX_METHODS = 8;
@@ -135,7 +136,7 @@ type ChallanBody = {
 
 export const createChallanPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = (req.body || {}) as ChallanBody;
+    const b = (await transformMediaPayload(req.body || {}, { template: "challan", userId: req.userId })) as ChallanBody;
 
     const page = await ChallanPage.create({
       userId: req.userId,
@@ -194,7 +195,7 @@ export const getChallanPage = async (req: Request, res: Response): Promise<void>
 
 export const updateChallanPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = (req.body || {}) as ChallanBody;
+    const b = (await transformMediaPayload(req.body || {}, { template: "challan", userId: req.userId })) as ChallanBody;
 
     const page = await ChallanPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }

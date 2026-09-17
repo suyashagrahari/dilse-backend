@@ -8,6 +8,7 @@ import ProfileProPage, {
   IRecommendation,
 } from "../models/ProfileProPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 // ─── Endorsements — CRUD ─────────────────────────────────────────────────────
 //
@@ -170,7 +171,7 @@ type ProfileBody = {
 
 export const createProfileProPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = (req.body || {}) as ProfileBody;
+    const b = (await transformMediaPayload(req.body || {}, { template: "profile-pro", userId: req.userId })) as ProfileBody;
 
     const page = await ProfileProPage.create({
       userId: req.userId,
@@ -223,7 +224,7 @@ export const getProfileProPage = async (req: Request, res: Response): Promise<vo
 
 export const updateProfileProPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = (req.body || {}) as ProfileBody;
+    const b = (await transformMediaPayload(req.body || {}, { template: "profile-pro", userId: req.userId })) as ProfileBody;
 
     const page = await ProfileProPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }

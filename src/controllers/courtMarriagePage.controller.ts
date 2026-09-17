@@ -6,6 +6,7 @@ import CourtMarriagePage, {
   CertificateState,
 } from "../models/CourtMarriagePage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { uploadMediaField } from "../services/mediaProcessor.service";
 
 /** The certificate has exactly three witness columns; unsigned ones stay blank. */
 const WITNESS_SLOTS = 3;
@@ -99,12 +100,16 @@ export const createCourtMarriagePage = async (req: Request, res: Response): Prom
   try {
     const b = req.body as CourtMarriageBody;
 
+    // To S3 first, so what is stored is a short CDN URL. Keeping the data URL
+    // would put the whole image inside every share response the recipient has
+    // to download before the page can render.
+    const photoUrl = await uploadMediaField(b.photoUrl, "court-marriage", req.userId);
+
     const page = await CourtMarriagePage.create({
       userId: req.userId,
       partyA: sanitizeParty(b.partyA),
       partyB: sanitizeParty(b.partyB),
-      // Uncapped on purpose: an uploaded photo arrives as an inline data URL.
-      photoUrl: typeof b.photoUrl === "string" ? b.photoUrl : "",
+      photoUrl,
       certificateNo: str(b.certificateNo, 24),
       registeredOn: sanitizeDate(b.registeredOn),
       knownSinceDays: int(b.knownSinceDays, 0, 100000),
@@ -160,7 +165,7 @@ export const updateCourtMarriagePage = async (req: Request, res: Response): Prom
 
     if (b.partyA                 !== undefined) page.partyA                 = sanitizeParty(b.partyA);
     if (b.partyB                 !== undefined) page.partyB                 = sanitizeParty(b.partyB);
-    if (b.photoUrl               !== undefined) page.photoUrl               = typeof b.photoUrl === "string" ? b.photoUrl : "";
+    if (b.photoUrl               !== undefined) page.photoUrl               = await uploadMediaField(b.photoUrl, "court-marriage", req.userId);
     if (b.certificateNo          !== undefined) page.certificateNo          = str(b.certificateNo, 24);
     if (b.registeredOn           !== undefined) page.registeredOn           = sanitizeDate(b.registeredOn);
     if (b.knownSinceDays         !== undefined) page.knownSinceDays         = int(b.knownSinceDays, 0, 100000);

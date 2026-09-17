@@ -8,6 +8,7 @@ import type {
   RakhiCharm,
 } from "../models/RakshaBandhanPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { transformMediaPayload } from "../services/mediaProcessor.service";
 
 const CHARMS: RakhiCharm[] = ["om", "swastik", "evil-eye", "heart", "star"];
 const MAX_MEMORIES = 12;
@@ -102,7 +103,7 @@ function buildContent(b: Record<string, unknown>) {
 
 export const createRakshaBandhanPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const content = buildContent(req.body || {});
+    const content = buildContent(await transformMediaPayload(req.body || {}, { template: "raksha-bandhan", userId: req.userId }));
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     const page = await RakshaBandhanPage.create({ userId: req.userId, ...content, password });
     res.status(201).json({ success: true, data: page });
@@ -144,7 +145,7 @@ export const updateRakshaBandhanPage = async (req: Request, res: Response): Prom
     const page = await RakshaBandhanPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const b = (req.body || {}) as Record<string, unknown>;
+    const b = (await transformMediaPayload(req.body || {}, { template: "raksha-bandhan", userId: req.userId })) as Record<string, unknown>;
     const content = buildContent(b);
     page.brotherName = content.brotherName;
     page.sisterName = content.sisterName;
