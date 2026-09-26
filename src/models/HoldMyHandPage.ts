@@ -78,7 +78,7 @@ const holdLineSchema = new Schema<IHoldLine>(
 const memoryCardSchema = new Schema<IMemoryCard>(
   {
     imageUrl: { type: String, default: "" },
-    note: { type: String, default: "", maxlength: 220 },
+    note: { type: String, default: "", maxlength: 600 },
   },
   { _id: false }
 );
