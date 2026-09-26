@@ -83,6 +83,14 @@ const sanitizePhotos = async (raw: unknown, userId: unknown): Promise<IPhoto[]> 
     const photo: IPhoto = { url };
     const caption = str(src.caption, DEDICATION_LIMITS.photoCaption).trim();
     if (caption) photo.caption = caption;
+    const note = str(src.note, DEDICATION_LIMITS.photoNote).trim();
+    if (note) photo.note = note;
+    const cropX = num(src.cropX, 0, 100);
+    const cropY = num(src.cropY, 0, 100);
+    const scale = num(src.scale, 100, 300);
+    if (cropX !== undefined) photo.cropX = cropX;
+    if (cropY !== undefined) photo.cropY = cropY;
+    if (scale !== undefined) photo.scale = scale;
     out.push(photo);
   }
   return out;

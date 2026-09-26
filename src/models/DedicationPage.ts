@@ -42,6 +42,7 @@ export const DEDICATION_LIMITS = {
   /** The carousel in the radio's window. */
   maxPhotos: 12,
   photoCaption: 80,
+  photoNote: 600,
   /** The love letter under the radio. */
   letter: 2000,
 } as const;
@@ -49,6 +50,12 @@ export const DEDICATION_LIMITS = {
 export interface IPhoto {
   url: string;
   caption?: string;
+  /** A little letter written for this one photo. */
+  note?: string;
+  /** Framing: focal point 0–100 and zoom 100–300 (%). */
+  cropX?: number;
+  cropY?: number;
+  scale?: number;
 }
 
 export interface IStation {
@@ -149,6 +156,10 @@ const photoSchema = new Schema<IPhoto>(
   {
     url: { type: String, required: true, maxlength: DEDICATION_LIMITS.url },
     caption: { type: String, maxlength: DEDICATION_LIMITS.photoCaption },
+    note: { type: String, maxlength: DEDICATION_LIMITS.photoNote },
+    cropX: { type: Number, min: 0, max: 100 },
+    cropY: { type: Number, min: 0, max: 100 },
+    scale: { type: Number, min: 100, max: 300 },
   },
   { _id: false }
 );
