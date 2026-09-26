@@ -14,6 +14,16 @@ const MAX_DURATION_MS = 300_000;
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
+/** Photo framing: position is 0-100 (object-position %), zoom is 100-300. */
+const cropPos = (v: unknown, fallback = 50): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : fallback;
+};
+const cropScale = (v: unknown): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.min(300, Math.max(100, Math.round(n))) : 100;
+};
+
 const clampDuration = (raw: unknown): number => {
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n)) return 60_000;
@@ -63,6 +73,9 @@ const sanitizeMemories = (raw: unknown): IMemoryCard[] => {
       return {
         imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : "",
         note: str(o.note, 600),
+        cropX: cropPos(o.cropX),
+        cropY: cropPos(o.cropY),
+        scale: cropScale(o.scale),
       };
     })
     .filter((m) => m.imageUrl.trim().length > 0);
@@ -80,6 +93,9 @@ type HoldMyHandBody = {
   senderName?: unknown;
   recipientName?: unknown;
   photoUrl?: unknown;
+  photoCropX?: unknown;
+  photoCropY?: unknown;
+  photoScale?: unknown;
   durationMs?: unknown;
   mode?: unknown;
   hands?: unknown;
@@ -101,6 +117,9 @@ export const createHoldMyHandPage = async (req: Request, res: Response): Promise
       senderName: str(b.senderName, 80),
       recipientName: str(b.recipientName, 80),
       photoUrl: typeof b.photoUrl === "string" ? b.photoUrl : "",
+      photoCropX: cropPos(b.photoCropX),
+      photoCropY: cropPos(b.photoCropY),
+      photoScale: cropScale(b.photoScale),
       durationMs,
       mode: sanitizeMode(b.mode),
       hands: sanitizeHands(b.hands),
@@ -157,6 +176,9 @@ export const updateHoldMyHandPage = async (req: Request, res: Response): Promise
     if (b.senderName    !== undefined) page.senderName    = str(b.senderName, 80);
     if (b.recipientName !== undefined) page.recipientName = str(b.recipientName, 80);
     if (b.photoUrl      !== undefined) page.photoUrl      = typeof b.photoUrl === "string" ? b.photoUrl : "";
+    if (b.photoCropX    !== undefined) page.photoCropX    = cropPos(b.photoCropX);
+    if (b.photoCropY    !== undefined) page.photoCropY    = cropPos(b.photoCropY);
+    if (b.photoScale    !== undefined) page.photoScale    = cropScale(b.photoScale);
     if (b.durationMs    !== undefined) page.durationMs    = clampDuration(b.durationMs);
     if (b.mode          !== undefined) page.mode          = sanitizeMode(b.mode);
     if (b.hands         !== undefined) page.hands         = sanitizeHands(b.hands);
