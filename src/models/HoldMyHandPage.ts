@@ -20,6 +20,10 @@ export type HoldMode = "kind" | "evil";
 export interface IMemoryCard {
   imageUrl: string;
   note: string;
+  /** Framing: object-position (0-100) and zoom (100 = fill, up to 300). */
+  cropX: number;
+  cropY: number;
+  scale: number;
 }
 
 export interface IHoldMyHandPage extends Document {
@@ -36,6 +40,9 @@ export interface IHoldMyHandPage extends Document {
    * would silently truncate it into a broken image. Empty string → heart fallback.
    */
   photoUrl: string;
+  photoCropX: number;
+  photoCropY: number;
+  photoScale: number;
   /** How long they must hold, in ms. Clamped 10s–5min by the controller. */
   durationMs: number;
   mode: HoldMode;
@@ -79,6 +86,9 @@ const memoryCardSchema = new Schema<IMemoryCard>(
   {
     imageUrl: { type: String, default: "" },
     note: { type: String, default: "", maxlength: 600 },
+    cropX: { type: Number, default: 50, min: 0, max: 100 },
+    cropY: { type: Number, default: 50, min: 0, max: 100 },
+    scale: { type: Number, default: 100, min: 100, max: 300 },
   },
   { _id: false }
 );
@@ -90,6 +100,10 @@ const holdMyHandPageSchema = new Schema<IHoldMyHandPage>(
     senderName: { type: String, default: "", maxlength: 80 },
     recipientName: { type: String, default: "", maxlength: 80 },
     photoUrl: { type: String, default: "" },
+    // How the sender framed the main photo — same model as gallery cards.
+    photoCropX: { type: Number, default: 50, min: 0, max: 100 },
+    photoCropY: { type: Number, default: 50, min: 0, max: 100 },
+    photoScale: { type: Number, default: 100, min: 100, max: 300 },
     durationMs: { type: Number, default: 60000, min: 10000, max: 300000 },
     mode: { type: String, enum: ["kind", "evil"], default: "kind" },
     hands: { type: Number, enum: [1, 2], default: 1 },
