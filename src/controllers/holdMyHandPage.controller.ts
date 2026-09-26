@@ -62,7 +62,7 @@ const sanitizeMemories = (raw: unknown): IMemoryCard[] => {
       const o = (m ?? {}) as Record<string, unknown>;
       return {
         imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : "",
-        note: str(o.note, 220),
+        note: str(o.note, 600),
       };
     })
     .filter((m) => m.imageUrl.trim().length > 0);
