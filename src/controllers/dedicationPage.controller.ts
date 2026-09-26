@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import DedicationPage, { DEDICATION_LIMITS, ISegment, IStation } from "../models/DedicationPage";
-import { uploadAudioDataUrl } from "../services/mediaProcessor.service";
+import DedicationPage, { DEDICATION_LIMITS, IPhoto, ISegment, IStation } from "../models/DedicationPage";
+import { uploadAudioDataUrl, uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
 
@@ -28,7 +28,64 @@ type DedicationBody = {
   recipient?: unknown;
   segments?: unknown;
   signOff?: unknown;
+  photos?: unknown;
+  letter?: unknown;
   password?: unknown;
+  // The editor posts its flat form model; both shapes are accepted.
+  stationName?: unknown;
+  stationFrequency?: unknown;
+  senderName?: unknown;
+  senderCity?: unknown;
+  recipientName?: unknown;
+  recipientCity?: unknown;
+};
+
+/**
+ * The client editor has always posted FLAT keys (`stationName`, `senderName`…)
+ * while this controller read only the nested `station`/`sender`/`recipient` —
+ * so every published show silently lost its station name and both names.
+ * Nested wins when present; flat fills in otherwise.
+ */
+const stationOf = (b: DedicationBody): unknown =>
+  b.station ?? (b.stationName !== undefined || b.stationFrequency !== undefined
+    ? { name: b.stationName, frequency: b.stationFrequency } : undefined);
+const senderOf = (b: DedicationBody): unknown =>
+  b.sender ?? (b.senderName !== undefined || b.senderCity !== undefined
+    ? { name: b.senderName, city: b.senderCity } : undefined);
+const recipientOf = (b: DedicationBody): unknown =>
+  b.recipient ?? (b.recipientName !== undefined || b.recipientCity !== undefined
+    ? { name: b.recipientName, city: b.recipientCity } : undefined);
+
+const httpsUrl = (v: unknown): string => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^https:\/\//.test(s) ? s.slice(0, DEDICATION_LIMITS.url) : "";
+};
+
+/** Photos arrive as CDN URLs or as compressed data URLs from the editor. */
+const sanitizePhotos = async (raw: unknown, userId: unknown): Promise<IPhoto[]> => {
+  if (!Array.isArray(raw)) return [];
+  const out: IPhoto[] = [];
+  for (const item of raw.slice(0, DEDICATION_LIMITS.maxRawItems)) {
+    if (out.length >= DEDICATION_LIMITS.maxPhotos) break;
+    const src = (item ?? {}) as Record<string, unknown>;
+    let url = typeof src.url === "string" ? src.url.trim() : "";
+    if (url.startsWith("data:")) {
+      try {
+        url = (await uploadImageDataUrl(url, `dedication/users/${String(userId || "anonymous")}/photos`)).url;
+      } catch (error) {
+        console.error("Dedication photo upload error:", error);
+        continue;
+      }
+    } else {
+      url = httpsUrl(url);
+    }
+    if (!url) continue;
+    const photo: IPhoto = { url };
+    const caption = str(src.caption, DEDICATION_LIMITS.photoCaption).trim();
+    if (caption) photo.caption = caption;
+    out.push(photo);
+  }
+  return out;
 };
 
 /**
@@ -86,6 +143,7 @@ const sanitizePerson = (raw: unknown): { name: string; city: string } => {
 const sanitizeSegments = async (raw: unknown, userId: unknown): Promise<ISegment[]> => {
   if (!Array.isArray(raw)) return [];
   const out: ISegment[] = [];
+  let clips = 0;
   for (const item of raw.slice(0, DEDICATION_LIMITS.maxRawItems)) {
     if (out.length >= DEDICATION_LIMITS.maxSegments) break;
     const src = (item ?? {}) as Record<string, unknown>;
@@ -136,6 +194,25 @@ const sanitizeSegments = async (raw: unknown, userId: unknown): Promise<ISegment
       if (startSeconds !== undefined) segment.startSeconds = startSeconds;
       if (endSeconds !== undefined) segment.endSeconds = endSeconds;
       out.push(segment);
+      continue;
+    }
+
+    if (src.kind === "clip") {
+      // Videos are uploaded (and transcoded) through /media/upload-video
+      // before the page is saved, so only an https URL is acceptable here.
+      if (clips >= DEDICATION_LIMITS.maxClips) continue;
+      const videoUrl = httpsUrl(src.videoUrl);
+      if (!videoUrl) continue;
+      clips++;
+      const segment: ISegment = {
+        kind: "clip",
+        videoUrl,
+        title: str(src.title, DEDICATION_LIMITS.songTitle),
+        dedication: str(src.dedication, DEDICATION_LIMITS.dedication),
+      };
+      const posterUrl = httpsUrl(src.posterUrl);
+      if (posterUrl) segment.posterUrl = posterUrl;
+      out.push(segment);
     }
   }
   return out;
@@ -147,11 +224,13 @@ export const createDedicationPage = async (req: Request, res: Response): Promise
 
     const page = await DedicationPage.create({
       userId: req.userId,
-      station: sanitizeStation(b.station),
-      sender: sanitizePerson(b.sender),
-      recipient: sanitizePerson(b.recipient),
+      station: sanitizeStation(stationOf(b)),
+      sender: sanitizePerson(senderOf(b)),
+      recipient: sanitizePerson(recipientOf(b)),
       segments: await sanitizeSegments(b.segments, req.userId),
       signOff: str(b.signOff, DEDICATION_LIMITS.signOff),
+      photos: await sanitizePhotos(b.photos, req.userId),
+      letter: str(b.letter, DEDICATION_LIMITS.letter),
       password: str(b.password, DEDICATION_LIMITS.password),
     });
 
@@ -197,9 +276,14 @@ export const updateDedicationPage = async (req: Request, res: Response): Promise
     const page = await DedicationPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.station   !== undefined) page.station   = sanitizeStation(b.station);
-    if (b.sender    !== undefined) page.sender    = sanitizePerson(b.sender);
-    if (b.recipient !== undefined) page.recipient = sanitizePerson(b.recipient);
+    const station = stationOf(b);
+    const sender = senderOf(b);
+    const recipient = recipientOf(b);
+    if (station   !== undefined) page.station   = sanitizeStation(station);
+    if (sender    !== undefined) page.sender    = sanitizePerson(sender);
+    if (recipient !== undefined) page.recipient = sanitizePerson(recipient);
+    if (b.photos  !== undefined) page.photos    = await sanitizePhotos(b.photos, req.userId);
+    if (b.letter  !== undefined) page.letter    = str(b.letter, DEDICATION_LIMITS.letter);
     if (b.segments  !== undefined) page.segments  = await sanitizeSegments(b.segments, req.userId);
     if (b.signOff   !== undefined) page.signOff   = str(b.signOff, DEDICATION_LIMITS.signOff);
     // Empty password on update means "unchanged", not "remove the gate".

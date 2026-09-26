@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "../config/env";
 
-type MediaKind = "image" | "audio";
+type MediaKind = "image" | "audio" | "video";
 
 export interface UploadToS3Options {
   folder: string;

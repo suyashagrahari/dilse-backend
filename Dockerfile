@@ -33,7 +33,8 @@ RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --frozen-lockfile
 # ── Stage 4: Minimal production runner ──────────────────────────────────────
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache libc6-compat
+# ffmpeg transcodes uploaded videos (dedication clips) to small H.264 mp4s.
+RUN apk add --no-cache libc6-compat ffmpeg
 WORKDIR /app
 
 ENV NODE_ENV=production

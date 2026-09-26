@@ -37,7 +37,19 @@ export const DEDICATION_LIMITS = {
   /** Guard against a caller posting a 100k-element array before we ever slice. */
   maxRawItems: 200,
   password: 128,
+  /** Uploaded, transcoded personal videos. Each is ≤10MB before compression. */
+  maxClips: 3,
+  /** The carousel in the radio's window. */
+  maxPhotos: 12,
+  photoCaption: 80,
+  /** The love letter under the radio. */
+  letter: 2000,
 } as const;
+
+export interface IPhoto {
+  url: string;
+  caption?: string;
+}
 
 export interface IStation {
   name: string;
@@ -53,7 +65,7 @@ export interface IStation {
  * union the client actually narrows on.
  */
 export interface ISegment {
-  kind: "voice" | "song";
+  kind: "voice" | "song" | "clip";
   // voice
   audioUrl?: string;
   durationMs?: number;
@@ -65,6 +77,9 @@ export interface ISegment {
   startSeconds?: number;
   endSeconds?: number;
   dedication?: string;
+  // clip — an uploaded video, played on the radio's screen
+  videoUrl?: string;
+  posterUrl?: string;
 }
 
 export interface IDedicationPage extends Document {
@@ -76,6 +91,8 @@ export interface IDedicationPage extends Document {
   segments: ISegment[];
   /** The final text card, over a dimming radio face. */
   signOff: string;
+  photos: IPhoto[];
+  letter: string;
   /**
    * Denormalised from `sender.name` / `recipient.name` by the pre-save hook
    * below. The dashboard queries in `share.controller` (`getMyCreations`,
@@ -112,7 +129,7 @@ const personSchema = new Schema<{ name: string; city: string }>(
 
 const segmentSchema = new Schema<ISegment>(
   {
-    kind: { type: String, enum: ["voice", "song"], required: true },
+    kind: { type: String, enum: ["voice", "song", "clip"], required: true },
     audioUrl: { type: String, maxlength: DEDICATION_LIMITS.url },
     durationMs: { type: Number, min: 0, max: DEDICATION_LIMITS.maxDurationMs },
     caption: { type: String, maxlength: DEDICATION_LIMITS.caption },
@@ -122,6 +139,16 @@ const segmentSchema = new Schema<ISegment>(
     startSeconds: { type: Number, min: 0 },
     endSeconds: { type: Number, min: 0 },
     dedication: { type: String, maxlength: DEDICATION_LIMITS.dedication },
+    videoUrl: { type: String, maxlength: DEDICATION_LIMITS.url },
+    posterUrl: { type: String, maxlength: DEDICATION_LIMITS.url },
+  },
+  { _id: false }
+);
+
+const photoSchema = new Schema<IPhoto>(
+  {
+    url: { type: String, required: true, maxlength: DEDICATION_LIMITS.url },
+    caption: { type: String, maxlength: DEDICATION_LIMITS.photoCaption },
   },
   { _id: false }
 );
@@ -135,6 +162,8 @@ const dedicationPageSchema = new Schema<IDedicationPage>(
     recipient: { type: personSchema, default: () => ({}) },
     segments: { type: [segmentSchema], default: [] },
     signOff: { type: String, default: "", maxlength: DEDICATION_LIMITS.signOff },
+    photos: { type: [photoSchema], default: [] },
+    letter: { type: String, default: "", maxlength: DEDICATION_LIMITS.letter },
     // Denormalised for the dashboard. Written by the pre-save hook, never by a
     // caller — see the hook for why it is not done in the controller.
     senderName: { type: String, default: "", maxlength: DEDICATION_LIMITS.name },

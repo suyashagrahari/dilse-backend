@@ -98,22 +98,6 @@ export const dedication: AiFillTemplateSchema = {
       required: true,
     },
     {
-      path: "segments[1].title",
-      label: "First song — title",
-      kind: "text",
-      max: 60,
-      guide:
-        "The title of the first song, shown on the radio's screen panel. Fill this ONLY if the sender's story names an actual song they have in mind. If it does not, leave it empty — the sender picks the track by pasting a link, and a title you invented would sit under a completely different song.",
-    },
-    {
-      path: "segments[1].artist",
-      label: "First song — artist or where",
-      kind: "text",
-      max: 60,
-      guide:
-        "The line under the title. Conventionally the artist, but the better move when the story supports it is WHERE the song lives for them — 'in the auto, both times', 'the kitchen, every Sunday'. Same rule as the title: only if the story gives you something real. Leave empty otherwise.",
-    },
-    {
       path: "segments[1].dedication",
       label: "First dedication card",
       kind: "text",
@@ -136,22 +120,6 @@ export const dedication: AiFillTemplateSchema = {
         "That was the one you hummed the whole way back from the airport. I never told you I noticed.",
     },
     {
-      path: "segments[3].title",
-      label: "Second song — title",
-      kind: "text",
-      max: 60,
-      guide:
-        "Title of the second song. Same rule as the first: only if the sender's story names a real track. Otherwise leave it empty for them.",
-    },
-    {
-      path: "segments[3].artist",
-      label: "Second song — artist or where",
-      kind: "text",
-      max: 60,
-      guide:
-        "The line under the second title — artist, or where the song belongs to the two of them. Only fill from something the story actually says.",
-    },
-    {
       path: "segments[3].dedication",
       label: "Second dedication card",
       kind: "text",
@@ -159,6 +127,16 @@ export const dedication: AiFillTemplateSchema = {
       guide:
         "The dedication read over the second song. It must not be a rewrite of the first — real hosts get shorter and looser as the show goes on, and often just gesture back ('still going out to Meera, still from Arjun') before adding one new reason. One or two sentences, and it should carry a different memory from the first card. " +
         ON_AIR,
+    },
+    {
+      path: "letter",
+      label: "Love letter",
+      kind: "text",
+      max: 1200,
+      guide:
+        "A handwritten love letter that comes sealed with the dedication and unfolds under the radio once the listener tunes in. Open with the listener's name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line. Write like a person, not a card: one concrete shared memory from the story, one thing the sender has never said out loud, and a promise that ties back to the radio ('same frequency', 'every station after this one'). Warm and specific; no lists, no emojis, no rhymes. Line breaks between paragraphs.",
+      example:
+        "Meera,\n\nI never know how to say these things out loud, so I built you a radio instead.\n\nEvery song on this station is a day I thought of you — the airport drive, the rain on your balcony.\n\nI'm yours. Today, and on every station after this one.\n\n— Arjun",
     },
     {
       path: "signOff",
