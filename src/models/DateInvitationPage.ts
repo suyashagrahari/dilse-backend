@@ -30,6 +30,19 @@ export interface IStop {
   surprise: boolean;
 }
 
+/**
+ * A photo from the night, pinned to one stop. Either of them can add one once
+ * the date is over; `by` records whose it is, and only they can remove it.
+ */
+export interface IMemory {
+  id: string;
+  url: string;
+  stopId: string;
+  title: string;
+  by: "sender" | "recipient";
+  at: string;
+}
+
 /** Where they meet. Revealed as soon as the invitation is accepted. */
 export interface IGeoPoint {
   name: string;
@@ -47,6 +60,10 @@ export const DATE_INVITE_LIMITS = {
   /** Guard against a caller posting a 100k-element array before we ever slice. */
   maxRawItems: 200,
   maxPhotos: 12,
+  /** Photos from the night, shared between the two of them. */
+  maxMemories: 4,
+  memoryTitle: 80,
+  songTitle: 120,
   name: 80,
   placeName: 160,
   address: 300,
@@ -101,6 +118,12 @@ export interface IDateInvitationPage extends Document {
   arrivedAt: string[];
   photos: string[];
   closingLine: string;
+  /** YouTube video id of the couple's song, or "" for none. */
+  songId: string;
+  songTitle: string;
+  /** When the recipient answered. Shown to the sender. */
+  rsvpAt: string;
+  memories: IMemory[];
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -144,6 +167,18 @@ const stopSchema = new Schema<IStop>(
   { _id: false }
 );
 
+const memorySchema = new Schema<IMemory>(
+  {
+    id: { type: String, required: true, maxlength: 40 },
+    url: { type: String, required: true, maxlength: DATE_INVITE_LIMITS.url },
+    stopId: { type: String, default: "", maxlength: DATE_INVITE_LIMITS.stopId },
+    title: { type: String, default: "", maxlength: DATE_INVITE_LIMITS.memoryTitle },
+    by: { type: String, enum: ["sender", "recipient"], required: true },
+    at: { type: String, default: "", maxlength: DATE_INVITE_LIMITS.iso },
+  },
+  { _id: false }
+);
+
 const dateInvitationPageSchema = new Schema<IDateInvitationPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -173,6 +208,10 @@ const dateInvitationPageSchema = new Schema<IDateInvitationPage>(
     arrivedAt: { type: [String], default: [] },
     photos: { type: [String], default: [] },
     closingLine: { type: String, default: "", maxlength: DATE_INVITE_LIMITS.closingLine },
+    songId: { type: String, default: "", maxlength: 20 },
+    songTitle: { type: String, default: "", maxlength: DATE_INVITE_LIMITS.songTitle },
+    rsvpAt: { type: String, default: "", maxlength: DATE_INVITE_LIMITS.iso },
+    memories: { type: [memorySchema], default: [] },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

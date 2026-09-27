@@ -9,6 +9,7 @@ import DateInvitationPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { pageToken } from "./dateInvitationLive.controller";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -43,7 +44,15 @@ type DateInviteBody = {
   arrivedAt?: unknown;
   photos?: unknown;
   closingLine?: unknown;
+  songId?: unknown;
+  songTitle?: unknown;
   password?: unknown;
+};
+
+/** A YouTube video id is exactly eleven url-safe characters. Anything else is no song. */
+const songIdOf = (v: unknown): string => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^[A-Za-z0-9_-]{11}$/.test(s) ? s : "";
 };
 
 /**
@@ -184,6 +193,8 @@ export const createDateInvitationPage = async (req: Request, res: Response): Pro
       arrivedAt: sanitizeArrivedAt(b.arrivedAt),
       photos: await resolvePhotos(b.photos, req.userId),
       closingLine: str(b.closingLine, DATE_INVITE_LIMITS.closingLine),
+      songId: songIdOf(b.songId),
+      songTitle: str(b.songTitle, DATE_INVITE_LIMITS.songTitle),
       password: str(b.password, DATE_INVITE_LIMITS.password),
     });
 
@@ -243,19 +254,13 @@ export const updateDateInvitationPage = async (req: Request, res: Response): Pro
     if (b.note          !== undefined) page.note          = str(b.note, DATE_INVITE_LIMITS.note);
     if (b.meetingPoint  !== undefined) page.meetingPoint  = sanitizeGeoPoint(b.meetingPoint);
     if (b.stops         !== undefined) page.stops         = sanitizeStops(b.stops);
-    if (b.rsvp          !== undefined) page.rsvp          = oneOf<RsvpState>(b.rsvp, ["pending", "accepted", "declined", "reschedule"], "pending");
-    if (b.proposedDate  !== undefined) page.proposedDate  = str(b.proposedDate, DATE_INVITE_LIMITS.iso);
-    // Clamped against the CURRENT stop list so an out-of-range value lands on
-    // the completed state rather than indexing off the end.
-    if (b.currentStopIndex !== undefined) page.currentStopIndex = clampNum(
-      b.currentStopIndex,
-      DATE_INVITE_LIMITS.currentStopIndexMin,
-      DATE_INVITE_LIMITS.currentStopIndexMin,
-      page.stops.length
-    );
-    if (b.arrivedAt     !== undefined) page.arrivedAt     = sanitizeArrivedAt(b.arrivedAt);
-    if (b.photos        !== undefined) page.photos        = await resolvePhotos(b.photos, req.userId);
+    // rsvp, proposedDate, currentStopIndex, arrivedAt and the photos are LIVE
+    // state owned by the evening itself (see dateInvitationLive.controller).
+    // The editor always sends its defaults for them, so honouring them here
+    // would wipe her answer and every check-in the moment he fixes a typo.
     if (b.closingLine   !== undefined) page.closingLine   = str(b.closingLine, DATE_INVITE_LIMITS.closingLine);
+    if (b.songId        !== undefined) page.songId        = songIdOf(b.songId);
+    if (b.songTitle     !== undefined) page.songTitle     = str(b.songTitle, DATE_INVITE_LIMITS.songTitle);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, DATE_INVITE_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, DATE_INVITE_LIMITS.password);
@@ -323,7 +328,8 @@ export const verifyDateInvitationPagePassword = async (req: Request, res: Respon
     if (!page.password) { res.json({ success: true, verified: true }); return; }
     const match = await page.comparePassword(typeof password === "string" ? password : "");
     if (match) {
-      res.json({ success: true, verified: true });
+      // The recipient's key for the live endpoints (RSVP, photos).
+      res.json({ success: true, verified: true, token: pageToken(page) });
     } else {
       res.status(401).json({ success: false, verified: false, error: "Wrong password" });
     }
