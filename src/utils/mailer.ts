@@ -384,6 +384,69 @@ export async function sendApologyAgreementEmail(opts: {
   }
 }
 
+/**
+ * The invitation was answered. Goes to the page owner, so the person who
+ * planned the evening hears "she said yes" without having to keep checking.
+ */
+export async function sendDateRsvpEmail(opts: {
+  to: string;
+  senderName: string;
+  recipientName: string;
+  state: "accepted" | "declined" | "reschedule";
+  proposedDate: string;
+  startsAt: string;
+  link: string;
+}): Promise<void> {
+  const who = opts.recipientName || "They";
+  const fmt = (iso: string) => {
+    const t = Date.parse(iso);
+    return Number.isNaN(t)
+      ? ""
+      : new Date(t).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
+  };
+  const copy =
+    opts.state === "accepted"
+      ? { subject: `💘 ${who} said yes to your date`, head: `${who} said yes 💘`, body: `It's a date${fmt(opts.startsAt) ? ` — ${fmt(opts.startsAt)}` : ""}. Open the invitation on the night: only you can tap "we're here", and the plan unlocks for both of you.` }
+      : opts.state === "reschedule"
+        ? { subject: `📅 ${who} suggested another day`, head: `${who} suggested another day 📅`, body: `${who} would love to go${fmt(opts.proposedDate) ? ` on ${fmt(opts.proposedDate)}` : " on a different day"} instead.` }
+        : { subject: `${who} answered your invitation`, head: `${who} answered`, body: `${who} said not this time. Thank you for asking so kindly.` };
+
+  if (!resend) {
+    console.log(`\n[DATE RSVP — no RESEND_API_KEY] To: ${opts.to} | ${copy.subject}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject: copy.subject,
+      text: `${copy.head}\n\n${copy.body}\n\nOpen the invitation: ${opts.link}\n\n— SubhSandesh`,
+      html: `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#12081f;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#12081f;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#1f0f33;border-radius:24px;border:1px solid rgba(255,255,255,.14);overflow:hidden;max-width:480px;width:100%;">
+        <tr><td style="background:linear-gradient(115deg,#ff4f8b,#ff7a5c,#ffb03c);padding:28px 30px;text-align:center;">
+          <p style="margin:0;color:#fff;font-size:11px;letter-spacing:.22em;font-weight:700;text-transform:uppercase;">SubhSandesh · The Invitation</p>
+          <p style="margin:8px 0 0;color:#fff;font-size:26px;font-weight:800;">${escapeHtml(copy.head)}</p>
+        </td></tr>
+        <tr><td style="padding:28px 30px;text-align:center;">
+          <p style="margin:0 0 22px;color:#fff6fb;font-size:15px;line-height:1.7;">${escapeHtml(copy.body)}</p>
+          <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#d8ff5c;color:#1a0d26;font-weight:800;font-size:15px;text-decoration:none;padding:13px 26px;border-radius:999px;">Open the invitation</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim(),
+    });
+  } catch (err) {
+    console.error("[DATE RSVP] Failed to send email:", err);
+  }
+}
+
 function escapeHtml(s: string): string {
   return (s || "")
     .replace(/&/g, "&amp;")
