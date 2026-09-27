@@ -13,6 +13,7 @@ import {
   sanitizeLovePhotos,
   sanitizeTheme,
   userPhotoFolder,
+  sanitizeLock,
 } from "../utils/loveMedia";
 
 /** Mirrors client/app/(templates)/legal-notice/components/themes.ts. */
@@ -160,6 +161,8 @@ type LegalNoticeBody = {
   gifs?: unknown;
   letter?: unknown;
   theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -191,6 +194,7 @@ export const createLegalNoticePage = async (req: Request, res: Response): Promis
       gifs: sanitizeLoveGifs(b.gifs),
       letter: sanitizeLoveLetter(b.letter),
       theme: sanitizeTheme(b.theme, LEGAL_NOTICE_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -254,6 +258,11 @@ export const updateLegalNoticePage = async (req: Request, res: Response): Promis
     if (b.gifs               !== undefined) page.gifs               = sanitizeLoveGifs(b.gifs);
     if (b.letter             !== undefined) page.letter             = sanitizeLoveLetter(b.letter);
     if (b.theme              !== undefined) page.theme              = sanitizeTheme(b.theme, LEGAL_NOTICE_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
 
     if (b.demands !== undefined) {
       // Carry over whatever the addressee has already answered: the owner
