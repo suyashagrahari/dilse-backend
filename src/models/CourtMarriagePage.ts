@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /** One of the two people being registered. */
 export interface IParty {
@@ -55,6 +56,11 @@ export interface ICourtMarriagePage extends Document {
   registrarSignaturePath: string;
   objectionCount: number;
   certificateState: CertificateState;
+  // Love kit: photos with little letters, GIFs, the main letter, the theme.
+  photos: ILovePhoto[];
+  gifs: string[];
+  letter: string;
+  theme: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -111,6 +117,7 @@ const courtMarriagePageSchema = new Schema<ICourtMarriagePage>(
       default: "registered",
     },
     // Security & meta
+    ...loveKitFields,
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },

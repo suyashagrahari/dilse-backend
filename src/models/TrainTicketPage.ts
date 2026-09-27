@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Train Ticket — a parody reservation slip whose reveal mechanic is a PNR status
@@ -73,6 +74,10 @@ export interface ITrainTicketPage extends Document {
   finePrint: string[];
   /** The sincere payload, shown under the slip once the chart is prepared. */
   letter: string;
+  /** Love kit: framed photos with little letters, GIFs and the colour theme. */
+  photos: ILovePhoto[];
+  gifs: string[];
+  theme: string;
 
   // Security & meta
   password: string;
@@ -156,6 +161,9 @@ const trainTicketPageSchema = new Schema<ITrainTicketPage>(
     },
     finePrint: { type: [String], default: [] },
     letter: { type: String, default: "", maxlength: 4000 },
+    photos: loveKitFields.photos,
+    gifs: loveKitFields.gifs,
+    theme: loveKitFields.theme,
 
     // Security & meta
     password: { type: String, default: "" },

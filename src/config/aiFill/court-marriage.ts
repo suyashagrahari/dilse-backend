@@ -15,7 +15,7 @@ import type { AiFillTemplateSchema } from "./types";
  *    error, not a joke, and no story reliably states it.
  *  - `certificateNo` — a format-sensitive registry ID that also seeds every ink
  *    wobble on the page; the generated default is already correct.
- *  - `photoUrl`, `registrarSignaturePath`, `witnesses[i].signaturePath` — media
+ *  - `photoUrl`, `photos`, `gifs`, `theme`, `registrarSignaturePath`, `witnesses[i].signaturePath` — media
  *    and drawn ink. The model never writes these (rule 1).
  *  - `certificateState` — lifecycle, not content.
  *  - `witnesses[2].name` — the third slot is designed to print as a blank ruled
@@ -159,6 +159,17 @@ export const courtMarriage: AiFillTemplateSchema = {
       max: 30,
       guide:
         "The second witness name, same rule — only somebody the story names, under 30 characters. Never use either of the couple's own names here, and never invent a filler name to complete the row; the third slot is meant to stay blank, and a second blank costs nothing.",
+    },
+    // ── The main letter ──────────────────────────────────────────────────────
+    {
+      path: "letter",
+      label: "Love letter",
+      kind: "longtext",
+      max: 1200,
+      guide:
+        "The letter that opens from a sealed envelope after the certificate is stamped. This is where the bureaucratic voice drops away: open with the partner's name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line. One light nod to the paperwork — the registrar only made official what the sender already knew — then get sincere: one concrete shared memory from the story and one thing the sender has never said out loud. Simple warm English, no lists, no emojis, no rhymes. Line breaks between paragraphs.",
+      example:
+        "Ananya,\n\nThe registrar stamped it today. I stamped it the night you laughed at my terrible joke in the rain.\n\nThank you for choosing the version of me that forgets the milk and remembers every word you say.\n\nOfficially, legally-ish, forever yours.\n\n— Rohan",
     },
   ],
 };

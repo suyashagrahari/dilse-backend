@@ -5,6 +5,10 @@ import TrainTicketPage, {
   IStation,
 } from "../models/TrainTicketPage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { sanitizeLoveGifs, sanitizeLovePhotos, sanitizeTheme, userPhotoFolder } from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/train-ticket/components/themes.ts. */
+const TRAIN_THEMES = ["midnight", "chai", "monsoon", "sleeper"] as const;
 
 const MAX_PASSENGERS = 4;
 const MAX_FARE_LINES = 8;
@@ -125,6 +129,8 @@ const redactUntilChart = (
     passengerCount: Array.isArray(data.passengers) ? data.passengers.length : 0,
     passengers: [],
     letter: "",
+    // The photos and their little letters are part of the reveal too.
+    photos: [],
   };
 };
 
@@ -145,6 +151,9 @@ type TrainTicketBody = {
   delay?: unknown;
   finePrint?: unknown;
   letter?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  theme?: unknown;
   password?: unknown;
 };
 
@@ -170,6 +179,9 @@ export const createTrainTicketPage = async (req: Request, res: Response): Promis
       delay: sanitizeDelay(b.delay),
       finePrint: sanitizeFinePrint(b.finePrint),
       letter: str(b.letter, 4000),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("train-ticket", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      theme: sanitizeTheme(b.theme, TRAIN_THEMES),
       password: str(b.password, 128),
     });
 
@@ -233,6 +245,9 @@ export const updateTrainTicketPage = async (req: Request, res: Response): Promis
     if (b.delay           !== undefined) page.delay           = sanitizeDelay(b.delay);
     if (b.finePrint       !== undefined) page.finePrint       = sanitizeFinePrint(b.finePrint);
     if (b.letter          !== undefined) page.letter          = str(b.letter, 4000);
+    if (b.photos          !== undefined) page.photos          = await sanitizeLovePhotos(b.photos, userPhotoFolder("train-ticket", req.userId));
+    if (b.gifs            !== undefined) page.gifs            = sanitizeLoveGifs(b.gifs);
+    if (b.theme           !== undefined) page.theme           = sanitizeTheme(b.theme, TRAIN_THEMES);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

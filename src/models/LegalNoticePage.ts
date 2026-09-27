@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Where a single demand stands. The recipient drives this from the shared page
@@ -83,6 +84,11 @@ export interface ILegalNoticePage extends Document {
   finePrint: string[];
   noticeState: NoticeState;
   counterNotice: ICounterNotice;
+  // Love kit: exhibits (photos with little letters), GIFs, the off-the-record letter, theme
+  photos: ILovePhoto[];
+  gifs: string[];
+  letter: string;
+  theme: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -134,6 +140,7 @@ const legalNoticePageSchema = new Schema<ILegalNoticePage>(
     finePrint: { type: [String], default: [] },
     noticeState: { type: String, enum: ["served", "responded", "complied", "final"], default: "served" },
     counterNotice: { type: counterNoticeSchema, default: () => ({ filedOn: "", demands: [] }) },
+    ...loveKitFields,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

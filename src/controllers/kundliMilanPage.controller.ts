@@ -8,6 +8,10 @@ import KundliMilanPage, {
 } from "../models/KundliMilanPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { sanitizeTheme } from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/kundli-milan/components/themes.ts. */
+const KUNDLI_THEMES = ["cosmic", "golden", "mehendi", "bubblegum"] as const;
 
 /** The client renders at most four upayas; anything beyond that is dropped. */
 const MAX_REMEDIES = 4;
@@ -129,6 +133,7 @@ type KundliMilanBody = {
   photos?: unknown;
   gifs?: unknown;
   letter?: unknown;
+  theme?: unknown;
   password?: unknown;
 };
 
@@ -147,6 +152,7 @@ export const createKundliMilanPage = async (req: Request, res: Response): Promis
       photos: await sanitizePhotos(b.photos, req.userId),
       gifs: sanitizeGifs(b.gifs),
       letter: str(b.letter, KUNDLI_LIMITS.letter),
+      theme: sanitizeTheme(b.theme, KUNDLI_THEMES),
       password: str(b.password, 128),
     });
 
@@ -201,6 +207,7 @@ export const updateKundliMilanPage = async (req: Request, res: Response): Promis
     if (b.photos         !== undefined) page.photos         = await sanitizePhotos(b.photos, req.userId);
     if (b.gifs           !== undefined) page.gifs           = sanitizeGifs(b.gifs);
     if (b.letter         !== undefined) page.letter         = str(b.letter, KUNDLI_LIMITS.letter);
+    if (b.theme          !== undefined) page.theme          = sanitizeTheme(b.theme, KUNDLI_THEMES);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
