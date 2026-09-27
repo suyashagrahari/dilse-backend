@@ -35,6 +35,27 @@ export type KootaName = (typeof KOOTA_NAMES)[number];
  * Mongoose Map yields a real `Map`, which `JSON.stringify` serialises to `{}` —
  * the shared GET would silently drop every custom reading.
  */
+/** A photo of the two of them, framed in the editor, with a little letter. */
+export interface IKundliPhoto {
+  url: string;
+  caption?: string;
+  note?: string;
+  /** Focal point, 0–100 on each axis. */
+  cropX?: number;
+  cropY?: number;
+  /** Zoom, 100–300 (percent). */
+  scale?: number;
+}
+
+export const KUNDLI_LIMITS = {
+  maxPhotos: 8,
+  maxGifs: 3,
+  photoCaption: 80,
+  photoNote: 600,
+  letter: 2000,
+  url: 2000,
+} as const;
+
 export type ICustomReadings = Partial<Record<KootaName, string>>;
 
 export interface IKundliMilanPage extends Document {
@@ -50,6 +71,11 @@ export interface IKundliMilanPage extends Document {
   remedies: string[];
   /** Invented, comic. Never a real astrologer. */
   astrologerName: string;
+  photos: IKundliPhoto[];
+  /** https GIF links — our curated stickers or any GIF they paste. */
+  gifs: string[];
+  /** The love letter, shown at the end of the reading. */
+  letter: string;
   // ── Security & meta ───────────────────────────────────────────────────────
   password: string;
   passwordRaw: string;
@@ -84,6 +110,18 @@ const customReadingsSchema = new Schema<ICustomReadings>(
   { _id: false }
 );
 
+const photoSchema = new Schema<IKundliPhoto>(
+  {
+    url: { type: String, required: true, maxlength: KUNDLI_LIMITS.url },
+    caption: { type: String, maxlength: KUNDLI_LIMITS.photoCaption },
+    note: { type: String, maxlength: KUNDLI_LIMITS.photoNote },
+    cropX: { type: Number, min: 0, max: 100 },
+    cropY: { type: Number, min: 0, max: 100 },
+    scale: { type: Number, min: 100, max: 300 },
+  },
+  { _id: false }
+);
+
 const kundliMilanPageSchema = new Schema<IKundliMilanPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -95,6 +133,9 @@ const kundliMilanPageSchema = new Schema<IKundliMilanPage>(
     customReadings: { type: customReadingsSchema, default: () => ({}) },
     remedies: { type: [String], default: [] },
     astrologerName: { type: String, default: "", maxlength: 80 },
+    photos: { type: [photoSchema], default: [] },
+    gifs: { type: [String], default: [] },
+    letter: { type: String, default: "", maxlength: KUNDLI_LIMITS.letter },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
