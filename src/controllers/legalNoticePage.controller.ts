@@ -7,6 +7,16 @@ import LegalNoticePage, {
   ILegalNoticePage,
 } from "../models/LegalNoticePage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import {
+  sanitizeLoveGifs,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  sanitizeTheme,
+  userPhotoFolder,
+} from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/legal-notice/components/themes.ts. */
+const LEGAL_NOTICE_THEMES = ["nightcourt", "casefile", "pinkverdict", "noir"] as const;
 
 /** Eight is the layout ceiling — nine demands overflow the page. */
 const MAX_DEMANDS = 8;
@@ -146,6 +156,10 @@ type LegalNoticeBody = {
   complianceDeadline?: unknown;
   escalationClause?: unknown;
   finePrint?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
   password?: unknown;
 };
 
@@ -173,6 +187,10 @@ export const createLegalNoticePage = async (req: Request, res: Response): Promis
       escalationClause: str(b.escalationClause, 600),
       finePrint: sanitizeFinePrint(b.finePrint),
       noticeState: computeNoticeState(demands, complianceDeadline),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("legal-notice", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, LEGAL_NOTICE_THEMES),
       password: str(b.password, 128),
     });
 
@@ -232,6 +250,10 @@ export const updateLegalNoticePage = async (req: Request, res: Response): Promis
     if (b.complianceDeadline !== undefined) page.complianceDeadline = str(b.complianceDeadline, 32);
     if (b.escalationClause   !== undefined) page.escalationClause   = str(b.escalationClause, 600);
     if (b.finePrint          !== undefined) page.finePrint          = sanitizeFinePrint(b.finePrint);
+    if (b.photos             !== undefined) page.photos             = await sanitizeLovePhotos(b.photos, userPhotoFolder("legal-notice", req.userId));
+    if (b.gifs               !== undefined) page.gifs               = sanitizeLoveGifs(b.gifs);
+    if (b.letter             !== undefined) page.letter             = sanitizeLoveLetter(b.letter);
+    if (b.theme              !== undefined) page.theme              = sanitizeTheme(b.theme, LEGAL_NOTICE_THEMES);
 
     if (b.demands !== undefined) {
       // Carry over whatever the addressee has already answered: the owner

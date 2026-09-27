@@ -163,5 +163,15 @@ export const legalNotice: AiFillTemplateSchema = {
       example:
         "That in the event of your failure to comply within the stipulated period, my client shall be constrained to escalate this matter to your mother, without further notice, and you shall be responsible for all consequences arising therefrom.",
     },
+    {
+      path: "letter",
+      label: "Off-the-record letter",
+      kind: "longtext",
+      max: 1200,
+      guide:
+        "The sincere note that opens from a sealed envelope under all the legalese — the sender dropping the lawyer act. Open with the addressee's name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line. Start by stepping out of character ('Off the record…'), wink once at one of the petty demands, then get genuinely warm: one concrete shared memory from the story and one thing the sender has never quite said out loud. Simple warm English, no legal wording, no lists, no emojis, no rhymes. Line breaks between paragraphs.",
+      example:
+        "Rohan,\n\nOff the record — my advocate advised against this — none of these demands are actually why I'm sending this.\n\nYou're the only person I'd bother drafting four recitals for. The hoodie can stay. (It cannot. Return it.)\n\nCase adjourned until our next date. Which you are planning.\n\n— Ananya",
+    },
   ],
 };

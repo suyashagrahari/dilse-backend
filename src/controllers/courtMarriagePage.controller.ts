@@ -7,6 +7,16 @@ import CourtMarriagePage, {
 } from "../models/CourtMarriagePage";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { uploadMediaField } from "../services/mediaProcessor.service";
+import {
+  sanitizeLoveGifs,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  sanitizeTheme,
+  userPhotoFolder,
+} from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/court-marriage/components/themes.ts. */
+const THEME_IDS = ["midnight", "rose", "mogra", "vegas"] as const;
 
 /** The certificate has exactly three witness columns; unsigned ones stay blank. */
 const WITNESS_SLOTS = 3;
@@ -93,6 +103,10 @@ type CourtMarriageBody = {
   registrarSignaturePath?: unknown;
   objectionCount?: unknown;
   certificateState?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
   password?: unknown;
 };
 
@@ -118,6 +132,10 @@ export const createCourtMarriagePage = async (req: Request, res: Response): Prom
       registrarSignaturePath: sanitizePath(b.registrarSignaturePath),
       objectionCount: int(b.objectionCount, 0, 9999),
       certificateState: sanitizeState(b.certificateState),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("court-marriage", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, THEME_IDS),
       password: str(b.password, 128),
     });
 
@@ -174,6 +192,10 @@ export const updateCourtMarriagePage = async (req: Request, res: Response): Prom
     if (b.registrarSignaturePath !== undefined) page.registrarSignaturePath = sanitizePath(b.registrarSignaturePath);
     if (b.objectionCount         !== undefined) page.objectionCount         = int(b.objectionCount, 0, 9999);
     if (b.certificateState       !== undefined) page.certificateState       = sanitizeState(b.certificateState);
+    if (b.photos                 !== undefined) page.photos                 = await sanitizeLovePhotos(b.photos, userPhotoFolder("court-marriage", req.userId));
+    if (b.gifs                   !== undefined) page.gifs                   = sanitizeLoveGifs(b.gifs);
+    if (b.letter                 !== undefined) page.letter                 = sanitizeLoveLetter(b.letter);
+    if (b.theme                  !== undefined) page.theme                  = sanitizeTheme(b.theme, THEME_IDS);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
