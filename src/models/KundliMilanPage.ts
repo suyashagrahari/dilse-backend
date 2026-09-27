@@ -76,6 +76,8 @@ export interface IKundliMilanPage extends Document {
   gifs: string[];
   /** The love letter, shown at the end of the reading. */
   letter: string;
+  /** Colour theme id ("" = the default). */
+  theme: string;
   // ── Security & meta ───────────────────────────────────────────────────────
   password: string;
   passwordRaw: string;
@@ -136,6 +138,7 @@ const kundliMilanPageSchema = new Schema<IKundliMilanPage>(
     photos: { type: [photoSchema], default: [] },
     gifs: { type: [String], default: [] },
     letter: { type: String, default: "", maxlength: KUNDLI_LIMITS.letter },
+    theme: { type: String, default: "", maxlength: 24 },
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
