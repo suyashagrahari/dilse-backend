@@ -61,6 +61,8 @@ export interface ICourtMarriagePage extends Document {
   gifs: string[];
   letter: string;
   theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // Security & meta
   password: string;
   passwordRaw: string;

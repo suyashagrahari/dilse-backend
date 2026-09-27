@@ -13,6 +13,7 @@ import {
   sanitizeLovePhotos,
   sanitizeTheme,
   userPhotoFolder,
+  sanitizeLock,
 } from "../utils/loveMedia";
 
 /** Mirrors client/app/(templates)/court-marriage/components/themes.ts. */
@@ -107,6 +108,8 @@ type CourtMarriageBody = {
   gifs?: unknown;
   letter?: unknown;
   theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -136,6 +139,7 @@ export const createCourtMarriagePage = async (req: Request, res: Response): Prom
       gifs: sanitizeLoveGifs(b.gifs),
       letter: sanitizeLoveLetter(b.letter),
       theme: sanitizeTheme(b.theme, THEME_IDS),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -196,6 +200,11 @@ export const updateCourtMarriagePage = async (req: Request, res: Response): Prom
     if (b.gifs                   !== undefined) page.gifs                   = sanitizeLoveGifs(b.gifs);
     if (b.letter                 !== undefined) page.letter                 = sanitizeLoveLetter(b.letter);
     if (b.theme                  !== undefined) page.theme                  = sanitizeTheme(b.theme, THEME_IDS);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

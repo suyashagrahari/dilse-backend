@@ -5,7 +5,7 @@ import TrainTicketPage, {
   IStation,
 } from "../models/TrainTicketPage";
 import { checkPublishAccess } from "../services/publishGate.service";
-import { sanitizeLoveGifs, sanitizeLovePhotos, sanitizeTheme, userPhotoFolder } from "../utils/loveMedia";
+import { sanitizeLoveGifs, sanitizeLovePhotos, sanitizeTheme, userPhotoFolder, sanitizeLock } from "../utils/loveMedia";
 
 /** Mirrors client/app/(templates)/train-ticket/components/themes.ts. */
 const TRAIN_THEMES = ["midnight", "chai", "monsoon", "sleeper"] as const;
@@ -154,6 +154,8 @@ type TrainTicketBody = {
   photos?: unknown;
   gifs?: unknown;
   theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -182,6 +184,7 @@ export const createTrainTicketPage = async (req: Request, res: Response): Promis
       photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("train-ticket", req.userId)),
       gifs: sanitizeLoveGifs(b.gifs),
       theme: sanitizeTheme(b.theme, TRAIN_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -248,6 +251,11 @@ export const updateTrainTicketPage = async (req: Request, res: Response): Promis
     if (b.photos          !== undefined) page.photos          = await sanitizeLovePhotos(b.photos, userPhotoFolder("train-ticket", req.userId));
     if (b.gifs            !== undefined) page.gifs            = sanitizeLoveGifs(b.gifs);
     if (b.theme           !== undefined) page.theme           = sanitizeTheme(b.theme, TRAIN_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

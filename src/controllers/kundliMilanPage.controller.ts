@@ -8,7 +8,7 @@ import KundliMilanPage, {
 } from "../models/KundliMilanPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
-import { sanitizeTheme } from "../utils/loveMedia";
+import { sanitizeTheme, sanitizeLock } from "../utils/loveMedia";
 
 /** Mirrors client/app/(templates)/kundli-milan/components/themes.ts. */
 const KUNDLI_THEMES = ["cosmic", "golden", "mehendi", "bubblegum"] as const;
@@ -134,6 +134,8 @@ type KundliMilanBody = {
   gifs?: unknown;
   letter?: unknown;
   theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -153,6 +155,7 @@ export const createKundliMilanPage = async (req: Request, res: Response): Promis
       gifs: sanitizeGifs(b.gifs),
       letter: str(b.letter, KUNDLI_LIMITS.letter),
       theme: sanitizeTheme(b.theme, KUNDLI_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -208,6 +211,11 @@ export const updateKundliMilanPage = async (req: Request, res: Response): Promis
     if (b.gifs           !== undefined) page.gifs           = sanitizeGifs(b.gifs);
     if (b.letter         !== undefined) page.letter         = str(b.letter, KUNDLI_LIMITS.letter);
     if (b.theme          !== undefined) page.theme          = sanitizeTheme(b.theme, KUNDLI_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
