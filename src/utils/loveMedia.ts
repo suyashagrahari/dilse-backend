@@ -29,6 +29,8 @@ export const LOVE_LIMITS = {
   letter: 2000,
   url: 2000,
   theme: 24,
+  lockQuestion: 140,
+  lockAnswer: 40,
 } as const;
 
 export const lovePhotoSchema = new Schema<ILovePhoto>(
@@ -49,6 +51,10 @@ export const loveKitFields = {
   gifs: { type: [String], default: [] },
   letter: { type: String, default: "", maxlength: LOVE_LIMITS.letter },
   theme: { type: String, default: "", maxlength: LOVE_LIMITS.theme },
+  /** The question that unlocks the letter ("" = the template's default). */
+  lockQuestion: { type: String, default: "", maxlength: LOVE_LIMITS.lockQuestion },
+  /** The label on the button that answers it ("" = the template's default). */
+  lockAnswer: { type: String, default: "", maxlength: LOVE_LIMITS.lockAnswer },
 };
 
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.slice(0, max) : "");
@@ -115,6 +121,12 @@ export const sanitizeLoveGifs = (raw: unknown): string[] => {
 };
 
 export const sanitizeLoveLetter = (raw: unknown): string => str(raw, LOVE_LIMITS.letter);
+
+/** The letter lock: a short question and the label of the answer that opens it. */
+export const sanitizeLock = (b: { lockQuestion?: unknown; lockAnswer?: unknown }) => ({
+  lockQuestion: str(b.lockQuestion, LOVE_LIMITS.lockQuestion).trim(),
+  lockAnswer: str(b.lockAnswer, LOVE_LIMITS.lockAnswer).trim(),
+});
 
 /** A theme id from the template's own list; anything else falls back to "". */
 export const sanitizeTheme = (raw: unknown, allowed: readonly string[]): string => {

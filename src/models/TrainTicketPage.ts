@@ -78,6 +78,8 @@ export interface ITrainTicketPage extends Document {
   photos: ILovePhoto[];
   gifs: string[];
   theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
 
   // Security & meta
   password: string;
@@ -164,6 +166,8 @@ const trainTicketPageSchema = new Schema<ITrainTicketPage>(
     photos: loveKitFields.photos,
     gifs: loveKitFields.gifs,
     theme: loveKitFields.theme,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
 
     // Security & meta
     password: { type: String, default: "" },

@@ -1,3 +1,4 @@
+import { loveKitFields } from "../utils/loveMedia";
 import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
@@ -78,6 +79,8 @@ export interface IKundliMilanPage extends Document {
   letter: string;
   /** Colour theme id ("" = the default). */
   theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // ── Security & meta ───────────────────────────────────────────────────────
   password: string;
   passwordRaw: string;
@@ -139,6 +142,8 @@ const kundliMilanPageSchema = new Schema<IKundliMilanPage>(
     gifs: { type: [String], default: [] },
     letter: { type: String, default: "", maxlength: KUNDLI_LIMITS.letter },
     theme: { type: String, default: "", maxlength: 24 },
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
