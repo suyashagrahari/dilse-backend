@@ -1,9 +1,12 @@
 import { Request, Response } from "express";
 import KundliMilanPage, {
   ICustomReadings,
+  IKundliPhoto,
   IPerson,
   KOOTA_NAMES,
+  KUNDLI_LIMITS,
 } from "../models/KundliMilanPage";
+import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 
 /** The client renders at most four upayas; anything beyond that is dropped. */
@@ -50,6 +53,67 @@ const sanitizeRemedies = (raw: unknown): string[] => {
     .slice(0, MAX_REMEDIES);
 };
 
+const httpsUrl = (v: unknown): string => {
+  const s = typeof v === "string" ? v.trim().slice(0, KUNDLI_LIMITS.url) : "";
+  return /^https:\/\/\S+$/i.test(s) ? s : "";
+};
+
+const clampNum = (v: unknown, min: number, max: number): number | undefined => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : undefined;
+};
+
+/**
+ * Photos arrive as compressed data URLs straight from the editor (uploaded to
+ * S3 here, only the link is stored) or as links already uploaded. A failed
+ * upload drops that one photo rather than failing the save.
+ */
+const sanitizePhotos = async (raw: unknown, userId: unknown): Promise<IKundliPhoto[]> => {
+  if (!Array.isArray(raw)) return [];
+  const out: IKundliPhoto[] = [];
+  for (const item of raw.slice(0, 40)) {
+    if (out.length >= KUNDLI_LIMITS.maxPhotos) break;
+    const src = (item ?? {}) as Record<string, unknown>;
+    let url = typeof src.url === "string" ? src.url.trim() : "";
+    if (url.startsWith("data:")) {
+      try {
+        url = (await uploadImageDataUrl(url, `kundli-milan/users/${String(userId || "anonymous")}/photos`)).url;
+      } catch (error) {
+        console.error("Kundli photo upload error:", error);
+        continue;
+      }
+    } else {
+      url = httpsUrl(url);
+    }
+    if (!url) continue;
+    const photo: IKundliPhoto = { url };
+    const caption = str(src.caption, KUNDLI_LIMITS.photoCaption).trim();
+    if (caption) photo.caption = caption;
+    const note = str(src.note, KUNDLI_LIMITS.photoNote).trim();
+    if (note) photo.note = note;
+    const cropX = clampNum(src.cropX, 0, 100);
+    const cropY = clampNum(src.cropY, 0, 100);
+    const scale = clampNum(src.scale, 100, 300);
+    if (cropX !== undefined) photo.cropX = cropX;
+    if (cropY !== undefined) photo.cropY = cropY;
+    if (scale !== undefined) photo.scale = scale;
+    out.push(photo);
+  }
+  return out;
+};
+
+/** https links only, deduplicated, at most three. */
+const sanitizeGifs = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const g of raw.slice(0, 20)) {
+    const url = httpsUrl(g);
+    if (url && !out.includes(url)) out.push(url);
+    if (out.length >= KUNDLI_LIMITS.maxGifs) break;
+  }
+  return out;
+};
+
 /**
  * The explicit allow-list. Nothing outside these keys is ever read off
  * `req.body`, so `isPublished`, `viewCount`, `userId`, `shareId` and
@@ -62,6 +126,9 @@ type KundliMilanBody = {
   customReadings?: unknown;
   remedies?: unknown;
   astrologerName?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
   password?: unknown;
 };
 
@@ -77,6 +144,9 @@ export const createKundliMilanPage = async (req: Request, res: Response): Promis
       customReadings: sanitizeCustomReadings(b.customReadings),
       remedies: sanitizeRemedies(b.remedies),
       astrologerName: str(b.astrologerName, 80),
+      photos: await sanitizePhotos(b.photos, req.userId),
+      gifs: sanitizeGifs(b.gifs),
+      letter: str(b.letter, KUNDLI_LIMITS.letter),
       password: str(b.password, 128),
     });
 
@@ -128,6 +198,9 @@ export const updateKundliMilanPage = async (req: Request, res: Response): Promis
     if (b.customReadings !== undefined) page.customReadings = sanitizeCustomReadings(b.customReadings);
     if (b.remedies       !== undefined) page.remedies       = sanitizeRemedies(b.remedies);
     if (b.astrologerName !== undefined) page.astrologerName = str(b.astrologerName, 80);
+    if (b.photos         !== undefined) page.photos         = await sanitizePhotos(b.photos, req.userId);
+    if (b.gifs           !== undefined) page.gifs           = sanitizeGifs(b.gifs);
+    if (b.letter         !== undefined) page.letter         = str(b.letter, KUNDLI_LIMITS.letter);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
