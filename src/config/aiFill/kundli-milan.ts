@@ -23,7 +23,7 @@ import type { AiFillTemplateSchema } from "./types";
 export const kundliMilan: AiFillTemplateSchema = {
   slug: "kundli-milan",
   premise:
-    "The sender has run a mock Vedic horoscope-matching report (Kundli Milan) on the two of them: a printed astrologer's sheet with the eight kootas scored out of 36 gunas, two birth charts, a stamp and a list of remedies. The vocabulary is entirely real and the comedy comes from an astrologer solemnly reporting on which of them can pick a restaurant — the score is generated high and the verdict always favourable, so nothing you write may read as a real reading, a warning, or a judgement on either person.",
+    "The sender has made a cute, playful 'Kundli Milan' (Vedic horoscope-matching) page for the two of them — not a real reading. The page 'scans the stars', counts up a high guna score out of 36, and walks through the eight kootas as funny cards (which of them controls the remote, whose spirit animal clashes, the family-drama forecast), followed by their photos, GIFs, a prescription of silly remedies and a love letter. The vocabulary is real and the comedy is an astrologer solemnly reporting on ordinary couple habits; the score is always high and the verdict always favourable, so nothing you write may read as a real reading, a warning, or a judgement on either person. Write in simple, warm, funny English that works for anyone in India.",
   audience: "partner",
   fields: [
     // ── The eight koota one-liners ───────────────────────────────────────────
@@ -140,6 +140,16 @@ export const kundliMilan: AiFillTemplateSchema = {
       max: 60,
       guide:
         "Place of birth printed in the second person's chart particulars, same form and same rule: 'City, State', under 60 characters, and only when the story states it. If the story makes a point of the two of them being from different places, this is a nice quiet place for that to show up.",
+    },
+    {
+      path: "letter",
+      label: "Love letter",
+      kind: "longtext",
+      max: 1200,
+      guide:
+        "The love letter that opens at the very end, after the stars have 'approved' the match. Open with the partner's name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line. Tie it back to the joke gently — the stars only confirmed what the sender already knew — then get sincere: one concrete shared memory from the story and one thing the sender has never said out loud. Simple warm English, no lists, no emojis, no rhymes. Line breaks between paragraphs.",
+      example:
+        "Ananya,\n\nThe stars gave us 34 out of 36. I would have argued for 36.\n\nI knew on the auto ride back from Marine Drive, when you fell asleep on my shoulder mid-sentence and I didn't move for forty minutes.\n\nNo kundli needed. Just you, every day.\n\n— Rohan",
     },
   ],
 };

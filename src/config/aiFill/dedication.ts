@@ -131,7 +131,7 @@ export const dedication: AiFillTemplateSchema = {
     {
       path: "letter",
       label: "Love letter",
-      kind: "text",
+      kind: "longtext",
       max: 1200,
       guide:
         "A handwritten love letter that comes sealed with the dedication and unfolds under the radio once the listener tunes in. Open with the listener's name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line. Write like a person, not a card: one concrete shared memory from the story, one thing the sender has never said out loud, and a promise that ties back to the radio ('same frequency', 'every station after this one'). Warm and specific; no lists, no emojis, no rhymes. Line breaks between paragraphs.",
