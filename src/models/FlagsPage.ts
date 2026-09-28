@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { LOVE_LIMITS, loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /** LEFT = red flag, RIGHT = green flag, UP = it's complicated. */
 export type SwipeChoice = "red" | "green" | "complicated";
@@ -59,6 +60,14 @@ export interface IFlagsPage extends Document {
   cards: IFlagCard[];
   /** The closing sentence. Not a game. */
   finalCard: string;
+  /** Love kit: the "It's a match" letter, the profile photos (each with a
+   *  memory note), up to three GIFs, the colour theme and the optional lock. */
+  letter: string;
+  photos: ILovePhoto[];
+  gifs: string[];
+  theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // ── Security & meta ──────────────────────────────────────────────────────
   password: string;
   passwordRaw: string;
@@ -140,6 +149,13 @@ const flagsPageSchema = new Schema<IFlagsPage>(
     recipientName: { type: String, default: "", maxlength: FLAGS_LIMITS.recipientName },
     cards: { type: [cardSchema], default: [] },
     finalCard: { type: String, default: "", maxlength: FLAGS_LIMITS.finalCard },
+    // Love kit
+    letter: { type: String, default: "", maxlength: LOVE_LIMITS.letter },
+    photos: loveKitFields.photos,
+    gifs: loveKitFields.gifs,
+    theme: loveKitFields.theme,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

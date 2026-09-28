@@ -10,6 +10,17 @@ import FlagsPage, {
 } from "../models/FlagsPage";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
+import {
+  sanitizeLock,
+  sanitizeLoveGifs,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  sanitizeTheme,
+  userPhotoFolder,
+} from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/flags/components/themes.ts. */
+const FLAGS_THEMES = ["swipe-night", "matcha-cherry", "y2k-bubble", "beige-flag"] as const;
 
 // ── Sanitisers ───────────────────────────────────────────────────────────────
 // Every value that reaches the document goes through one of these. The client
@@ -96,6 +107,12 @@ type FlagsBody = {
   recipientName?: unknown;
   cards?: unknown;
   finalCard?: unknown;
+  letter?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -111,6 +128,11 @@ export const createFlagsPage = async (req: Request, res: Response): Promise<void
       recipientName: str(b.recipientName, FLAGS_LIMITS.recipientName),
       cards: sanitizeCards(b.cards),
       finalCard: str(b.finalCard, FLAGS_LIMITS.finalCard),
+      letter: sanitizeLoveLetter(b.letter),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("flags", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      theme: sanitizeTheme(b.theme, FLAGS_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, FLAGS_LIMITS.password),
     });
 
@@ -160,6 +182,15 @@ export const updateFlagsPage = async (req: Request, res: Response): Promise<void
     if (b.recipientName !== undefined) page.recipientName = str(b.recipientName, FLAGS_LIMITS.recipientName);
     if (b.cards         !== undefined) page.cards         = sanitizeCards(b.cards);
     if (b.finalCard     !== undefined) page.finalCard     = str(b.finalCard, FLAGS_LIMITS.finalCard);
+    if (b.letter        !== undefined) page.letter        = sanitizeLoveLetter(b.letter);
+    if (b.photos        !== undefined) page.photos        = await sanitizeLovePhotos(b.photos, userPhotoFolder("flags", req.userId));
+    if (b.gifs          !== undefined) page.gifs          = sanitizeLoveGifs(b.gifs);
+    if (b.theme         !== undefined) page.theme         = sanitizeTheme(b.theme, FLAGS_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined) {
       const next = str(b.password, FLAGS_LIMITS.password);
