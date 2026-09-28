@@ -9,6 +9,10 @@ import ChallanPage, {
 } from "../models/ChallanPage";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
+import { sanitizeLoveGifs, sanitizeLoveLetter, sanitizeLock, sanitizeLovePhotos, sanitizeTheme, userPhotoFolder } from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/challan/components/themes.ts. */
+const CHALLAN_THEMES = ["official", "patrol", "pink", "carbon"] as const;
 
 const MAX_OFFENCES = 10;
 const MAX_METHODS = 8;
@@ -131,6 +135,12 @@ type ChallanBody = {
   settlement?: unknown;
   paidMessage?: unknown;
   contestMessage?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -154,6 +164,11 @@ export const createChallanPage = async (req: Request, res: Response): Promise<vo
       settlement: sanitizeSettlement(b.settlement),
       paidMessage: sanitizeLines(b.paidMessage),
       contestMessage: sanitizeLines(b.contestMessage),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("challan", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, CHALLAN_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -214,6 +229,15 @@ export const updateChallanPage = async (req: Request, res: Response): Promise<vo
     if (b.settlement     !== undefined) page.settlement     = sanitizeSettlement(b.settlement);
     if (b.paidMessage    !== undefined) page.paidMessage    = sanitizeLines(b.paidMessage);
     if (b.contestMessage !== undefined) page.contestMessage = sanitizeLines(b.contestMessage);
+    if (b.photos         !== undefined) page.photos         = await sanitizeLovePhotos(b.photos, userPhotoFolder("challan", req.userId));
+    if (b.gifs           !== undefined) page.gifs           = sanitizeLoveGifs(b.gifs);
+    if (b.letter         !== undefined) page.letter         = sanitizeLoveLetter(b.letter);
+    if (b.theme          !== undefined) page.theme          = sanitizeTheme(b.theme, CHALLAN_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      if (b.lockQuestion !== undefined) page.lockQuestion = lock.lockQuestion;
+      if (b.lockAnswer   !== undefined) page.lockAnswer   = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
