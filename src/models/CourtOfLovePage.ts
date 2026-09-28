@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /** One hearing in the trial: the charge, four pleas, and which one the Court accepts. */
 export interface IQuizQuestion {
@@ -34,8 +35,23 @@ export interface ICourtOfLovePage extends Document {
   /** The oath the accused swears before the trial begins. */
   oathText: string;
   questions: IQuizQuestion[];
-  /** Revealed with a typewriter effect after a winning verdict. */
+  /**
+   * The pre-love-kit letter. Superseded by `letter` (the Final Judgement); kept
+   * so pages published before the kit still read theirs — the client falls back
+   * to it when `letter` is empty.
+   */
   secretLetter: string;
+  /** Love kit — the Exhibits: framed photos, each with a caption + testimony. */
+  photos: ILovePhoto[];
+  /** Love kit — up to three GIFs, woven through the evidence and the judgement. */
+  gifs: string[];
+  /** The Final Judgement — the main letter, read after the gavel. */
+  letter: string;
+  /** Theme id (supreme | pink | night | parchment); "" = the default. */
+  theme: string;
+  /** The last question the Court asks before the judgement is unsealed. */
+  lockQuestion: string;
+  lockAnswer: string;
   /** Signed at the bottom of the stamp paper. */
   signatureName: string;
   /** Title printed on the certificate. */
@@ -79,6 +95,10 @@ const courtOfLovePageSchema = new Schema<ICourtOfLovePage>(
     oathText: { type: String, default: "", maxlength: 400 },
     questions: { type: [questionSchema], default: [] },
     secretLetter: { type: String, default: "", maxlength: 3000 },
+    ...loveKitFields,
+    // The judgement replaces `secretLetter`, which allowed 3000 characters —
+    // keep that ceiling so an old letter copied across is never rejected.
+    letter: { type: String, default: "", maxlength: 3000 },
     signatureName: { type: String, default: "", maxlength: 80 },
     certificateTitle: { type: String, default: "", maxlength: 120 },
     language: { type: String, default: "en", maxlength: 24 },

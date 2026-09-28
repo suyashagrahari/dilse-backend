@@ -2,6 +2,10 @@ import { Request, Response } from "express";
 import NutritionPage, { INutrient, IVitamin } from "../models/NutritionPage";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
+import { sanitizeLoveGifs, sanitizeLoveLetter, sanitizeLovePhotos, sanitizeLock, sanitizeTheme, userPhotoFolder } from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/nutrition/components/themes.ts. */
+const NUTRITION_THEMES = ["classic", "candy", "kraft", "midnight"] as const;
 
 // ─── Nutrition Facts — CRUD ──────────────────────────────────────────────────
 //
@@ -89,6 +93,12 @@ type NutritionBody = {
   message?: unknown;
   photoUrl?: unknown;
   distributedBy?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -113,6 +123,11 @@ export const createNutritionPage = async (req: Request, res: Response): Promise<
       message: sanitizeLines(b.message, MAX_MESSAGE_LINES, 600),
       photoUrl: str(b.photoUrl, 600).trim(),
       distributedBy: str(b.distributedBy, 120).trim(),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("nutrition", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, NUTRITION_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -172,6 +187,15 @@ export const updateNutritionPage = async (req: Request, res: Response): Promise<
     if (b.message              !== undefined) page.message              = sanitizeLines(b.message, MAX_MESSAGE_LINES, 600);
     if (b.photoUrl             !== undefined) page.photoUrl             = str(b.photoUrl, 600).trim();
     if (b.distributedBy        !== undefined) page.distributedBy        = str(b.distributedBy, 120).trim();
+    if (b.photos               !== undefined) page.photos               = await sanitizeLovePhotos(b.photos, userPhotoFolder("nutrition", req.userId));
+    if (b.gifs                 !== undefined) page.gifs                 = sanitizeLoveGifs(b.gifs);
+    if (b.letter               !== undefined) page.letter               = sanitizeLoveLetter(b.letter);
+    if (b.theme                !== undefined) page.theme                = sanitizeTheme(b.theme, NUTRITION_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

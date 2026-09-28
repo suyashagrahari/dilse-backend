@@ -22,7 +22,7 @@ export interface ILovePhoto {
 }
 
 export const LOVE_LIMITS = {
-  maxPhotos: 8,
+  maxPhotos: 10,
   maxGifs: 3,
   photoCaption: 80,
   photoNote: 600,
