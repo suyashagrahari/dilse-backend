@@ -1027,6 +1027,75 @@ function validateSubdomain(name: string): string | null {
   return null;
 }
 
+// ── Guaranteeing a free name ─────────────────────────────────────────────────
+//
+// The unique index on User.subdomain is what actually makes names unique; the
+// helpers below only make sure the picker never OFFERS a taken one. For a
+// taken base they propose numbered variants ("aarav-loves-riya-2"), trimming
+// the base so the result still fits the 30-character limit, and check the
+// whole batch in one query.
+
+const SUBDOMAIN_MAX = 30;
+
+function numberedVariants(base: string, count = 6): string[] {
+  const out: string[] = [];
+  for (let n = 2; out.length < count && n < 100; n++) {
+    const suffix = `-${n}`;
+    const head = base.slice(0, SUBDOMAIN_MAX - suffix.length).replace(/-+$/, "");
+    const v = `${head}${suffix}`;
+    if (!validateSubdomain(v)) out.push(v);
+  }
+  return out;
+}
+
+/** Names from `candidates` nobody else owns, in order. */
+async function freeSubdomains(candidates: string[], userId?: string): Promise<Set<string>> {
+  const uniq = [...new Set(candidates)];
+  if (!uniq.length) return new Set();
+  const owned = await User.find({ subdomain: { $in: uniq } }).select("_id subdomain").lean();
+  const taken = new Set(
+    owned.filter((u) => String(u._id) !== String(userId)).map((u) => String(u.subdomain))
+  );
+  return new Set(uniq.filter((c) => !taken.has(c)));
+}
+
+/** First free numbered variant of a taken name, or null. */
+async function firstFreeVariant(base: string, userId?: string): Promise<string | null> {
+  const variants = numberedVariants(base);
+  const free = await freeSubdomains(variants, userId);
+  return variants.find((v) => free.has(v)) || null;
+}
+
+/**
+ * GET /auth/subdomain/suggest?names=a,b,c
+ *
+ * The picker sends its own ideas (built from the creator's and the
+ * recipient's names); this answers with ones that are actually free — each
+ * taken idea replaced by its first free numbered variant — so every chip it
+ * shows can be claimed.
+ */
+export const suggestSubdomains = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const ideas = String(req.query.names || "")
+      .split(",")
+      .map((n) => n.toLowerCase().trim())
+      .filter((n) => n && !validateSubdomain(n))
+      .slice(0, 12);
+    const pool = [...ideas, ...ideas.flatMap((i) => numberedVariants(i, 4))];
+    const free = await freeSubdomains(pool, req.userId);
+    const out: { name: string; from: string }[] = [];
+    const seen = new Set<string>();
+    for (const idea of ideas) {
+      const pick = free.has(idea) ? idea : numberedVariants(idea, 4).find((v) => free.has(v));
+      if (pick && !seen.has(pick)) { seen.add(pick); out.push({ name: pick, from: idea }); }
+    }
+    res.json({ success: true, data: out });
+  } catch (error) {
+    console.error("Suggest subdomain error:", error);
+    res.status(500).json({ success: false, error: "Failed to suggest names" });
+  }
+};
+
 export const checkSubdomainAvailability = async (
   req: Request,
   res: Response
@@ -1041,7 +1110,8 @@ export const checkSubdomainAvailability = async (
     const currentUserId = req.userId;
     const existing = await User.findOne({ subdomain: name });
     if (existing && String(existing._id) !== String(currentUserId)) {
-      res.json({ success: true, available: false, reason: "This subdomain is already taken" });
+      const alternative = await firstFreeVariant(name, currentUserId);
+      res.json({ success: true, available: false, reason: "This subdomain is already taken", alternative });
       return;
     }
     res.json({ success: true, available: true });
@@ -1069,11 +1139,24 @@ export const setSubdomain = async (
     }
     const existing = await User.findOne({ subdomain: rawName });
     if (existing && String(existing._id) !== String(user._id)) {
-      res.status(409).json({ success: false, error: "This subdomain is already taken" });
+      const alternative = await firstFreeVariant(rawName, String(user._id));
+      res.status(409).json({ success: false, error: "This subdomain is already taken", alternative });
       return;
     }
     user.subdomain = rawName;
-    await user.save();
+    try {
+      await user.save();
+    } catch (err) {
+      // Two people claiming the same name at once: the check above passed for
+      // both, and the unique index rejected the second save. That is "taken",
+      // not a server error.
+      if ((err as { code?: number })?.code === 11000) {
+        const alternative = await firstFreeVariant(rawName, String(user._id));
+        res.status(409).json({ success: false, error: "Someone just claimed this name", alternative });
+        return;
+      }
+      throw err;
+    }
     res.json({
       success: true,
       data: {
