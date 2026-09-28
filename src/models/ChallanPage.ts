@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Challan — a parody traffic-violation notice served on someone you love.
@@ -92,6 +93,14 @@ export interface IChallanPage extends Document {
   paidMessage: string[];
   /** The sincere payload, shown after the objection is upheld. */
   contestMessage: string[];
+  /** Love kit: CCTV "evidence" photos with officer's observations, GIFs, the court order letter, theme. */
+  photos: ILovePhoto[];
+  gifs: string[];
+  /** The main letter — the court order / officer's personal remarks. */
+  letter: string;
+  theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
 
   // Security & meta
   password: string;
@@ -200,6 +209,12 @@ const challanPageSchema = new Schema<IChallanPage>(
     },
     paidMessage: { type: [String], default: [] },
     contestMessage: { type: [String], default: [] },
+    photos: loveKitFields.photos,
+    gifs: loveKitFields.gifs,
+    letter: loveKitFields.letter,
+    theme: loveKitFields.theme,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
 
     // Security & meta
     password: { type: String, default: "" },
