@@ -15,8 +15,12 @@
 //                                RESERVED slot that never vends and is left alone.
 //   creditPrompts: string[]    — types.ts:44. A genuine array of STRINGS → ONE
 //   displayIdleMessages: …[]     `list` field, not numbered paths.
+//   letter: string             — the love-kit main letter, printed as the
+//                                secret prize at the foot of the receipt.
 //
-// There is no media leaf anywhere in this shape.
+// `photos[]` (the memory cards) is media — its caption/note leaves sit under a
+// media-word path and the list is empty until the sender adds photos, so they
+// are left to the sender. `gifs` and `theme` are not copy.
 
 import type { AiFillTemplateSchema } from "./types";
 
@@ -242,6 +246,16 @@ export const vendingMachine: AiFillTemplateSchema = {
         "The memory on the coupon from B3. Two or three sentences, under 300 characters. Tell the small moment the sender first felt let in somewhere, and end by naming plainly that it mattered — this is the sincere slot on the shelf, so no punchline.",
       example:
         "She handed me chai without asking how I take it, and got it exactly right, and you looked at me like that meant something. It did.",
+    },
+    {
+      path: "letter",
+      label: "The letter on the receipt",
+      kind: "longtext",
+      max: 1200,
+      guide:
+        "The main love letter. After she has vended the slots and collected the memory cards, the machine prints a receipt — every card itemised at ₹∞, a subtotal of PRICELESS — and under 'SECRET PRIZE UNLOCKED' at the foot of it, this letter. Open with her name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line after a dash. Nod to the machine once, lightly (it printed what would not fit on a shelf), then drop the joke and be sincere: one concrete shared memory from the story and one thing the sender has never said out loud. It may end with a receipt-style line such as 'No refunds. No returns. No expiry.' Simple warm English, no lists, no emojis, no rhymes. Line breaks between paragraphs.",
+      example:
+        "Ananya,\n\nEighteen slots weren't enough, so the machine printed the rest.\n\nI still think about the night the gas went out and we ate half-cooked maggi on the floor. You said it was the best meal of your life. I think I knew then.\n\nI've never said this properly: you make ordinary days feel like something I'd want to keep.\n\nNo refunds. No returns. No expiry.\n\n— Rohan",
     },
   ],
 };
