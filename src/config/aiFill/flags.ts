@@ -32,7 +32,7 @@ const RESPONSE = 110;
 export const flags: AiFillTemplateSchema = {
   slug: "flags",
   premise:
-    "This is a deck of cards laid out like a dating app, except every card is a statement about the SENDER — one of his own habits, flaws or small decencies — and the recipient swipes to judge it: left for RED FLAG, right for GREEN FLAG, up for IT'S COMPLICATED. Whichever way she swipes, the card flips over and the sender has already written a reply to that exact verdict, so all three replies must exist and all three must be worth reading. At the end she gets a scorecard about her own generosity, never about him.",
+    "This is a deck of cards laid out like a dating app, except every card is a statement about the SENDER — one of his own habits, flaws or small decencies — and the recipient swipes to judge it: left for RED FLAG, right for GREEN FLAG, up for BEIGE FLAG (the Gen-Z word for a quirk that is neither good nor bad, just odd — 'it's complicated'). Whichever way she swipes, the card flips over and the sender has already written a reply to that exact verdict, so all three replies must exist and all three must be worth reading. At the end she gets a scorecard about her own generosity, never about him, and then an 'It's a match' screen that opens his real love letter — the one place the jokes stop.",
   audience: "partner",
   fields: [
     {
@@ -92,7 +92,7 @@ export const flags: AiFillTemplateSchema = {
     },
     {
       path: "cards[0].responses.complicated",
-      label: "Card 1 — if she calls it COMPLICATED",
+      label: "Card 1 — if she calls it a BEIGE FLAG",
       kind: "text",
       max: RESPONSE,
       required: true,
@@ -133,7 +133,7 @@ export const flags: AiFillTemplateSchema = {
     },
     {
       path: "cards[1].responses.complicated",
-      label: "Card 2 — if she calls it COMPLICATED",
+      label: "Card 2 — if she calls it a BEIGE FLAG",
       kind: "text",
       max: RESPONSE,
       required: true,
@@ -174,7 +174,7 @@ export const flags: AiFillTemplateSchema = {
     },
     {
       path: "cards[2].responses.complicated",
-      label: "Card 3 — if she calls it COMPLICATED",
+      label: "Card 3 — if she calls it a BEIGE FLAG",
       kind: "text",
       max: RESPONSE,
       required: true,
@@ -215,7 +215,7 @@ export const flags: AiFillTemplateSchema = {
     },
     {
       path: "cards[3].responses.complicated",
-      label: "Card 4 — if she calls it COMPLICATED",
+      label: "Card 4 — if she calls it a BEIGE FLAG",
       kind: "text",
       max: RESPONSE,
       required: true,
@@ -235,6 +235,37 @@ export const flags: AiFillTemplateSchema = {
       example: "he was there the week your father was in hospital, and never mentioned it again.",
     },
 
+    {
+      path: "letter",
+      label: "The match letter",
+      kind: "longtext",
+      max: 1200,
+      required: true,
+      guide:
+        "The love letter that opens on the final 'It's a match' screen, after she has judged every card and seen her scorecard. This is where the comedy drops completely. Open with her name on its own line, then two to four short paragraphs, then sign off with the sender's first name on the last line. Tie it to the game once and lightly — whatever she swiped, he would still swipe right on her — then get sincere: one concrete shared memory from the story and one thing he has never said out loud. First person, simple warm English, no lists, no emoji, no rhymes, and nothing that asks her for a reply. Blank lines between paragraphs, under 1000 characters.",
+      example:
+        "Ananya,\n\nYou just judged eleven of my worst habits and somehow I still came out at a 96. I'd swipe right on you every single time, even on the days you call my snoring a green flag.\n\nI still think about the drive back from Lonavala when you fell asleep with your hand on the gear stick and I didn't change gears for forty minutes.\n\nI don't say it enough: you make the ordinary days the best ones.\n\nRohan",
+    },
+    {
+      path: "lockQuestion",
+      label: "The question before the letter",
+      kind: "text",
+      max: 120,
+      required: false,
+      guide:
+        "A playful one-line yes/no question she must answer before the match letter opens, phrased like a dating-app prompt and aimed at the sender — something only a yes makes sense for. Lowercase, under 60 characters, ending in a question mark, no emoji.",
+      example: "swipe right on me for another year?",
+    },
+    {
+      path: "lockAnswer",
+      label: "The yes button",
+      kind: "text",
+      max: 40,
+      required: false,
+      guide:
+        "The label of the only button that answers the question above and opens the letter — a short, eager yes in the same lowercase texting voice. Two to four words, under 24 characters, may end with one emoji.",
+      example: "obviously, yes 💚",
+    },
     {
       path: "finalCard",
       label: "The closing card",
