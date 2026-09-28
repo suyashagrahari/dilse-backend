@@ -5,6 +5,7 @@ import { audit } from "../services/adminAudit";
 import mongoose from "mongoose";
 import User, { UserRole } from "../models/User";
 import PageView from "../models/PageView";
+import PageFeedback from "../models/PageFeedback";
 import ContactInquiry from "../models/ContactInquiry";
 import { sendContactReplyEmail } from "../utils/mailer";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
@@ -218,6 +219,23 @@ export const getTemplatePopularity = async (_req: Request, res: Response): Promi
 
 // ─── USER MANAGEMENT ────────────────────────────────────────────
 
+// A calendar day in India, as a [start, end) instant range.
+//
+// The admin asks "who signed up today" in IST, and a UTC day would split an
+// Indian evening across two dates. `from`/`to` are YYYY-MM-DD; `to` defaults
+// to `from`, so a single day is just `from`.
+const IST_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const istRange = (from?: unknown, to?: unknown): { start: Date; end: Date } | null => {
+  const f = typeof from === "string" && IST_DAY.test(from) ? from : "";
+  if (!f) return null;
+  const t = typeof to === "string" && IST_DAY.test(to) && to >= f ? to : f;
+  const start = new Date(`${f}T00:00:00+05:30`);
+  const end = new Date(`${t}T00:00:00+05:30`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return { start, end };
+};
+
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = Math.max(parseInt(req.query.page as string) || 1, 1);
@@ -226,6 +244,9 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     const roleFilter = req.query.role as string;
     const sortBy = (req.query.sortBy as string) || "createdAt";
     const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+    const range = istRange(req.query.from, req.query.to);
+    const templateType = String(req.query.template || "");
+    const tpl = templateType ? ALL_PAGE_MODELS.find((m) => m.type === templateType) : undefined;
 
     const query: Record<string, unknown> = {};
     if (search) {
@@ -242,6 +263,26 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       query.status = statusFilter;
     }
 
+    // With a template, the date means "made a page of it that day"; without
+    // one, it means "signed up that day".
+    const templatePages = new Map<string, { count: number; last: Date }>();
+    if (templateType && !tpl) {
+      res.status(400).json({ success: false, error: "Unknown template" });
+      return;
+    }
+    if (tpl) {
+      const match: Record<string, unknown> = {};
+      if (range) match.createdAt = { $gte: range.start, $lt: range.end };
+      const rows = (await (tpl.model as mongoose.Model<unknown>).aggregate([
+        { $match: match },
+        { $group: { _id: "$userId", count: { $sum: 1 }, last: { $max: "$createdAt" } } },
+      ])) as { _id: mongoose.Types.ObjectId | null; count: number; last: Date }[];
+      for (const r of rows) if (r._id) templatePages.set(String(r._id), { count: r.count, last: r.last });
+      query._id = { $in: [...templatePages.keys()].map((id) => new mongoose.Types.ObjectId(id)) };
+    } else if (range) {
+      query.createdAt = { $gte: range.start, $lt: range.end };
+    }
+
     const [users, total] = await Promise.all([
       User.find(query)
         .select("name email avatar provider role status statusReason suspendedUntil points isVerified createdAt")
@@ -252,21 +293,66 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       User.countDocuments(query),
     ]);
 
+    // Did they rate anything, and how warmly — one aggregate for the page.
+    const ids = users.map((u) => u._id);
+    const fb = ids.length
+      ? ((await PageFeedback.aggregate([
+          { $match: { userId: { $in: ids } } },
+          { $group: { _id: "$userId", avg: { $avg: "$rating" }, count: { $sum: 1 }, templates: { $addToSet: "$templateSlug" } } },
+        ])) as { _id: mongoose.Types.ObjectId; avg: number; count: number; templates: string[] }[])
+      : [];
+    const fbBy = new Map(fb.map((f) => [String(f._id), f]));
+
     res.json({
       success: true,
       data: {
-        users,
+        users: users.map((u) => {
+          const f = fbBy.get(String(u._id));
+          const tp = templatePages.get(String(u._id));
+          return {
+            ...u,
+            feedback: f ? { count: f.count, avg: Math.round(f.avg * 10) / 10, templates: f.templates.length } : null,
+            ...(tp ? { templatePages: tp.count, templateLastAt: tp.last } : {}),
+          };
+        }),
         pagination: {
           page,
           limit,
           total,
           totalPages: Math.ceil(total / limit),
         },
+        ...(tpl ? { template: { type: tpl.type, label: tpl.label, pages: [...templatePages.values()].reduce((a, b) => a + b.count, 0) } } : {}),
       },
     });
   } catch (error) {
     console.error("Get all users error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch users" });
+  }
+};
+
+// Every template with how many distinct people made one — in the date range
+// when one is given. Feeds the template filter on /admin/users.
+export const getUserTemplateCounts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const range = istRange(req.query.from, req.query.to);
+    const match: Record<string, unknown> = {};
+    if (range) match.createdAt = { $gte: range.start, $lt: range.end };
+    const rows = await Promise.all(
+      ALL_PAGE_MODELS.map(async ({ model, type, label }) => {
+        const [r] = (await (model as mongoose.Model<unknown>).aggregate([
+          { $match: match },
+          { $group: { _id: "$userId" } },
+          { $count: "users" },
+        ])) as { users: number }[];
+        const pages = await (model as mongoose.Model<unknown>).countDocuments(match);
+        return { type, label, users: r?.users || 0, pages };
+      }),
+    );
+    rows.sort((a, b) => b.users - a.users || a.label.localeCompare(b.label));
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("User template counts error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch template counts" });
   }
 };
 

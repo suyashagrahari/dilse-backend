@@ -5,6 +5,7 @@ import {
   getViewsChart,
   getTemplatePopularity,
   getAllUsers,
+  getUserTemplateCounts,
   getUserDetail,
   changeUserRole,
   deleteUserPage,
@@ -74,6 +75,7 @@ router.get("/analytics/recent-activity", getRecentActivity);
 // Who came back on a different day and made another page. Super-admin only:
 // it reads every creator's activity across every template.
 router.get("/users/recurring", requireSuperAdmin, getRecurringUsers);
+router.get("/users/template-counts", getUserTemplateCounts);
 router.get("/users", getAllUsers);
 router.get("/users/:userId", getUserDetail);
 router.patch("/users/:userId/role", changeUserRole);
