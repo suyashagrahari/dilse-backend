@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, LOVE_LIMITS, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -43,6 +44,17 @@ export const PUZZLE_LIMITS = {
 
 export type FinalPieceMode = "auto" | "sender-release";
 
+/**
+ * The sliding puzzle's size, chosen by the sender: Easy 3×3, Medium 4×4,
+ * Hard 5×5. Pages created before the sliding rebuild have no value and are
+ * derived from their old jigsaw grid on the client.
+ */
+export const PUZZLE_DIFFICULTIES = ["easy", "medium", "hard"] as const;
+export type PuzzleDifficulty = (typeof PUZZLE_DIFFICULTIES)[number];
+
+/** Mirrors client/app/(templates)/photo-puzzle/components/themes.ts. */
+export const PUZZLE_THEMES = ["cozy", "pastel", "midnight", "sakura"] as const;
+
 export interface IPhotoPuzzlePage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
@@ -62,6 +74,19 @@ export interface IPhotoPuzzlePage extends Document {
   /** Shown while waiting for the sender to release the last piece. */
   finalPieceMessage: string;
   closingLine: string;
+  /** Sliding puzzle size. "" on pages made before the sliding rebuild. */
+  difficulty: string;
+  /** Square framing of the puzzle photo: focal point 0–100, zoom 100–300. */
+  imageCropX: number;
+  imageCropY: number;
+  imageScale: number;
+  /** Love kit: memory photos with notes, GIFs, the main letter, theme, lock. */
+  photos: ILovePhoto[];
+  gifs: string[];
+  letter: string;
+  theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -97,6 +122,16 @@ const photoPuzzlePageSchema = new Schema<IPhotoPuzzlePage>(
     finalPieceMode: { type: String, enum: ["auto", "sender-release"], default: "sender-release" },
     finalPieceMessage: { type: String, default: "", maxlength: PUZZLE_LIMITS.finalPieceMessage },
     closingLine: { type: String, default: "", maxlength: PUZZLE_LIMITS.closingLine },
+    difficulty: { type: String, enum: ["", ...PUZZLE_DIFFICULTIES], default: "" },
+    imageCropX: { type: Number, default: 50, min: 0, max: 100 },
+    imageCropY: { type: Number, default: 50, min: 0, max: 100 },
+    imageScale: { type: Number, default: 100, min: 100, max: 300 },
+    photos: loveKitFields.photos,
+    gifs: loveKitFields.gifs,
+    letter: { type: String, default: "", maxlength: LOVE_LIMITS.letter },
+    theme: loveKitFields.theme,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

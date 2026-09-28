@@ -1,5 +1,19 @@
 import { Request, Response } from "express";
-import PhotoPuzzlePage, { FinalPieceMode, PUZZLE_LIMITS } from "../models/PhotoPuzzlePage";
+import PhotoPuzzlePage, {
+  FinalPieceMode,
+  PUZZLE_DIFFICULTIES,
+  PUZZLE_LIMITS,
+  PUZZLE_THEMES,
+  type PuzzleDifficulty,
+} from "../models/PhotoPuzzlePage";
+import {
+  sanitizeLock,
+  sanitizeLoveGifs,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  sanitizeTheme,
+  userPhotoFolder,
+} from "../utils/loveMedia";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
@@ -14,7 +28,7 @@ const clampNum = (v: unknown, fallback: number, min: number, max: number): numbe
 };
 
 /**
- * Every write goes through an explicit allow-list of the eleven content fields.
+ * Every write goes through an explicit allow-list of the content fields.
  * `req.body` is never spread into the document, so a caller cannot smuggle in
  * `userId`, `isPublished`, `shareId`, `viewCount` or `passwordRaw`.
  */
@@ -30,8 +44,21 @@ type PuzzleBody = {
   finalPieceMode?: unknown;
   finalPieceMessage?: unknown;
   closingLine?: unknown;
+  difficulty?: unknown;
+  imageCropX?: unknown;
+  imageCropY?: unknown;
+  imageScale?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
+
+const sanitizeDifficulty = (raw: unknown): PuzzleDifficulty =>
+  (PUZZLE_DIFFICULTIES as readonly string[]).includes(raw as string) ? (raw as PuzzleDifficulty) : "easy";
 
 /**
  * Clamps any requested grid into something playable, mirroring `normaliseGrid`
@@ -115,6 +142,15 @@ export const createPhotoPuzzlePage = async (req: Request, res: Response): Promis
       finalPieceMode: (b.finalPieceMode === "auto" ? "auto" : "sender-release") as FinalPieceMode,
       finalPieceMessage: str(b.finalPieceMessage, PUZZLE_LIMITS.finalPieceMessage),
       closingLine: str(b.closingLine, PUZZLE_LIMITS.closingLine),
+      difficulty: sanitizeDifficulty(b.difficulty),
+      imageCropX: clampNum(b.imageCropX, 50, 0, 100),
+      imageCropY: clampNum(b.imageCropY, 50, 0, 100),
+      imageScale: clampNum(b.imageScale, 100, 100, 300),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("photo-puzzle", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, PUZZLE_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, PUZZLE_LIMITS.password),
     });
 
@@ -179,6 +215,19 @@ export const updatePhotoPuzzlePage = async (req: Request, res: Response): Promis
     if (b.finalPieceMode    !== undefined) page.finalPieceMode    = b.finalPieceMode === "auto" ? "auto" : "sender-release";
     if (b.finalPieceMessage !== undefined) page.finalPieceMessage = str(b.finalPieceMessage, PUZZLE_LIMITS.finalPieceMessage);
     if (b.closingLine       !== undefined) page.closingLine       = str(b.closingLine, PUZZLE_LIMITS.closingLine);
+    if (b.difficulty        !== undefined) page.difficulty        = sanitizeDifficulty(b.difficulty);
+    if (b.imageCropX        !== undefined) page.imageCropX        = clampNum(b.imageCropX, 50, 0, 100);
+    if (b.imageCropY        !== undefined) page.imageCropY        = clampNum(b.imageCropY, 50, 0, 100);
+    if (b.imageScale        !== undefined) page.imageScale        = clampNum(b.imageScale, 100, 100, 300);
+    if (b.photos            !== undefined) page.photos            = await sanitizeLovePhotos(b.photos, userPhotoFolder("photo-puzzle", req.userId));
+    if (b.gifs              !== undefined) page.gifs              = sanitizeLoveGifs(b.gifs);
+    if (b.letter            !== undefined) page.letter            = sanitizeLoveLetter(b.letter);
+    if (b.theme             !== undefined) page.theme             = sanitizeTheme(b.theme, PUZZLE_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, PUZZLE_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, PUZZLE_LIMITS.password);
