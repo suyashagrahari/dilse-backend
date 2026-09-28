@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /** What a slot dispenses. Mirrors `SlotKind` in the client contract. */
 export type SlotKind = "compliment" | "memory" | "voucher" | "empty";
@@ -55,6 +56,14 @@ export interface IVendingMachinePage extends Document {
   displayIdleMessages: string[];
   /** Sender-only. `select: false` — see ICreditAnswer. */
   creditAnswers: ICreditAnswer[];
+  /** Love kit: the limited-edition memory cards (photo + caption + note on the back). */
+  photos: ILovePhoto[];
+  /** Up to three GIF / animated-sticker links. */
+  gifs: string[];
+  /** The main letter — printed as the secret prize on the receipt. */
+  letter: string;
+  /** Machine theme id — mirrors client components/themes.ts. */
+  theme: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -99,6 +108,11 @@ const vendingMachinePageSchema = new Schema<IVendingMachinePage>(
     displayIdleMessages: { type: [String], default: [] },
     // Sender-only. Never selected by default — the public reader must not see it.
     creditAnswers: { type: [creditAnswerSchema], default: [], select: false },
+    // Love kit
+    photos: loveKitFields.photos,
+    gifs: loveKitFields.gifs,
+    letter: loveKitFields.letter,
+    theme: loveKitFields.theme,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },

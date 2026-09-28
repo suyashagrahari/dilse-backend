@@ -8,6 +8,16 @@ import VendingMachinePage, {
   IVendingMachinePage,
 } from "../models/VendingMachinePage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import {
+  sanitizeLoveGifs,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  sanitizeTheme,
+  userPhotoFolder,
+} from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/vending-machine/components/themes.ts. */
+const VENDING_THEMES = ["arcade", "tokyo", "kawaii", "chrome"] as const;
 
 // ─── Geometry, mirrored from the client contract (`components/types.ts`) ─────
 const ROWS = ["A", "B", "C"];
@@ -115,6 +125,10 @@ type VendingMachineBody = {
   slots?: unknown;
   creditPrompts?: unknown;
   displayIdleMessages?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
   password?: unknown;
 };
 
@@ -130,6 +144,10 @@ export const createVendingMachinePage = async (req: Request, res: Response): Pro
       slots: sanitizeSlots(b.slots),
       creditPrompts: strArray(b.creditPrompts, MAX_CREDIT_PROMPTS, PROMPT_MAX),
       displayIdleMessages: strArray(b.displayIdleMessages, MAX_IDLE_MESSAGES, 60),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("vending-machine", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, VENDING_THEMES),
       password: str(b.password, 128),
     });
 
@@ -202,6 +220,10 @@ export const updateVendingMachinePage = async (req: Request, res: Response): Pro
     if (b.slots               !== undefined) page.slots               = sanitizeSlots(b.slots);
     if (b.creditPrompts       !== undefined) page.creditPrompts       = strArray(b.creditPrompts, MAX_CREDIT_PROMPTS, PROMPT_MAX);
     if (b.displayIdleMessages !== undefined) page.displayIdleMessages = strArray(b.displayIdleMessages, MAX_IDLE_MESSAGES, 60);
+    if (b.photos              !== undefined) page.photos              = await sanitizeLovePhotos(b.photos, userPhotoFolder("vending-machine", req.userId));
+    if (b.gifs                !== undefined) page.gifs                = sanitizeLoveGifs(b.gifs);
+    if (b.letter              !== undefined) page.letter              = sanitizeLoveLetter(b.letter);
+    if (b.theme               !== undefined) page.theme               = sanitizeTheme(b.theme, VENDING_THEMES);
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 
