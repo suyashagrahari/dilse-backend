@@ -36,44 +36,110 @@ const ALL_PAGE_MODELS = TEMPLATE_LOOKUPS.map(({ model, templateType, editorRoute
   slug: editorRoute.replace(/^\//, ""),
 }));
 
+// ─── IST DAYS ───────────────────────────────────────────────────
+//
+// Every "day" on the admin screens is an Indian day, midnight to midnight IST.
+// The server runs in UTC, so `new Date().setHours(0)` used to start "today" at
+// 05:30 IST — the Analytics card and the Users "Today" filter then disagreed by
+// everyone who signed up between midnight and half past five.
+const TZ = "Asia/Kolkata";
+const IST_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const istYmd = (d: Date = new Date()) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+const istMidnight = (ymd: string) => new Date(`${ymd}T00:00:00+05:30`);
+const addDays = (ymd: string, n: number) => {
+  const d = istMidnight(ymd);
+  d.setUTCDate(d.getUTCDate() + n); // IST has no DST, so a day is always 24h
+  return istYmd(d);
+};
+
+/** `from`/`to` (YYYY-MM-DD, IST) as a [start, end) range; `to` defaults to `from`. */
+const istRange = (from?: unknown, to?: unknown): { start: Date; end: Date; from: string; to: string } | null => {
+  const f = typeof from === "string" && IST_DAY.test(from) ? from : "";
+  if (!f) return null;
+  const t = typeof to === "string" && IST_DAY.test(to) && to >= f ? to : f;
+  const start = istMidnight(f);
+  const end = istMidnight(addDays(t, 1));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return { start, end, from: f, to: t };
+};
+
+/** One count per IST day in [fromYmd, toYmd], zeros filled in. */
+const dailyCounts = async (model: mongoose.Model<any>, fromYmd: string, toYmd: string) => {
+  const rows = (await model.aggregate([
+    { $match: { createdAt: { $gte: istMidnight(fromYmd), $lt: istMidnight(addDays(toYmd, 1)) } } },
+    { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TZ } }, count: { $sum: 1 } } },
+  ])) as { _id: string; count: number }[];
+  const by = new Map(rows.map((r) => [r._id, r.count]));
+  const out: { date: string; count: number }[] = [];
+  for (let d = fromYmd; d <= toYmd; d = addDays(d, 1)) out.push({ date: d, count: by.get(d) || 0 });
+  return out;
+};
+
+/** 24 hourly counts for one IST day — the chart when a single day is chosen. */
+const hourlyCounts = async (model: mongoose.Model<any>, ymd: string) => {
+  const rows = (await model.aggregate([
+    { $match: { createdAt: { $gte: istMidnight(ymd), $lt: istMidnight(addDays(ymd, 1)) } } },
+    { $group: { _id: { $hour: { date: "$createdAt", timezone: TZ } }, count: { $sum: 1 } } },
+  ])) as { _id: number; count: number }[];
+  const by = new Map(rows.map((r) => [r._id, r.count]));
+  return Array.from({ length: 24 }, (_, h) => ({ date: `${String(h).padStart(2, "0")}:00`, count: by.get(h) || 0 }));
+};
+
 // ─── ANALYTICS DASHBOARD ────────────────────────────────────────
+//
+// `from`/`to` pick the period the headline numbers, template table and device
+// split describe; without them it is all time. "Today", "yesterday", the
+// 7/30-day totals and the 7-day average are always sent, whatever the period,
+// because they are the pulse you check every time.
 
-export const getAnalyticsOverview = async (_req: Request, res: Response): Promise<void> => {
+export const getAnalyticsOverview = async (req: Request, res: Response): Promise<void> => {
   try {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const todayYmd = istYmd();
+    const today = istMidnight(todayYmd);
+    const yesterday = istMidnight(addDays(todayYmd, -1));
+    const week = istMidnight(addDays(todayYmd, -6)); // last 7 days, today included
+    const month = istMidnight(addDays(todayYmd, -29));
+    const range = istRange(req.query.from, req.query.to);
+    const inRange = range ? { createdAt: { $gte: range.start, $lt: range.end } } : {};
 
-    // User stats
-    const [totalUsers, usersToday, usersThisWeek, usersThisMonth] = await Promise.all([
+    const [totalUsers, usersToday, usersYesterday, usersThisWeek, usersThisMonth, usersInPeriod] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ createdAt: { $gte: today } }),
-      User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-      User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+      User.countDocuments({ createdAt: { $gte: yesterday, $lt: today } }),
+      User.countDocuments({ createdAt: { $gte: week } }),
+      User.countDocuments({ createdAt: { $gte: month } }),
+      User.countDocuments(inRange),
     ]);
 
-    // Page view stats
-    const [totalViews, viewsToday, viewsThisWeek, viewsThisMonth] = await Promise.all([
+    const [totalViews, viewsToday, viewsYesterday, viewsThisWeek, viewsThisMonth, viewsInPeriod] = await Promise.all([
       PageView.countDocuments(),
       PageView.countDocuments({ createdAt: { $gte: today } }),
-      PageView.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-      PageView.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+      PageView.countDocuments({ createdAt: { $gte: yesterday, $lt: today } }),
+      PageView.countDocuments({ createdAt: { $gte: week } }),
+      PageView.countDocuments({ createdAt: { $gte: month } }),
+      PageView.countDocuments(inRange),
     ]);
+
+    // The 7 COMPLETE days before today. Today is still filling up, so counting
+    // it would drag the average down every morning.
+    const [last7Users, last7Views] = await Promise.all([
+      dailyCounts(User as unknown as mongoose.Model<any>, addDays(todayYmd, -7), addDays(todayYmd, -1)),
+      dailyCounts(PageView as unknown as mongoose.Model<any>, addDays(todayYmd, -7), addDays(todayYmd, -1)),
+    ]);
+    const avg = (xs: { count: number }[]) => Math.round((xs.reduce((a, b) => a + b.count, 0) / 7) * 10) / 10;
 
     // Whether each template is switched on HERE, so a row of zeros can be read.
     // Without it the table lies by omission: a hidden template shows 0/0 and
-    // reads as "nobody wants this", when in fact nobody could reach it. On this
-    // production deployment 37 of 43 are currently switched off, so that is most
-    // of the table.
+    // reads as "nobody wants this", when in fact nobody could reach it.
     const hidden = new Set(await hiddenSlugs().catch(() => []));
 
-    // Total pages created across all templates
+    // Pages per template — in the period when one is chosen.
     const templateStats = await Promise.all(
       ALL_PAGE_MODELS.map(async ({ model, type, label, slug }) => {
         const [total, published] = await Promise.all([
-          (model as mongoose.Model<unknown>).countDocuments(),
-          (model as mongoose.Model<unknown>).countDocuments({ isPublished: true }),
+          (model as mongoose.Model<unknown>).countDocuments(inRange),
+          (model as mongoose.Model<unknown>).countDocuments({ ...inRange, isPublished: true }),
         ]);
         return { type, label, slug, live: !hidden.has(slug), total, published };
       })
@@ -86,32 +152,36 @@ export const getAnalyticsOverview = async (_req: Request, res: Response): Promis
     const totalPagesCreated = templateStats.reduce((s, t) => s + t.total, 0);
     const totalPagesPublished = templateStats.reduce((s, t) => s + t.published, 0);
 
-    // User role distribution
-    const roleDistribution = await User.aggregate([
-      { $group: { _id: "$role", count: { $sum: 1 } } },
-    ]);
-
-    // Device breakdown from page views
-    const deviceBreakdown = await PageView.aggregate([
-      { $group: { _id: "$device", count: { $sum: 1 } } },
+    const [roleDistribution, providerDistribution, deviceBreakdown] = await Promise.all([
+      User.aggregate([{ $match: inRange }, { $group: { _id: "$role", count: { $sum: 1 } } }]),
+      User.aggregate([{ $match: inRange }, { $group: { _id: "$provider", count: { $sum: 1 } } }]),
+      PageView.aggregate([{ $match: inRange }, { $group: { _id: "$device", count: { $sum: 1 } } }]),
     ]);
 
     res.json({
       success: true,
       data: {
-        users: { total: totalUsers, today: usersToday, thisWeek: usersThisWeek, thisMonth: usersThisMonth },
-        pageViews: { total: totalViews, today: viewsToday, thisWeek: viewsThisWeek, thisMonth: viewsThisMonth },
+        today: todayYmd,
+        period: range ? { from: range.from, to: range.to } : null,
+        users: {
+          total: totalUsers, today: usersToday, yesterday: usersYesterday,
+          thisWeek: usersThisWeek, thisMonth: usersThisMonth, inPeriod: usersInPeriod,
+        },
+        pageViews: {
+          total: totalViews, today: viewsToday, yesterday: viewsYesterday,
+          thisWeek: viewsThisWeek, thisMonth: viewsThisMonth, inPeriod: viewsInPeriod,
+        },
+        last7: { users: last7Users, views: last7Views, avgUsers: avg(last7Users), avgViews: avg(last7Views) },
         pages: {
           totalCreated: totalPagesCreated,
           totalPublished: totalPagesPublished,
-          // Sent rather than left as a subtraction on the client. A draft is a
-          // page somebody built and did not finish paying for or publishing, so
-          // it is the number that says where people are dropping out — worth a
-          // name of its own rather than arithmetic each caller repeats.
+          // A draft is a page somebody built and did not publish — the number
+          // that says where people are dropping out.
           totalDrafts: totalPagesCreated - totalPagesPublished,
         },
         templateStats,
         roleDistribution: roleDistribution.map((r) => ({ role: r._id || "normal", count: r.count })),
+        providerDistribution: providerDistribution.map((r) => ({ provider: r._id || "local", count: r.count })),
         deviceBreakdown: deviceBreakdown.map((d) => ({ device: d._id || "unknown", count: d.count })),
       },
     });
@@ -121,73 +191,31 @@ export const getAnalyticsOverview = async (_req: Request, res: Response): Promis
   }
 };
 
-// ─── CHART DATA: User registrations over time ───────────────────
+// ─── CHART DATA: users / views over time ────────────────────────
+//
+// `from`/`to` for a period (one day → 24 hourly points), else the last `days`
+// IST days ending today.
+const seriesFor = async (model: mongoose.Model<any>, req: Request) => {
+  const range = istRange(req.query.from, req.query.to);
+  if (range && range.from === range.to) return hourlyCounts(model, range.from);
+  if (range) return dailyCounts(model, range.from, range.to);
+  const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 365);
+  const todayYmd = istYmd();
+  return dailyCounts(model, addDays(todayYmd, -(days - 1)), todayYmd);
+};
 
 export const getUserGrowthChart = async (req: Request, res: Response): Promise<void> => {
   try {
-    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
-
-    const data = await User.aggregate([
-      { $match: { createdAt: { $gte: startDate } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    // Fill in missing days with 0
-    const result: { date: string; count: number }[] = [];
-    const cursor = new Date(startDate);
-    const dataMap = new Map(data.map((d) => [d._id, d.count]));
-    while (cursor <= new Date()) {
-      const key = cursor.toISOString().split("T")[0];
-      result.push({ date: key, count: dataMap.get(key) || 0 });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: await seriesFor(User as unknown as mongoose.Model<any>, req) });
   } catch (error) {
     console.error("User growth chart error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch chart data" });
   }
 };
 
-// ─── CHART DATA: Page views over time ───────────────────────────
-
 export const getViewsChart = async (req: Request, res: Response): Promise<void> => {
   try {
-    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
-
-    const data = await PageView.aggregate([
-      { $match: { createdAt: { $gte: startDate } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const result: { date: string; count: number }[] = [];
-    const cursor = new Date(startDate);
-    const dataMap = new Map(data.map((d) => [d._id, d.count]));
-    while (cursor <= new Date()) {
-      const key = cursor.toISOString().split("T")[0];
-      result.push({ date: key, count: dataMap.get(key) || 0 });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: await seriesFor(PageView as unknown as mongoose.Model<any>, req) });
   } catch (error) {
     console.error("Views chart error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch chart data" });
@@ -196,9 +224,11 @@ export const getViewsChart = async (req: Request, res: Response): Promise<void> 
 
 // ─── CHART DATA: Template popularity ────────────────────────────
 
-export const getTemplatePopularity = async (_req: Request, res: Response): Promise<void> => {
+export const getTemplatePopularity = async (req: Request, res: Response): Promise<void> => {
   try {
+    const range = istRange(req.query.from, req.query.to);
     const data = await PageView.aggregate([
+      ...(range ? [{ $match: { createdAt: { $gte: range.start, $lt: range.end } } }] : []),
       { $group: { _id: "$templateType", views: { $sum: 1 } } },
       { $sort: { views: -1 } },
     ]);
@@ -218,23 +248,6 @@ export const getTemplatePopularity = async (_req: Request, res: Response): Promi
 };
 
 // ─── USER MANAGEMENT ────────────────────────────────────────────
-
-// A calendar day in India, as a [start, end) instant range.
-//
-// The admin asks "who signed up today" in IST, and a UTC day would split an
-// Indian evening across two dates. `from`/`to` are YYYY-MM-DD; `to` defaults
-// to `from`, so a single day is just `from`.
-const IST_DAY = /^\d{4}-\d{2}-\d{2}$/;
-const istRange = (from?: unknown, to?: unknown): { start: Date; end: Date } | null => {
-  const f = typeof from === "string" && IST_DAY.test(from) ? from : "";
-  if (!f) return null;
-  const t = typeof to === "string" && IST_DAY.test(to) && to >= f ? to : f;
-  const start = new Date(`${f}T00:00:00+05:30`);
-  const end = new Date(`${t}T00:00:00+05:30`);
-  end.setUTCDate(end.getUTCDate() + 1);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  return { start, end };
-};
 
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
