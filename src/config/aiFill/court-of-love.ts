@@ -31,7 +31,7 @@ import type { AiFillTemplateSchema, AiFillField } from "./types";
  * say we'll go one day" and the closing "how much do I love you", where every
  * answer scores. Spending model budget re-inventing those buys nothing.
  *
- * Eight questions × 4 fields + 4 top-level fields = 36, inside the 40-field
+ * Eight questions × 4 fields + 4 top-level fields + 2 exhibit notes = 38, inside the 40-field
  * ceiling in FILL_LIMITS with room to spare. Adding a ninth would sit exactly on
  * the ceiling, which the limit's own comment warns is where a single model call
  * stops being reliable.
@@ -176,13 +176,34 @@ export const courtOfLove: AiFillTemplateSchema = {
         "The title printed across the certificate the recipient is awarded when the verdict goes their way — the local equivalent of 'Certified Best Partner'. An award title, under 60 characters, in the register of an official honour that is obviously not one. It is printed in large type on a stamp-paper certificate, so short beats clever.",
     },
     {
-      path: "secretLetter",
-      label: "The sealed letter",
+      path: "letter",
+      label: "The Final Judgement (main letter)",
       kind: "longtext",
       max: 900,
       required: true,
       guide:
-        "The love letter that unseals the moment the verdict comes in — the real reason this page exists, and the one place the courtroom joke is dropped entirely. Four to seven sentences in the sender's plain voice, built from the specifics of their story rather than from generic romance. No markdown, no 'Dear ―', no sign-off: the sender's name is already printed beneath it. End on something said out loud rather than something performed, and never turn the quiz into a score the recipient owes.",
+        "The Final Judgement — the love letter the Court reads aloud after the verdict, once the recipient has seen the evidence. It is the real reason this page exists, and the one place the courtroom joke is dropped almost entirely: at most one light legal touch in the first line ('The Court has reviewed the evidence.'), then four to six sentences in the sender's plain, spoken voice, built from the specifics of their story rather than generic romance. No markdown, no 'Dear ―', no sign-off: the sender's name is printed beneath it as the presiding judge. End on something said out loud rather than performed, and never turn the quiz into a score the recipient owes.",
+    },
+    // ── The Exhibits ─────────────────────────────────────────────────────────
+    // Text leaves only. The photos themselves (url + crop) are the sender's
+    // uploads and are never written by the model; these two notes attach to
+    // the first two exhibits if the sender has added photos.
+    {
+      path: "photos[0].note",
+      label: "Exhibit A — testimony",
+      kind: "longtext",
+      max: 300,
+      guide:
+        "The sender's testimony under Exhibit A, the first photo of the two of them — shown when the recipient taps the evidence photo open. One to three short sentences, first person, about a specific moment from the story (the first date, the first trip, the first stupid joke). May open with a tiny courtroom flourish ('Let the record show…') but the rest is plain and warm. Under 300 characters.",
+      example: "Let the record show: you said the sky looked like mango lassi. I have not recovered.",
+    },
+    {
+      path: "photos[1].note",
+      label: "Exhibit B — testimony",
+      kind: "longtext",
+      max: 300,
+      guide:
+        "The sender's testimony under Exhibit B, the second photo — a different kind of memory from Exhibit A (if A was a milestone, B is ordinary and domestic). One to three short sentences, first person, specific, plain and fond, no legal wording beyond the odd wink. Under 300 characters.",
     },
   ],
 };
