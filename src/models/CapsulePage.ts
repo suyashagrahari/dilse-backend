@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -102,6 +103,20 @@ export interface ICapsulePage extends Document {
   status: CapsuleStatus;
   openedAt: string;
   /**
+   * THE KEEPSAKES — what is found inside the capsule when it opens: framed
+   * photos (each with a memory note on the back), up to three GIFs, and the
+   * letter sealed at the very bottom. SEALED exactly like `predictions`: none
+   * of it leaves the server before `opensOn` (the projection carries counts
+   * only). `theme` is the outside of the capsule and is public.
+   */
+  photos: ILovePhoto[];
+  gifs: string[];
+  letter: string;
+  theme: string;
+  /** The line pressed around the letter's wax seal, and the button that breaks it. */
+  lockQuestion: string;
+  lockAnswer: string;
+  /**
    * Denormalised from `pair.a.name` / `pair.b.name` by the pre-save hook below.
    * The dashboard queries in `share.controller` (`getMyCreations`,
    * `getReceivedPages`) read flat `senderName`/`recipientName` off every
@@ -187,6 +202,13 @@ const capsulePageSchema = new Schema<ICapsulePage>(
       default: "writing",
     },
     openedAt: { type: String, default: "", maxlength: CAPSULE_LIMITS.timestamp },
+    // Love kit — see the interface. Sealed with the predictions.
+    photos: loveKitFields.photos,
+    gifs: loveKitFields.gifs,
+    letter: loveKitFields.letter,
+    theme: loveKitFields.theme,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Denormalised for the dashboard. Written by the pre-save hook, never by a
     // caller — see the hook for why it is not done in the controller.
     senderName: { type: String, default: "", maxlength: CAPSULE_LIMITS.name },

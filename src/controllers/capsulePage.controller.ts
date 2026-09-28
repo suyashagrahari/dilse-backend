@@ -15,6 +15,17 @@ import CapsulePage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import {
+  sanitizeLock,
+  sanitizeLoveGifs,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  sanitizeTheme,
+  userPhotoFolder,
+} from "../utils/loveMedia";
+
+/** Mirrors client/app/(templates)/capsule/components/themes.ts. */
+const CAPSULE_THEMES = ["rust", "chrome", "garden", "stardust"] as const;
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -56,6 +67,12 @@ type CapsuleBody = {
   predictions?: unknown;
   status?: unknown;
   openedAt?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -204,6 +221,10 @@ export interface SealableCapsule {
   stake: string;
   predictions: { author: Side }[];
   status?: CapsuleStatus;
+  /** The outside of the capsule. Public by design. */
+  theme: string;
+  /** How much is inside — numbers only. Never a URL, caption, note or letter. */
+  keepsakes: { photos: number; gifs: number; letter: boolean };
 }
 
 export interface SealedCapsuleProjection {
@@ -215,6 +236,8 @@ export interface SealedCapsuleProjection {
   timezone: string;
   stake: string;
   counts: { a: number; b: number };
+  theme: string;
+  keepsakes: { photos: number; gifs: number; letter: boolean };
   /** Whether the 24h amend window is still open, and until when. */
   amendUntil?: string;
 }
@@ -261,6 +284,12 @@ export const projectSealedCapsule = (
     timezone: capsule.timezone,
     stake: capsule.stake,
     counts: { a, b },
+    theme: capsule.theme,
+    keepsakes: {
+      photos: capsule.keepsakes.photos,
+      gifs: capsule.keepsakes.gifs,
+      letter: capsule.keepsakes.letter,
+    },
   };
 
   const sealed = Date.parse(capsule.sealedOn);
@@ -303,6 +332,14 @@ const asSealable = (o: Record<string, unknown>): SealableCapsule => {
     predictions: rawPredictions.map((p) => ({
       author: (p as { author?: unknown })?.author === "b" ? ("b" as Side) : ("a" as Side),
     })),
+    theme: typeof o.theme === "string" ? o.theme : "",
+    // Lengths and a boolean, read here and nowhere else — the photo objects,
+    // GIF links and letter text never reach the object handed onward.
+    keepsakes: {
+      photos: Array.isArray(o.photos) ? o.photos.length : 0,
+      gifs: Array.isArray(o.gifs) ? o.gifs.length : 0,
+      letter: typeof o.letter === "string" && o.letter.trim().length > 0,
+    },
   };
 };
 
@@ -345,6 +382,11 @@ export const createCapsulePage = async (req: Request, res: Response): Promise<vo
       predictions: sanitizePredictions(b.predictions),
       status: asStatus(b.status),
       openedAt: str(b.openedAt, CAPSULE_LIMITS.timestamp),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("capsule", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: sanitizeLoveLetter(b.letter),
+      theme: sanitizeTheme(b.theme, CAPSULE_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, CAPSULE_LIMITS.password),
     });
 
@@ -413,11 +455,22 @@ export const updateCapsulePage = async (req: Request, res: Response): Promise<vo
      *
      * If you cannot tell which side a new field falls on, ask whether changing
      * it after the fact could alter who wins or what they owe. If yes, lock it.
+     *
+     * THE KEEPSAKES lock too, for the other reason a field locks: they are
+     * inside the capsule. Photos, their notes, the GIFs and the letter are
+     * sealed content (the public projection carries counts only), and "sealed"
+     * means the author cannot slip a new letter in a year later any more than
+     * they can rewrite a prediction. `theme` is the colour of the OUTSIDE of
+     * the capsule — cosmetic, public, and editable forever, like the names.
      */
     const locked: string[] = [];
     if (b.predictions !== undefined) locked.push("predictions");
     if (b.stake !== undefined) locked.push("stake");
     if (b.context !== undefined) locked.push("context");
+    if (b.photos !== undefined) locked.push("photos");
+    if (b.gifs !== undefined) locked.push("gifs");
+    if (b.letter !== undefined) locked.push("letter");
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) locked.push("lock");
     if (locked.length > 0 && !canAmendCapsule(page)) {
       res.status(403).json({
         success: false,
@@ -437,6 +490,15 @@ export const updateCapsulePage = async (req: Request, res: Response): Promise<vo
     if (b.predictions !== undefined) page.predictions = sanitizePredictions(b.predictions);
     if (b.status      !== undefined) page.status      = asStatus(b.status);
     if (b.openedAt    !== undefined) page.openedAt    = str(b.openedAt, CAPSULE_LIMITS.timestamp);
+    if (b.photos      !== undefined) page.photos      = await sanitizeLovePhotos(b.photos, userPhotoFolder("capsule", req.userId));
+    if (b.gifs        !== undefined) page.gifs        = sanitizeLoveGifs(b.gifs);
+    if (b.letter      !== undefined) page.letter      = sanitizeLoveLetter(b.letter);
+    if (b.theme       !== undefined) page.theme       = sanitizeTheme(b.theme, CAPSULE_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, CAPSULE_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, CAPSULE_LIMITS.password);
