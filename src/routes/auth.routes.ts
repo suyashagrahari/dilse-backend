@@ -12,6 +12,7 @@ import {
   changePassword,
   getDashboard,
   checkSubdomainAvailability,
+  suggestSubdomains,
   setSubdomain,
 } from "../controllers/auth.controller";
 import { protect, blockImpersonation } from "../middleware/auth";
@@ -35,6 +36,7 @@ router.get("/dashboard", protect, getDashboard);
 router.post("/refresh", refreshToken);
 router.post("/logout", protect, logout);
 router.get("/subdomain/check", protect, checkSubdomainAvailability);
+router.get("/subdomain/suggest", protect, suggestSubdomains);
 router.put("/subdomain", protect, blockImpersonation, setSubdomain);
 
 export default router;
