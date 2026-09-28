@@ -21,13 +21,15 @@ import type { AiFillTemplateSchema } from "./types";
  * because the type is dead serious and the copy never winks — a nutrient note
  * that tries to be a joke is much less funny than one that states an absurd
  * fact in the voice of a compliance document. The only field allowed to drop
- * the act is `message`, and the whole template is built around that break.
+ * the act is `letter` (the note inside the wrapper), and the whole template is
+ * built around that break. `message` is legacy — the client derives it from
+ * `letter` on save. `photos`/`gifs`/`theme` are media or structure.
  */
 export const nutrition: AiFillTemplateSchema = {
   slug: "nutrition",
-  audience: "bestfriend",
+  audience: "partner",
   premise:
-    "A parody nutrition-facts panel printed on a package, where the product is a person. It looks exactly like the regulatory panel on the back of a snack box: 8px type, hard black rules, bold major nutrients with indented sub-nutrients, a % Daily Value column, an ingredients paragraph and an allergen warning. Every nutrient is a trait of that person, and tapping a row reveals the sender's line about it. Below the package, in a completely different voice and a readable serif, the sender says the sincere thing. The comedy is 100% in the copy and it only lands because the design never breaks character — so write like a compliance document that happens to be about somebody you love, and save the warmth for the message at the end.",
+    "A parody nutrition-facts panel printed on a package, where the product is a person. It looks exactly like the regulatory panel on the back of a snack box: 8px type, hard black rules, bold major nutrients with indented sub-nutrients, a % Daily Value column, an ingredients paragraph and an allergen warning. It is a gift from someone to their partner. Every nutrient is a trait of that person, and tapping a row reveals the sender's line about it. After the label come their photos as 'servings' in a box, a few GIFs listed as 'side effects', and finally a note folded inside a foil wrapper where, in a completely different voice and a readable serif, the sender says the sincere thing. The comedy is 100% in the copy and it only lands because the design never breaks character — so write like a compliance document that happens to be about somebody you love, and save the warmth for the note at the end.",
   forbiddenOutput: [
     "Aditi",
     "FDA",
@@ -327,15 +329,24 @@ export const nutrition: AiFillTemplateSchema = {
       example: "CONTAINS: sarcasm, strong opinions",
     },
     {
-      path: "message",
-      label: "The message",
-      kind: "list",
-      max: 4,
-      itemMax: 400,
+      path: "letter",
+      label: "The note inside the wrapper",
+      kind: "longtext",
+      max: 1200,
       required: true,
       guide:
-        "THE EMOTIONAL PAYLOAD, and the only field that leaves the joke behind. It is rendered BELOW the package in a readable serif at a comfortable size, so the reader goes from 8px regulatory density straight into real writing — that tonal break is the entire point of this template. Two to four paragraphs, 200 to 500 characters total. No nutrition vocabulary, no percentages, no callback to the labels above, no jokes at all. Just the sender saying the thing plainly, with one concrete detail from their story that means it could not have been written about anybody else.",
-      example: "I made you a label because I did not know how else to say it. There is no daily value for you.",
+        "THE EMOTIONAL PAYLOAD, and the only field that leaves the joke behind. It is folded inside a foil wrapper at the very end of the page and torn open after everything else, then shown in a big handwritten-style serif — the reader goes from 8px regulatory density straight into real writing, and that tonal break is the entire point of this template. Open with the partner's first name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line after a dash. No nutrition vocabulary, no percentages, no callback to the rows above, no jokes. Just the sender saying the thing plainly: one concrete shared memory from their story, and one thing they have never said out loud. Simple warm English, no emojis, no rhymes. Blank line between paragraphs.",
+      example:
+        "Meera,\n\nI made you a label because I did not know how else to say it.\n\nThere is no daily limit on you. There never was.\n\n— Rohan",
+    },
+    {
+      path: "lockQuestion",
+      label: "Question printed on the wrapper",
+      kind: "text",
+      max: 90,
+      guide:
+        "One short question printed on the sealed wrapper; the partner taps the answer button to tear it open. Playful and easy to say yes to, in the voice of packaging instructions addressed to the partner. Never guilt-trip and never assume anything serious. Under 90 characters, ends with a question mark.",
+      example: "Promise to read the directions slowly?",
     },
   ],
 };

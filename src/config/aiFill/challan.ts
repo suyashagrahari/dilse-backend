@@ -398,5 +398,16 @@ export const challan: AiFillTemplateSchema = {
       example:
         "Objection upheld. You were right, and I withdraw all of it except the part where I miss you.",
     },
+    // ── The main letter ──────────────────────────────────────────────────────
+    {
+      path: "letter",
+      label: "Officer's personal remarks (the main letter)",
+      kind: "longtext",
+      max: 1200,
+      guide:
+        "THE MAIN LETTER. It is revealed at the very end, after she has paid or contested and the camera evidence has been reviewed, printed as the 'Officer's personal remarks' on a final court order and sealed with a stamp. The first line may keep one dry beat of the enforcement voice (a case number, 'having reviewed the evidence', 'the officer notes for the record') and then the sender drops the act completely and writes to her as themselves. Open with her name on its own line, then two to four short paragraphs, then sign off with the sender's name on the last line. One concrete shared memory from the story and one thing the sender has never said out loud. Simple warm English, no lists, no emojis, no rhymes, and no fines, sections or legal threats once the act is dropped. Line breaks between paragraphs.",
+      example:
+        "Meera,\n\nHaving reviewed all the footage, the officer has one remark for the record, and it is not about traffic.\n\nYou walked into my life at 11:40 on a Tuesday with a box of momos nobody ordered, and I have been a better, calmer, happier person every single day since.\n\nNo fine. Just stay.\n\nKabir",
+    },
   ],
 };

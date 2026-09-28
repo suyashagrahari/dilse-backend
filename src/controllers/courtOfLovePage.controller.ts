@@ -9,8 +9,18 @@ import {
   generateCaseFromStory,
   sanitizeStory,
 } from "../services/courtOfLoveAi.service";
+import { sanitizeLoveGifs, sanitizeLovePhotos, sanitizeLock, sanitizeTheme, userPhotoFolder } from "../utils/loveMedia";
 
-const MAX_QUESTIONS = 5;
+/**
+ * Ten — the same count the client edits and the AI service writes.
+ *
+ * This was 5 while the editor, the demo and the generator all produced ten,
+ * so every published page silently lost questions 6–10 (including the
+ * closing "every answer is right" question) the moment it was saved.
+ */
+const MAX_QUESTIONS = 10;
+const LETTER_MAX = 3000;
+const COURT_THEMES = ["supreme", "pink", "night", "parchment"] as const;
 const OPTIONS_PER_QUESTION = 4;
 
 const str = (v: unknown, max: number): string =>
@@ -18,7 +28,7 @@ const str = (v: unknown, max: number): string =>
 
 /**
  * Normalise whatever the client sent into exactly the shape the schema expects:
- * at most 5 hearings, exactly 4 pleas each, and a correctIndex that can only ever
+ * at most 10 hearings, exactly 4 pleas each, and a correctIndex that can only ever
  * point at a real option. Anything malformed is coerced rather than rejected so a
  * half-filled form still publishes.
  */
@@ -55,6 +65,12 @@ type CourtOfLoveBody = {
   certificateTitle?: unknown;
   language?: unknown;
   password?: unknown;
+  photos?: unknown;
+  gifs?: unknown;
+  letter?: unknown;
+  theme?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
 };
 
 export const createCourtOfLovePage = async (req: Request, res: Response): Promise<void> => {
@@ -72,6 +88,11 @@ export const createCourtOfLovePage = async (req: Request, res: Response): Promis
       signatureName: str(b.signatureName, 80),
       certificateTitle: str(b.certificateTitle, 120),
       language: str(b.language, 24) || "en",
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("court-of-love", req.userId)),
+      gifs: sanitizeLoveGifs(b.gifs),
+      letter: str(b.letter, LETTER_MAX),
+      theme: sanitizeTheme(b.theme, COURT_THEMES),
+      ...sanitizeLock(b),
       password: str(b.password, 128),
     });
 
@@ -126,6 +147,15 @@ export const updateCourtOfLovePage = async (req: Request, res: Response): Promis
     if (b.signatureName    !== undefined) page.signatureName    = str(b.signatureName, 80);
     if (b.certificateTitle !== undefined) page.certificateTitle = str(b.certificateTitle, 120);
     if (b.language         !== undefined) page.language         = str(b.language, 24) || "en";
+    if (b.photos           !== undefined) page.photos           = await sanitizeLovePhotos(b.photos, userPhotoFolder("court-of-love", req.userId));
+    if (b.gifs             !== undefined) page.gifs             = sanitizeLoveGifs(b.gifs);
+    if (b.letter           !== undefined) page.letter           = str(b.letter, LETTER_MAX);
+    if (b.theme            !== undefined) page.theme            = sanitizeTheme(b.theme, COURT_THEMES);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);
 

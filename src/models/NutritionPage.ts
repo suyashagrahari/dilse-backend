@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 // ─── Nutrition Facts — the persisted shape ───────────────────────────────────
 //
@@ -50,6 +51,15 @@ export interface INutritionPage extends Document {
   message: string[];
   photoUrl: string;
   distributedBy: string;
+
+  // Love kit — "servings" (photos + memory notes), side-effect GIFs, the note
+  // inside the wrapper (main letter), the packaging theme and the letter lock.
+  photos: ILovePhoto[];
+  gifs: string[];
+  letter: string;
+  theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
 
   // Security & meta
   password: string;
@@ -103,6 +113,9 @@ const nutritionPageSchema = new Schema<INutritionPage>(
     message: { type: [String], default: [] },
     photoUrl: { type: String, default: "" },
     distributedBy: { type: String, default: "" },
+
+    // Love kit (photos, gifs, letter, theme, lockQuestion, lockAnswer).
+    ...loveKitFields,
 
     // Security & meta
     password: { type: String, default: "" },
