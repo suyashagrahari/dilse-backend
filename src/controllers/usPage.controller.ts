@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import UsPage, {
   IComment,
+  ICrop,
+  IFrame,
   IHighlight,
   IHighlightSlide,
   IPost,
@@ -9,6 +11,23 @@ import UsPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLock, sanitizeLoveLetter } from "../utils/loveMedia";
+
+/** Framing from the editor's adjuster; the default framing is stored as nothing. */
+const sanitizeCrop = (raw: unknown): ICrop | undefined => {
+  if (!raw || typeof raw !== "object") return undefined;
+  const src = raw as Record<string, unknown>;
+  const x = Number(src.x);
+  const y = Number(src.y);
+  const scale = Number(src.scale);
+  if (![x, y, scale].every(Number.isFinite)) return undefined;
+  const crop = {
+    x: Math.min(100, Math.max(0, Math.round(x))),
+    y: Math.min(100, Math.max(0, Math.round(y))),
+    scale: Math.min(300, Math.max(100, Math.round(scale))),
+  };
+  return crop.x === 50 && crop.y === 50 && crop.scale === 100 ? undefined : crop;
+};
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -41,6 +60,14 @@ type UsBody = {
   highlights?: unknown;
   posts?: unknown;
   pinnedPostIds?: unknown;
+  from?: unknown;
+  to?: unknown;
+  note?: unknown;
+  avatarCrop?: unknown;
+  dms?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -128,6 +155,22 @@ const sanitizePosts = async (raw: unknown, userId: unknown): Promise<IPost[]> =>
       postedAgo: str(src.postedAgo, US_LIMITS.postedAgo),
       comments: sanitizeComments(src.comments),
     };
+    const crop = sanitizeCrop(src.crop);
+    if (crop) post.crop = crop;
+    if (Array.isArray(src.more)) {
+      const more: IFrame[] = [];
+      for (const f of src.more.slice(0, US_LIMITS.maxRawItems)) {
+        if (more.length >= US_LIMITS.maxMore) break;
+        const fs = (f ?? {}) as Record<string, unknown>;
+        const url = await resolveImageUrl(fs.url, userId, "posts");
+        if (!url) continue;
+        const frame: IFrame = { url };
+        const fc = sanitizeCrop(fs.crop);
+        if (fc) frame.crop = fc;
+        more.push(frame);
+      }
+      if (more.length) post.more = more;
+    }
     const location = str(src.location, US_LIMITS.location).trim();
     if (location) post.location = location;
     if (src.isMultiple === true) post.isMultiple = true;
@@ -146,6 +189,8 @@ const sanitizeSlides = async (raw: unknown, userId: unknown): Promise<IHighlight
     const imageUrl = await resolveImageUrl(src.imageUrl, userId, "highlights");
     if (!imageUrl) continue;
     const slide: IHighlightSlide = { imageUrl };
+    const crop = sanitizeCrop(src.crop);
+    if (crop) slide.crop = crop;
     const caption = str(src.caption, US_LIMITS.slideCaption).trim();
     if (caption) slide.caption = caption;
     out.push(slide);
@@ -206,6 +251,13 @@ export const createUsPage = async (req: Request, res: Response): Promise<void> =
       highlights: await sanitizeHighlights(b.highlights, req.userId),
       posts: await sanitizePosts(b.posts, req.userId),
       pinnedPostIds: sanitizeStrings(b.pinnedPostIds, US_LIMITS.maxPinned, US_LIMITS.postId),
+      from: str(b.from, US_LIMITS.name).trim(),
+      to: str(b.to, US_LIMITS.name).trim(),
+      note: str(b.note, US_LIMITS.note).trim(),
+      avatarCrop: sanitizeCrop(b.avatarCrop),
+      dms: sanitizeStrings(b.dms, US_LIMITS.maxDms, US_LIMITS.dm),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       password: str(b.password, US_LIMITS.password),
     });
 
@@ -262,6 +314,17 @@ export const updateUsPage = async (req: Request, res: Response): Promise<void> =
     if (b.highlights    !== undefined) page.highlights    = await sanitizeHighlights(b.highlights, req.userId);
     if (b.posts         !== undefined) page.posts         = await sanitizePosts(b.posts, req.userId);
     if (b.pinnedPostIds !== undefined) page.pinnedPostIds = sanitizeStrings(b.pinnedPostIds, US_LIMITS.maxPinned, US_LIMITS.postId);
+    if (b.from          !== undefined) page.from          = str(b.from, US_LIMITS.name).trim();
+    if (b.to            !== undefined) page.to            = str(b.to, US_LIMITS.name).trim();
+    if (b.note          !== undefined) page.note          = str(b.note, US_LIMITS.note).trim();
+    if (b.avatarCrop    !== undefined) page.avatarCrop    = sanitizeCrop(b.avatarCrop);
+    if (b.dms           !== undefined) page.dms           = sanitizeStrings(b.dms, US_LIMITS.maxDms, US_LIMITS.dm);
+    if (b.letter        !== undefined) page.letter        = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion  !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      if (b.lockQuestion !== undefined) page.lockQuestion = lock.lockQuestion;
+      if (b.lockAnswer   !== undefined) page.lockAnswer   = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, US_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, US_LIMITS.password);
