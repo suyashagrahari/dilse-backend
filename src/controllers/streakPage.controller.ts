@@ -12,6 +12,12 @@ import StreakPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import {
+  sanitizeLock,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  userPhotoFolder,
+} from "../utils/loveMedia";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -44,6 +50,67 @@ type StreakBody = {
   milestones?: unknown;
   microLetters?: unknown;
   password?: unknown;
+  // The snap-app skin.
+  handleA?: unknown;
+  handleB?: unknown;
+  avatarA?: unknown;
+  avatarB?: unknown;
+  zodiacA?: unknown;
+  zodiacB?: unknown;
+  mapPlace?: unknown;
+  chats?: unknown;
+  photos?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
+};
+
+/**
+ * The body, flattened. Early editors nested the content under `pageData`
+ * (which this controller never read — every field silently fell back to its
+ * default). Accept both so no client version loses a save.
+ */
+const bodyOf = (req: Request): StreakBody => {
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  const nested = raw.pageData && typeof raw.pageData === "object" ? (raw.pageData as Record<string, unknown>) : {};
+  return { ...nested, ...raw } as StreakBody;
+};
+
+const SKIN_KEYS = ["handleA", "handleB", "avatarA", "avatarB", "zodiacA", "zodiacB", "mapPlace"] as const;
+const SKIN_MAX: Record<(typeof SKIN_KEYS)[number], number> = {
+  handleA: STREAK_LIMITS.handle,
+  handleB: STREAK_LIMITS.handle,
+  avatarA: STREAK_LIMITS.token,
+  avatarB: STREAK_LIMITS.token,
+  zodiacA: STREAK_LIMITS.token,
+  zodiacB: STREAK_LIMITS.token,
+  mapPlace: STREAK_LIMITS.place,
+};
+
+const sanitizeChats = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw.slice(0, 40)) {
+    const line = str(v, STREAK_LIMITS.chatLine).trim();
+    if (line) out.push(line);
+    if (out.length >= STREAK_LIMITS.maxChats) break;
+  }
+  return out;
+};
+
+/** Only the skin keys the caller actually sent — an update leaves the rest alone. */
+const sanitizeSkin = async (b: StreakBody, userId: unknown): Promise<Record<string, unknown>> => {
+  const out: Record<string, unknown> = {};
+  for (const k of SKIN_KEYS) if (b[k] !== undefined) out[k] = str(b[k], SKIN_MAX[k]).trim();
+  if (b.chats !== undefined) out.chats = sanitizeChats(b.chats);
+  if (b.photos !== undefined) out.photos = await sanitizeLovePhotos(b.photos, userPhotoFolder("streak", userId));
+  if (b.letter !== undefined) out.letter = sanitizeLoveLetter(b.letter);
+  if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+    const lock = sanitizeLock(b);
+    if (b.lockQuestion !== undefined) out.lockQuestion = lock.lockQuestion;
+    if (b.lockAnswer !== undefined) out.lockAnswer = lock.lockAnswer;
+  }
+  return out;
 };
 
 // ─── Time — the same rules the client contract uses ──────────────────────────
@@ -397,9 +464,10 @@ export const buildSideShareUrls = (baseShareUrl: string, tokens: SideTokens) => 
 
 export const createStreakPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = req.body as StreakBody;
+    const b = bodyOf(req);
 
     const page = await StreakPage.create({
+      ...(await sanitizeSkin(b, req.userId)),
       userId: req.userId,
       pair: await sanitizePair(b.pair, req.userId),
       startedOn: str(b.startedOn, STREAK_LIMITS.date),
@@ -465,11 +533,12 @@ export const getStreakPage = async (req: Request, res: Response): Promise<void> 
 
 export const updateStreakPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const b = req.body as StreakBody;
+    const b = bodyOf(req);
 
     const page = await StreakPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
+    page.set(await sanitizeSkin(b, req.userId));
     if (b.pair         !== undefined) page.pair         = await sanitizePair(b.pair, req.userId);
     if (b.startedOn    !== undefined) page.startedOn    = str(b.startedOn, STREAK_LIMITS.date);
     if (b.timezone     !== undefined) page.timezone     = str(b.timezone, STREAK_LIMITS.timezone);
@@ -684,6 +753,86 @@ export const getSharedStreakPage = async (req: Request, res: Response): Promise<
   } catch (error) {
     console.error("Get shared streak page error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch page" });
+  }
+};
+
+// ─── The recipient's daily write (public, token-identified) ─────────────────
+//
+// The published page is opened by two people without accounts. Each link
+// carries `?k=<side token>`; a link WITHOUT a token is the plain share link the
+// sender sends to their partner, so it reads and writes as side "b". The
+// sender's own link (with side A's token) is handed to them at publish time.
+
+/** Which side this caller is: the token's side, or the plain link's "b". */
+const sharedSide = (req: Request, tokens: SideTokens): Side => viewerSideFrom(req, tokens) ?? "b";
+
+const plainDays = (page: InstanceType<typeof StreakPage>): ICheckInDay[] =>
+  (page.toObject({ flattenMaps: true }) as unknown as { checkIns?: ICheckInDay[] }).checkIns ?? [];
+
+const todayFor = (page: InstanceType<typeof StreakPage>, side: Side) => {
+  const today = dayKeyInZone(Date.now(), page.timezone);
+  const day = plainDays(page).find((d) => d.date === today);
+  return day ? projectSharedCheckIns([day], today, side)[0] : null;
+};
+
+export const getSharedStreakToday = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = await StreakPage.findOne({ shareId: req.params.shareId, isPublished: true }).select(
+      "+sideTokenA +sideTokenB"
+    );
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    const side = sharedSide(req, page);
+    res.json({ success: true, data: { side, day: todayFor(page, side) } });
+  } catch (error) {
+    console.error("Get streak today error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch today" });
+  }
+};
+
+/**
+ * IDEMPOTENT on (page, pair-day, side): a second tap, a retry on a flaky
+ * connection, or two tabs all resolve to the one check-in already recorded.
+ * The day is ALWAYS the server's pair-local today — a client cannot backfill.
+ * Photos are https links only here; nothing anonymous is uploaded.
+ */
+export const checkInSharedStreak = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = await StreakPage.findOne({ shareId: req.params.shareId, isPublished: true }).select(
+      "+sideTokenA +sideTokenB"
+    );
+    if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+    const side = sharedSide(req, page);
+    const raw = ((req.body as Record<string, unknown>)?.entry ?? {}) as Record<string, unknown>;
+    const today = dayKeyInZone(Date.now(), page.timezone);
+
+    const existing = page.checkIns.find((d) => d.date === today);
+    if (existing?.[side]) {
+      res.json({ success: true, alreadyCheckedIn: true, data: { side, day: todayFor(page, side) } });
+      return;
+    }
+
+    const entry: ICheckInEntry = { word: str(raw.word, STREAK_LIMITS.word).trim(), at: new Date().toISOString() };
+    const photo = str(raw.photoUrl, STREAK_LIMITS.url).trim();
+    if (/^https:\/\/\S+$/i.test(photo)) entry.photoUrl = photo;
+    const note = str(raw.note, STREAK_LIMITS.note).trim();
+    if (note) entry.note = note;
+
+    if (existing) {
+      existing[side] = entry;
+    } else {
+      if (page.checkIns.length >= STREAK_LIMITS.maxCheckInDays) {
+        res.status(409).json({ success: false, error: "Check-in log is full" });
+        return;
+      }
+      page.checkIns.push({ date: today, [side]: entry } as ICheckInDay);
+      page.checkIns.sort((x, y) => (x.date < y.date ? -1 : 1));
+    }
+    page.markModified("checkIns");
+    await page.save();
+    res.json({ success: true, alreadyCheckedIn: false, data: { side, day: todayFor(page, side) } });
+  } catch (error) {
+    console.error("Shared streak check-in error:", error);
+    res.status(500).json({ success: false, error: "Failed to check in" });
   }
 };
 

@@ -5,12 +5,23 @@ import SearchedPage, {
   IKnowledgePanel,
   IPaaItem,
   ISearchImage,
+  ISearchPlace,
   ISearchResult,
+  ISearchReview,
+  ISearchStory,
+  ISearchVideo,
   SEARCHED_LIMITS,
 } from "../models/SearchedPage";
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import {
+  sanitizeLock,
+  sanitizeLoveLetter,
+  sanitizeLovePhotos,
+  userPhotoFolder,
+} from "../utils/loveMedia";
+
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -38,7 +49,54 @@ type SearchedBody = {
   relatedSearches?: unknown;
   images?: unknown;
   alternateResults?: unknown;
+  senderName?: unknown;
+  recipientName?: unknown;
+  doodleTitle?: unknown;
+  aiOverview?: unknown;
+  aiPoints?: unknown;
+  reviews?: unknown;
+  topStories?: unknown;
+  videos?: unknown;
+  places?: unknown;
+  photos?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
+};
+
+/** Rows of plain-string fields: every key capped, rows with no `need` key dropped. */
+function sanitizeRows<T extends object>(raw: unknown, max: number, spec: Record<string, number>, need: string): T[] {
+  if (!Array.isArray(raw)) return [];
+  const out: T[] = [];
+  for (const item of raw.slice(0, SEARCHED_LIMITS.maxRawItems)) {
+    if (out.length >= max) break;
+    const src = (item ?? {}) as Record<string, unknown>;
+    const row: Record<string, unknown> = {};
+    for (const [k, cap] of Object.entries(spec)) row[k] = str(src[k], cap).trim();
+    if (!row[need]) continue;
+    out.push(row as T);
+  }
+  return out;
+}
+
+const L = SEARCHED_LIMITS;
+const sanitizeReviews = (raw: unknown): ISearchReview[] =>
+  sanitizeRows<ISearchReview>(raw, L.maxReviews, { author: L.reviewAuthor, text: L.reviewText, when: L.reviewWhen }, "text").map((r, i) => {
+    const src = Array.isArray(raw) ? ((raw[i] ?? {}) as Record<string, unknown>) : {};
+    const n = Math.round(Number(src.stars));
+    const out: ISearchReview = { author: r.author || "Anonymous", stars: Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 5, text: r.text };
+    if (r.when) out.when = r.when;
+    return out;
+  });
+const sanitizeStories = (raw: unknown) => sanitizeRows<ISearchStory>(raw, L.maxStories, { source: L.storySource, time: L.storyTime, title: L.storyTitle }, "title");
+const sanitizeVideos = (raw: unknown) => sanitizeRows<ISearchVideo>(raw, L.maxVideos, { channel: L.videoChannel, duration: L.videoDuration, title: L.videoTitle }, "title");
+const sanitizePlaces = (raw: unknown) => sanitizeRows<ISearchPlace>(raw, L.maxPlaces, { name: L.placeName, kind: L.placeKind, rating: L.placeRating, note: L.placeNote }, "name");
+
+/** `sender: {name}` (current client) or flat `senderName` (older clients). */
+const nameFrom = (nested: unknown, flat: unknown): string => {
+  const n = str(((nested ?? {}) as Record<string, unknown>).name, L.name).trim();
+  return n || str(flat, L.name).trim();
 };
 
 /**
@@ -125,6 +183,10 @@ const sanitizeResults = async (
       url: str(src.url, SEARCHED_LIMITS.breadcrumb),
       snippet,
     };
+    const site = str(src.site, SEARCHED_LIMITS.site).trim();
+    if (site) result.site = site;
+    const date = str(src.date, SEARCHED_LIMITS.date).trim();
+    if (date) result.date = date;
     const page = await sanitizeFakePage(src.page, userId);
     if (page) result.page = page;
     const badge = str(src.badge, SEARCHED_LIMITS.badge).trim();
@@ -235,16 +297,25 @@ const flattenAlternateResults = (
 export const createSearchedPage = async (req: Request, res: Response): Promise<void> => {
   try {
     const b = req.body as SearchedBody;
-    const senderSrc = (b.sender ?? {}) as Record<string, unknown>;
     const recipientSrc = (b.recipient ?? {}) as Record<string, unknown>;
 
     const page = await SearchedPage.create({
       userId: req.userId,
-      sender: { name: str(senderSrc.name, SEARCHED_LIMITS.name) },
+      sender: { name: nameFrom(b.sender, b.senderName) },
       recipient: {
-        name: str(recipientSrc.name, SEARCHED_LIMITS.name),
+        name: nameFrom(b.recipient, b.recipientName),
         photoUrl: await resolveImageUrl(recipientSrc.photoUrl, req.userId, "recipient"),
       },
+      doodleTitle: str(b.doodleTitle, L.doodleTitle),
+      aiOverview: str(b.aiOverview, L.aiOverview),
+      aiPoints: sanitizeStrings(b.aiPoints, L.maxAiPoints, L.aiPoint),
+      reviews: sanitizeReviews(b.reviews),
+      topStories: sanitizeStories(b.topStories),
+      videos: sanitizeVideos(b.videos),
+      places: sanitizePlaces(b.places),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("searched", req.userId)),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       autocomplete: sanitizeStrings(
         b.autocomplete,
         SEARCHED_LIMITS.maxAutocomplete,
@@ -310,16 +381,29 @@ export const updateSearchedPage = async (req: Request, res: Response): Promise<v
     const page = await SearchedPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    if (b.sender !== undefined) {
-      const src = (b.sender ?? {}) as Record<string, unknown>;
-      page.sender = { name: str(src.name, SEARCHED_LIMITS.name) };
+    if (b.sender !== undefined || b.senderName !== undefined) {
+      page.sender = { name: nameFrom(b.sender, b.senderName) };
     }
-    if (b.recipient !== undefined) {
+    if (b.recipient !== undefined || b.recipientName !== undefined) {
       const src = (b.recipient ?? {}) as Record<string, unknown>;
       page.recipient = {
-        name: str(src.name, SEARCHED_LIMITS.name),
-        photoUrl: await resolveImageUrl(src.photoUrl, req.userId, "recipient"),
+        name: nameFrom(b.recipient, b.recipientName),
+        photoUrl: src.photoUrl !== undefined ? await resolveImageUrl(src.photoUrl, req.userId, "recipient") : page.recipient?.photoUrl ?? "",
       };
+    }
+    if (b.doodleTitle !== undefined) page.doodleTitle = str(b.doodleTitle, L.doodleTitle);
+    if (b.aiOverview !== undefined) page.aiOverview = str(b.aiOverview, L.aiOverview);
+    if (b.aiPoints !== undefined) page.aiPoints = sanitizeStrings(b.aiPoints, L.maxAiPoints, L.aiPoint);
+    if (b.reviews !== undefined) page.reviews = sanitizeReviews(b.reviews);
+    if (b.topStories !== undefined) page.topStories = sanitizeStories(b.topStories);
+    if (b.videos !== undefined) page.videos = sanitizeVideos(b.videos);
+    if (b.places !== undefined) page.places = sanitizePlaces(b.places);
+    if (b.photos !== undefined) page.photos = await sanitizeLovePhotos(b.photos, userPhotoFolder("searched", req.userId));
+    if (b.letter !== undefined) page.letter = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
     }
     if (b.autocomplete !== undefined)
       page.autocomplete = sanitizeStrings(b.autocomplete, SEARCHED_LIMITS.maxAutocomplete, SEARCHED_LIMITS.suggestion);
