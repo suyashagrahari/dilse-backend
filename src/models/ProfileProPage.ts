@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 // ─── Endorsements — a relationship as a career profile ───────────────────────
 //
@@ -57,6 +58,12 @@ export const PROFILE_LIMITS = {
   prompt: 240,
   password: 128,
   endorsementsMax: 100000,
+  maxPosts: 4,
+  post: 1200,
+  ago: 20,
+  maxLanguages: 6,
+  language: 40,
+  level: 60,
 } as const;
 
 /**
@@ -77,6 +84,24 @@ export interface IProfilePerson {
   connections: string;
   degreeNote: string;
   openTo: string;
+  /** Framing of the round photo / cover: focal point 0–100, zoom 100–300. */
+  photoCropX?: number;
+  photoCropY?: number;
+  photoScale?: number;
+  bannerCropX?: number;
+  bannerCropY?: number;
+  bannerScale?: number;
+}
+
+export interface IProfilePost {
+  id: string;
+  text: string;
+  ago: string;
+}
+
+export interface IProfileLanguage {
+  name: string;
+  level: string;
 }
 
 export interface IProfileExperience {
@@ -141,6 +166,16 @@ export interface IProfileProPage extends Document {
   recommendations: IRecommendation[];
   certifications: IProfileCertification[];
   contributorPrompt: string;
+  /** Who made the page; signs the letter. */
+  senderName: string;
+  /** Memories — the Featured carousel. */
+  photos: ILovePhoto[];
+  posts: IProfilePost[];
+  languages: IProfileLanguage[];
+  /** The main letter (a recommendation) and its optional question gate. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   /** Owner switch for both contribution lanes on the shared page. */
   contributorsEnabled: boolean;
   // Security & meta
@@ -164,6 +199,12 @@ const personSchema = new Schema<IProfilePerson>(
     connections: { type: String, default: "", maxlength: PROFILE_LIMITS.connections },
     degreeNote: { type: String, default: "", maxlength: PROFILE_LIMITS.degreeNote },
     openTo: { type: String, default: "", maxlength: PROFILE_LIMITS.openTo },
+    photoCropX: { type: Number, min: 0, max: 100 },
+    photoCropY: { type: Number, min: 0, max: 100 },
+    photoScale: { type: Number, min: 100, max: 300 },
+    bannerCropX: { type: Number, min: 0, max: 100 },
+    bannerCropY: { type: Number, min: 0, max: 100 },
+    bannerScale: { type: Number, min: 100, max: 300 },
   },
   { _id: false }
 );
@@ -227,6 +268,23 @@ const recommendationSchema = new Schema<IRecommendation>(
   { _id: false }
 );
 
+const postSchema = new Schema<IProfilePost>(
+  {
+    id: { type: String, default: "", maxlength: 64 },
+    text: { type: String, default: "", maxlength: PROFILE_LIMITS.post },
+    ago: { type: String, default: "", maxlength: PROFILE_LIMITS.ago },
+  },
+  { _id: false }
+);
+
+const languageSchema = new Schema<IProfileLanguage>(
+  {
+    name: { type: String, default: "", maxlength: PROFILE_LIMITS.language },
+    level: { type: String, default: "", maxlength: PROFILE_LIMITS.level },
+  },
+  { _id: false }
+);
+
 const profileProPageSchema = new Schema<IProfileProPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -240,6 +298,13 @@ const profileProPageSchema = new Schema<IProfileProPage>(
     recommendations: { type: [recommendationSchema], default: [] },
     certifications: { type: [certificationSchema], default: [] },
     contributorPrompt: { type: String, default: "", maxlength: PROFILE_LIMITS.prompt },
+    senderName: { type: String, default: "", maxlength: PROFILE_LIMITS.name },
+    photos: loveKitFields.photos,
+    posts: { type: [postSchema], default: [] },
+    languages: { type: [languageSchema], default: [] },
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     contributorsEnabled: { type: Boolean, default: true },
     // Security & meta
     password: { type: String, default: "" },
