@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -25,6 +26,10 @@ export const WATCH_LIMITS = {
   ago: 48,
   duration: 12,
   label: 160,
+  /** Film-mode caption line typed over a chapter's frame. */
+  cc: 200,
+  /** What a memory card says when she opens it. */
+  note: 400,
   paragraph: 800,
   comment: 1200,
   prompt: 240,
@@ -69,6 +74,8 @@ export interface IComment {
 export interface IChapter {
   seconds: number;
   label: string;
+  /** Film mode: the caption that types out over this chapter's frame. */
+  cc: string;
 }
 
 export interface IWatchDescription {
@@ -92,6 +99,8 @@ export interface IRelatedVideo {
   /** "4:12" — a label, never seeked to. */
   duration: string;
   thumbnailUrl: string;
+  /** What plays as the caption when she opens this memory. */
+  note: string;
 }
 
 export interface IWatchVideo {
@@ -122,6 +131,14 @@ export interface IWatchPage extends Document {
   shareId: string;
   /** The friends' write link. A different secret from shareId, on purpose. */
   contribToken: string;
+  /** Her name, as he calls her. */
+  herName: string;
+  /** The photo film's frames (framed in the editor). Empty + youtubeId = link mode. */
+  photos: ILovePhoto[];
+  /** The main letter that pops in from the corner. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   video: IWatchVideo;
   channel: IWatchChannel;
   description: IWatchDescription;
@@ -174,6 +191,7 @@ const chapterSchema = new Schema<IChapter>(
   {
     seconds: { type: Number, default: 0, min: 0, max: WATCH_LIMITS.maxSeconds },
     label: { type: String, default: "", maxlength: WATCH_LIMITS.label },
+    cc: { type: String, default: "", maxlength: WATCH_LIMITS.cc },
   },
   { _id: false }
 );
@@ -197,6 +215,7 @@ const relatedVideoSchema = new Schema<IRelatedVideo>(
     ago: { type: String, default: "", maxlength: WATCH_LIMITS.ago },
     duration: { type: String, default: "", maxlength: WATCH_LIMITS.duration },
     thumbnailUrl: { type: String, default: "", maxlength: WATCH_LIMITS.url },
+    note: { type: String, default: "", maxlength: WATCH_LIMITS.note },
   },
   { _id: false }
 );
@@ -227,6 +246,11 @@ const watchPageSchema = new Schema<IWatchPage>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
     contribToken: { type: String, unique: true, sparse: true, index: true },
+    herName: { type: String, default: "", maxlength: WATCH_LIMITS.name },
+    photos: loveKitFields.photos,
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     video: { type: videoSchema, default: () => ({}) },
     channel: { type: channelSchema, default: () => ({}) },
     description: { type: descriptionSchema, default: () => ({}) },

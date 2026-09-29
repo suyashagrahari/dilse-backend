@@ -10,6 +10,7 @@ import {
   AiUnavailableError,
   fillFromStory,
   sanitizeStory,
+  type FillHints,
   type FillPeople,
 } from "../services/storyFill.service";
 import type { ApiResponse } from "../types";
@@ -138,7 +139,21 @@ export const postFill = async (
       partnerPronouns: str(rawPeople.partnerPronouns, 32) || str(fallback.partnerPronouns, 32),
     };
 
-    const result = await fillFromStory({ schema, story, people, context });
+    // Guided-flow answers. Optional and free text; clamped here like every
+    // other string off the wire, and only the known language tags survive.
+    const rawHints = (body.hints && typeof body.hints === "object" ? body.hints : {}) as Record<
+      string,
+      unknown
+    >;
+    const language = str(rawHints.language, 12);
+    const hints: FillHints = {
+      relation: str(rawHints.relation, 40),
+      tone: str(rawHints.tone, 24),
+      language: ["en", "hi-Latn", "hi"].includes(language) ? language : "",
+      occasion: str(rawHints.occasion, 60),
+    };
+
+    const result = await fillFromStory({ schema, story, people, context, hints });
 
     res.json({ success: true, data: result });
   } catch (error: unknown) {

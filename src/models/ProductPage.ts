@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -49,7 +50,25 @@ export const PRODUCT_LIMITS = {
   starsDefault: 5,
   discountMin: 0,
   discountMax: 100,
+  /** The small listing extras added with the premium redesign. */
+  dealLabel: 40,
+  boughtLine: 80,
+  variantLabel: 30,
+  variant: 40,
+  maxVariants: 6,
+  offer: 200,
+  maxOffers: 4,
+  customersSay: 700,
+  tag: 40,
+  maxTags: 8,
 } as const;
+
+/** How the sender framed one gallery photo: focal point 0–100, zoom 100–300. */
+export interface IPhotoCrop {
+  x: number;
+  y: number;
+  scale: number;
+}
 
 /** 1–5, as rendered by the star row. Never a float — the histogram buckets on it. */
 export type StarRating = 1 | 2 | 3 | 4 | 5;
@@ -106,6 +125,8 @@ export interface IProductSubject {
   lastName: string;
   /** Fills the gallery rail; the first is the hero. */
   photos: string[];
+  /** Index-aligned with `photos`. Missing entries mean "centred, no zoom". */
+  crops: IPhotoCrop[];
 }
 
 export interface IProductSender {
@@ -154,6 +175,23 @@ export interface IProductPage extends Document {
   contributorPrompt: string;
   /** Owner switch for the open review box on the shared page. */
   contributorsEnabled: boolean;
+  /** "Limited time deal" — the red badge over the price. */
+  dealLabel: string;
+  /** "10K+ bought in past month" — under the rating row. */
+  boughtLine: string;
+  /** "Mood" — the label over the variant chips. */
+  variantLabel: string;
+  variants: string[];
+  /** "Label | text" — the offer cards under the price. */
+  offers: string[];
+  /** The "Customers say" summary paragraph. */
+  customersSay: string;
+  /** The aspect chips under it. */
+  customersSayTags: string[];
+  /** The main letter, and its optional one-question lock. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -169,6 +207,19 @@ const subjectSchema = new Schema<IProductSubject>(
     firstName: { type: String, default: "", maxlength: PRODUCT_LIMITS.name },
     lastName: { type: String, default: "", maxlength: PRODUCT_LIMITS.name },
     photos: { type: [String], default: [] },
+    crops: {
+      type: [
+        new Schema<IPhotoCrop>(
+          {
+            x: { type: Number, default: 50, min: 0, max: 100 },
+            y: { type: Number, default: 50, min: 0, max: 100 },
+            scale: { type: Number, default: 100, min: 100, max: 300 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { _id: false }
 );
@@ -277,6 +328,16 @@ const productPageSchema = new Schema<IProductPage>(
     },
     contributorPrompt: { type: String, default: "", maxlength: PRODUCT_LIMITS.prompt },
     contributorsEnabled: { type: Boolean, default: true },
+    dealLabel: { type: String, default: "", maxlength: PRODUCT_LIMITS.dealLabel },
+    boughtLine: { type: String, default: "", maxlength: PRODUCT_LIMITS.boughtLine },
+    variantLabel: { type: String, default: "", maxlength: PRODUCT_LIMITS.variantLabel },
+    variants: { type: [String], default: [] },
+    offers: { type: [String], default: [] },
+    customersSay: { type: String, default: "", maxlength: PRODUCT_LIMITS.customersSay },
+    customersSayTags: { type: [String], default: [] },
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
