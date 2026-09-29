@@ -3,12 +3,13 @@ import RewindPage, { IStat, REWIND_LIMITS } from "../models/RewindPage";
 import { uploadAudioDataUrl, uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLock, sanitizeLoveLetter, sanitizeLovePhotos, userPhotoFolder } from "../utils/loveMedia";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
 /**
- * Every write goes through an explicit allow-list of the thirteen content
+ * Every write goes through an explicit allow-list of the content
  * fields. `req.body` is never spread into the document, so a caller cannot
  * smuggle in `userId`, `isPublished`, `shareId`, `viewCount` or `passwordRaw`.
  *
@@ -29,7 +30,15 @@ type RewindBody = {
   stats?: unknown;
   answers?: unknown;
   photos?: unknown;
+  songs?: unknown;
+  places?: unknown;
+  genres?: unknown;
+  fanLine?: unknown;
+  playlistName?: unknown;
   closingLine?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
 
@@ -76,12 +85,25 @@ const resolveAudioUrl = async (raw: unknown, userId: unknown): Promise<string> =
   }
 };
 
-const resolvePhotos = async (raw: unknown, userId: unknown): Promise<string[]> => {
+/**
+ * Memories. The editor sends framed photo objects (url + caption + note +
+ * crop); a caller still on the old shape may send bare URL strings, which are
+ * lifted into objects first so both go through the one shared sanitiser.
+ */
+const resolvePhotos = async (raw: unknown, userId: unknown) => {
+  if (!Array.isArray(raw)) return [];
+  const lifted = raw.slice(0, 40).map((p) => (typeof p === "string" ? { url: p } : p));
+  return sanitizeLovePhotos(lifted, userPhotoFolder("rewind", userId));
+};
+
+/** Plain short strings, blanks dropped, capped in count and length. */
+const sanitizeLines = (raw: unknown, maxItems: number, maxLen: number): string[] => {
   if (!Array.isArray(raw)) return [];
   const out: string[] = [];
-  for (const entry of raw.slice(0, REWIND_LIMITS.maxPhotos)) {
-    const url = await resolveImageUrl(entry, userId, "photos");
-    if (url) out.push(url);
+  for (const entry of raw.slice(0, REWIND_LIMITS.maxRawItems)) {
+    if (out.length >= maxItems) break;
+    const line = str(entry, maxLen).trim();
+    if (line) out.push(line);
   }
   return out;
 };
@@ -170,7 +192,14 @@ export const createRewindPage = async (req: Request, res: Response): Promise<voi
       stats: sanitizeStats(b.stats),
       answers: sanitizeAnswers(b.answers),
       photos: await resolvePhotos(b.photos, req.userId),
+      songs: sanitizeLines(b.songs, REWIND_LIMITS.maxSongs, REWIND_LIMITS.song),
+      places: sanitizeLines(b.places, REWIND_LIMITS.maxPlaces, REWIND_LIMITS.place),
+      genres: sanitizeLines(b.genres, REWIND_LIMITS.maxGenres, REWIND_LIMITS.genre),
+      fanLine: str(b.fanLine, REWIND_LIMITS.fanLine),
+      playlistName: str(b.playlistName, REWIND_LIMITS.playlistName),
       closingLine: str(b.closingLine, REWIND_LIMITS.closingLine),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       password: str(b.password, REWIND_LIMITS.password),
     });
 
@@ -228,8 +257,19 @@ export const updateRewindPage = async (req: Request, res: Response): Promise<voi
     if (b.topReasons        !== undefined) page.topReasons        = sanitizeTopReasons(b.topReasons);
     if (b.stats             !== undefined) page.stats             = sanitizeStats(b.stats);
     if (b.answers           !== undefined) page.answers           = sanitizeAnswers(b.answers);
-    if (b.photos            !== undefined) page.photos            = await resolvePhotos(b.photos, req.userId);
+    if (b.photos            !== undefined) { page.photos = await resolvePhotos(b.photos, req.userId); page.markModified("photos"); }
+    if (b.songs             !== undefined) page.songs             = sanitizeLines(b.songs, REWIND_LIMITS.maxSongs, REWIND_LIMITS.song);
+    if (b.places            !== undefined) page.places            = sanitizeLines(b.places, REWIND_LIMITS.maxPlaces, REWIND_LIMITS.place);
+    if (b.genres            !== undefined) page.genres            = sanitizeLines(b.genres, REWIND_LIMITS.maxGenres, REWIND_LIMITS.genre);
+    if (b.fanLine           !== undefined) page.fanLine           = str(b.fanLine, REWIND_LIMITS.fanLine);
+    if (b.playlistName      !== undefined) page.playlistName      = str(b.playlistName, REWIND_LIMITS.playlistName);
     if (b.closingLine       !== undefined) page.closingLine       = str(b.closingLine, REWIND_LIMITS.closingLine);
+    if (b.letter            !== undefined) page.letter            = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      if (b.lockQuestion !== undefined) page.lockQuestion = lock.lockQuestion;
+      if (b.lockAnswer   !== undefined) page.lockAnswer   = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, REWIND_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, REWIND_LIMITS.password);
