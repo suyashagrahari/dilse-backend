@@ -3,12 +3,13 @@ import CatchPage, { CATCH_LIMITS, IBadItem, IGoodItem } from "../models/CatchPag
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { httpsUrl, sanitizeLock, sanitizeLoveLetter, sanitizeLovePhotos, userPhotoFolder } from "../utils/loveMedia";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
 
 /**
- * Every write goes through an explicit allow-list of the seven content fields.
+ * Every write goes through an explicit allow-list of the content fields.
  * `req.body` is never spread into the document, so a caller cannot smuggle in
  * `userId`, `isPublished`, `shareId`, `viewCount` or `passwordRaw`.
  */
@@ -20,7 +21,21 @@ type CatchBody = {
   badItems?: unknown;
   closingLine?: unknown;
   durationMs?: unknown;
+  faceCropX?: unknown;
+  faceCropY?: unknown;
+  faceScale?: unknown;
+  tagline?: unknown;
+  photos?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
+};
+
+/** A crop number clamped into range; anything unreadable is the default. */
+const cropNum = (raw: unknown, min: number, max: number, dflt: number): number => {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : dflt;
 };
 
 /**
@@ -106,7 +121,7 @@ const clampDuration = (raw: unknown): number => {
 const resolveFaceUrl = async (raw: unknown, userId: unknown): Promise<string> => {
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value) return "";
-  if (!value.startsWith("data:")) return value.slice(0, CATCH_LIMITS.faceUrl);
+  if (!value.startsWith("data:")) return httpsUrl(value).slice(0, CATCH_LIMITS.faceUrl);
   try {
     const uploaded = await uploadImageDataUrl(value, `catch/users/${String(userId || "anonymous")}/face`);
     return uploaded.url.slice(0, CATCH_LIMITS.faceUrl);
@@ -129,6 +144,13 @@ export const createCatchPage = async (req: Request, res: Response): Promise<void
       badItems: sanitizeBadItems(b.badItems),
       closingLine: str(b.closingLine, CATCH_LIMITS.closingLine),
       durationMs: clampDuration(b.durationMs),
+      faceCropX: cropNum(b.faceCropX, 0, 100, 50),
+      faceCropY: cropNum(b.faceCropY, 0, 100, 50),
+      faceScale: cropNum(b.faceScale, 100, 300, 100),
+      tagline: str(b.tagline, CATCH_LIMITS.tagline),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("catch", req.userId)),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       password: str(b.password, CATCH_LIMITS.password),
     });
 
@@ -181,6 +203,17 @@ export const updateCatchPage = async (req: Request, res: Response): Promise<void
     if (b.badItems      !== undefined) page.badItems      = sanitizeBadItems(b.badItems);
     if (b.closingLine   !== undefined) page.closingLine   = str(b.closingLine, CATCH_LIMITS.closingLine);
     if (b.durationMs    !== undefined) page.durationMs    = clampDuration(b.durationMs);
+    if (b.faceCropX     !== undefined) page.faceCropX     = cropNum(b.faceCropX, 0, 100, 50);
+    if (b.faceCropY     !== undefined) page.faceCropY     = cropNum(b.faceCropY, 0, 100, 50);
+    if (b.faceScale     !== undefined) page.faceScale     = cropNum(b.faceScale, 100, 300, 100);
+    if (b.tagline       !== undefined) page.tagline       = str(b.tagline, CATCH_LIMITS.tagline);
+    if (b.photos        !== undefined) page.photos        = await sanitizeLovePhotos(b.photos, userPhotoFolder("catch", req.userId));
+    if (b.letter        !== undefined) page.letter        = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, CATCH_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, CATCH_LIMITS.password);
