@@ -10,6 +10,7 @@ import CallPage, {
 import { uploadAudioDataUrl, uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLock, sanitizeLoveLetter, sanitizeLovePhotos, userPhotoFolder } from "../utils/loveMedia";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -37,7 +38,19 @@ type CallBody = {
   callLog?: unknown;
   contributorPrompt?: unknown;
   contributorsEnabled?: unknown;
+  callReason?: unknown;
+  savedAs?: unknown;
+  whoViewed?: unknown;
+  photos?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
+};
+
+const cropNum = (v: unknown, min: number, max: number): number | undefined => {
+  const n = typeof v === "number" ? v : Number(v);
+  return v === undefined || v === null || v === "" || !Number.isFinite(n) ? undefined : Math.min(max, Math.max(min, Math.round(n)));
 };
 
 /**
@@ -92,6 +105,9 @@ const sanitizeCaller = async (raw: unknown, userId: unknown): Promise<ICaller> =
     number: str(src.number, CALL_LIMITS.number).trim(),
     location: str(src.location, CALL_LIMITS.location).trim(),
     carrier: str(src.carrier, CALL_LIMITS.carrier).trim(),
+    ...(cropNum(src.cropX, 0, 100) !== undefined ? { cropX: cropNum(src.cropX, 0, 100) } : {}),
+    ...(cropNum(src.cropY, 0, 100) !== undefined ? { cropY: cropNum(src.cropY, 0, 100) } : {}),
+    ...(cropNum(src.scale, 100, 300) !== undefined ? { scale: cropNum(src.scale, 100, 300) } : {}),
   };
 };
 
@@ -177,6 +193,12 @@ export const createCallPage = async (req: Request, res: Response): Promise<void>
       // Opt-out, not opt-in: the tag box is part of the template, and an absent
       // flag on a create must not silently switch it off.
       contributorsEnabled: b.contributorsEnabled === undefined ? true : b.contributorsEnabled === true,
+      callReason: str(b.callReason, CALL_LIMITS.reason).trim(),
+      savedAs: str(b.savedAs, CALL_LIMITS.savedAs).trim(),
+      whoViewed: str(b.whoViewed, CALL_LIMITS.viewed).trim(),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("call", req.userId)),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       password: str(b.password, CALL_LIMITS.password),
     });
 
@@ -232,6 +254,16 @@ export const updateCallPage = async (req: Request, res: Response): Promise<void>
     if (b.callLog           !== undefined) page.callLog           = sanitizeCallLog(b.callLog);
     if (b.contributorPrompt !== undefined) page.contributorPrompt = str(b.contributorPrompt, CALL_LIMITS.prompt).trim();
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = b.contributorsEnabled === true;
+    if (b.callReason        !== undefined) page.callReason        = str(b.callReason, CALL_LIMITS.reason).trim();
+    if (b.savedAs           !== undefined) page.savedAs           = str(b.savedAs, CALL_LIMITS.savedAs).trim();
+    if (b.whoViewed         !== undefined) page.whoViewed         = str(b.whoViewed, CALL_LIMITS.viewed).trim();
+    if (b.photos            !== undefined) page.photos            = await sanitizeLovePhotos(b.photos, userPhotoFolder("call", req.userId));
+    if (b.letter            !== undefined) page.letter            = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      if (b.lockQuestion !== undefined) page.lockQuestion = lock.lockQuestion;
+      if (b.lockAnswer !== undefined) page.lockAnswer = lock.lockAnswer;
+    }
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, CALL_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, CALL_LIMITS.password);
