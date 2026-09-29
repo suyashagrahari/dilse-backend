@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -43,6 +44,12 @@ export const STREAK_LIMITS = {
   /** Guard against a caller posting a 100k-element array before we ever slice. */
   maxRawItems: 10000,
   password: 128,
+  /** The snap-app skin. */
+  handle: 40,
+  token: 24,
+  place: 60,
+  chatLine: 200,
+  maxChats: 8,
 } as const;
 
 /** Which half of the pair. Stable for the life of the pair. */
@@ -112,6 +119,26 @@ export interface IStreakPage extends Document {
   covers: { a: number; b: number };
   milestones: IMilestone[];
   microLetters: IMicroLetter[];
+  // ── The snap-app skin (all optional; old pages simply lack them) ──
+  /** Usernames shown under the names ("ananya.bby"). */
+  handleA: string;
+  handleB: string;
+  /** Bitmoji-style avatar preset ids. */
+  avatarA: string;
+  avatarB: string;
+  /** Zodiac sign ids for the friendship charms ("leo"). */
+  zodiacA: string;
+  zodiacB: string;
+  /** The place both avatars stand on the parody map. */
+  mapPlace: string;
+  /** Lines the sender "saved in chat" — shown at the top of the conversation. */
+  chats: string[];
+  /** Memories: framed photos, each with a caption and a little note. */
+  photos: ILovePhoto[];
+  /** The main letter + its optional one-question lock. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   /**
    * Denormalised from `pair.a.name` / `pair.b.name` by the pre-save hook below.
    * The dashboard queries in `share.controller` (`getMyCreations`,
@@ -238,6 +265,18 @@ const streakPageSchema = new Schema<IStreakPage>(
     covers: { type: coversSchema, default: () => ({ a: 0, b: 0 }) },
     milestones: { type: [milestoneSchema], default: [] },
     microLetters: { type: [microLetterSchema], default: [] },
+    handleA: { type: String, default: "", maxlength: STREAK_LIMITS.handle },
+    handleB: { type: String, default: "", maxlength: STREAK_LIMITS.handle },
+    avatarA: { type: String, default: "", maxlength: STREAK_LIMITS.token },
+    avatarB: { type: String, default: "", maxlength: STREAK_LIMITS.token },
+    zodiacA: { type: String, default: "", maxlength: STREAK_LIMITS.token },
+    zodiacB: { type: String, default: "", maxlength: STREAK_LIMITS.token },
+    mapPlace: { type: String, default: "", maxlength: STREAK_LIMITS.place },
+    chats: { type: [String], default: [] },
+    photos: loveKitFields.photos,
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Denormalised for the dashboard. Written by the pre-save hook, never by a
     // caller — see the hook for why it is not done in the controller.
     senderName: { type: String, default: "", maxlength: STREAK_LIMITS.name },

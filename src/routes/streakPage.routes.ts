@@ -9,6 +9,8 @@ import {
   coverStreakDay,
   publishStreakPage,
   getSharedStreakPage,
+  getSharedStreakToday,
+  checkInSharedStreak,
   verifyStreakPagePassword,
   deleteStreakPage,
 } from "../controllers/streakPage.controller";
@@ -25,6 +27,9 @@ const live = requireTemplateAccess("streak");
 // Public — the recipient's two entry points. Must stay above `protect`.
 router.get("/share/:shareId", getSharedStreakPage);
 router.post("/share/:shareId/verify", verifyStreakPagePassword);
+// The published page's live layer: today's row for this reader, and their tap.
+router.get("/share/:shareId/today", getSharedStreakToday);
+router.post("/share/:shareId/check-in", checkInSharedStreak);
 
 router.use(protect);
 router.post("/", live, createStreakPage);
