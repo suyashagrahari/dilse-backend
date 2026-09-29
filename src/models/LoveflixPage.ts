@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -46,7 +47,37 @@ export const LOVEFLIX_LIMITS = {
   choiceSecondsDefault: 10,
   defaultChoiceIndexMin: 0,
   defaultChoiceIndexMax: 1,
+  // ── v2 (premium) catalogue ──
+  thirdProfile: 40,
+  ratingReason: 90,
+  genre: 24,
+  maxGenres: 4,
+  maxEpisodes: 6,
+  epTitle: 48,
+  synopsis: 200,
+  subtitle: 320,
+  maxReasons: 10,
+  reason: 80,
+  maxJokes: 8,
+  joke: 70,
+  maxPlans: 6,
+  plan: 70,
 } as const;
+
+/** Photo framing: focal point 0-100 and zoom 100-300 (%). */
+export interface ICrop {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+export interface IEpisode {
+  title: string;
+  synopsis: string;
+  subtitle: string;
+  imageUrl: string;
+  crop: ICrop;
+}
 
 export type RowKind = "cards" | "top10";
 
@@ -108,6 +139,20 @@ export interface ILoveflixPage extends Document {
   finaleText: string;
   finaleQuestion: string;
   credits: ICredit[];
+  // v2
+  recipientCrop: ICrop;
+  senderCrop: ICrop;
+  heroCrop: ICrop;
+  thirdProfile: string;
+  ratingReason: string;
+  genres: string[];
+  episodes: IEpisode[];
+  reasons: string[];
+  insideJokes: string[];
+  plans: string[];
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -182,6 +227,26 @@ const creditSchema = new Schema<ICredit>(
   { _id: false }
 );
 
+const cropSchema = new Schema<ICrop>(
+  {
+    x: { type: Number, default: 50, min: 0, max: 100 },
+    y: { type: Number, default: 50, min: 0, max: 100 },
+    scale: { type: Number, default: 100, min: 100, max: 300 },
+  },
+  { _id: false }
+);
+
+const episodeSchema = new Schema<IEpisode>(
+  {
+    title: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.epTitle },
+    synopsis: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.synopsis },
+    subtitle: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.subtitle },
+    imageUrl: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.url },
+    crop: { type: cropSchema, default: () => ({}) },
+  },
+  { _id: false }
+);
+
 const loveflixPageSchema = new Schema<ILoveflixPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -207,7 +272,23 @@ const loveflixPageSchema = new Schema<ILoveflixPage>(
     startSceneId: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.sceneId },
     finaleText: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.finaleText },
     finaleQuestion: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.finaleQuestion },
+    // v1 fields above (rows / scenes / credits) are kept so pages saved before
+    // the redesign still load; the client maps them onto the v2 catalogue.
     credits: { type: [creditSchema], default: [] },
+    // ── v2 (premium) catalogue ──
+    recipientCrop: { type: cropSchema, default: () => ({}) },
+    senderCrop: { type: cropSchema, default: () => ({}) },
+    heroCrop: { type: cropSchema, default: () => ({}) },
+    thirdProfile: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.thirdProfile },
+    ratingReason: { type: String, default: "", maxlength: LOVEFLIX_LIMITS.ratingReason },
+    genres: { type: [String], default: [] },
+    episodes: { type: [episodeSchema], default: [] },
+    reasons: { type: [String], default: [] },
+    insideJokes: { type: [String], default: [] },
+    plans: { type: [String], default: [] },
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
