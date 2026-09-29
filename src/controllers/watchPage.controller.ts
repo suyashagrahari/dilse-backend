@@ -12,6 +12,7 @@ import WatchPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLock, sanitizeLoveLetter, sanitizeLovePhotos, userPhotoFolder } from "../utils/loveMedia";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -50,6 +51,11 @@ const handleOf = (v: unknown): string => {
  * `userId`, `isPublished`, `shareId`, `viewCount` or `passwordRaw`.
  */
 type WatchBody = {
+  herName?: unknown;
+  photos?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   video?: unknown;
   channel?: unknown;
   description?: unknown;
@@ -164,10 +170,11 @@ const sanitizeChapters = (raw: unknown): IChapter[] => {
     if (out.length >= WATCH_LIMITS.maxChapters) break;
     const src = obj(entry);
     const label = str(src.label, WATCH_LIMITS.label).trim();
-    if (!label) continue;
+    const cc = str(src.cc, WATCH_LIMITS.cc).trim();
+    if (!label && !cc) continue;
     const seconds = typeof src.seconds === "number" ? src.seconds : Number(src.seconds);
     if (!Number.isFinite(seconds) || seconds < 0 || seconds > WATCH_LIMITS.maxSeconds) continue;
-    out.push({ seconds: Math.trunc(seconds), label });
+    out.push({ seconds: Math.trunc(seconds), label, cc });
   }
   // Ascending, so the chapter list cannot render out of order regardless of how
   // it was authored.
@@ -211,6 +218,7 @@ const sanitizeRelated = async (raw: unknown, userId: unknown): Promise<IRelatedV
       ago: str(src.ago, WATCH_LIMITS.ago).trim(),
       duration: str(src.duration, WATCH_LIMITS.duration).trim(),
       thumbnailUrl: await resolveImageUrl(src.thumbnailUrl, userId, "related"),
+      note: str(src.note, WATCH_LIMITS.note).trim(),
     });
   }
   return out;
@@ -254,6 +262,10 @@ export const createWatchPage = async (req: Request, res: Response): Promise<void
 
     const page = await WatchPage.create({
       userId: req.userId,
+      herName: str(b.herName, WATCH_LIMITS.name).trim(),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("watch", req.userId)),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       video: sanitizeVideo(b.video),
       channel: await sanitizeChannel(b.channel, req.userId),
       description: sanitizeDescription(b.description),
@@ -307,6 +319,14 @@ export const updateWatchPage = async (req: Request, res: Response): Promise<void
     const page = await WatchPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
+    if (b.herName             !== undefined) page.herName             = str(b.herName, WATCH_LIMITS.name).trim();
+    if (b.photos              !== undefined) page.photos              = await sanitizeLovePhotos(b.photos, userPhotoFolder("watch", req.userId));
+    if (b.letter              !== undefined) page.letter              = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      if (b.lockQuestion !== undefined) page.lockQuestion = lock.lockQuestion;
+      if (b.lockAnswer   !== undefined) page.lockAnswer   = lock.lockAnswer;
+    }
     if (b.video               !== undefined) page.video               = sanitizeVideo(b.video);
     if (b.channel             !== undefined) page.channel             = await sanitizeChannel(b.channel, req.userId);
     if (b.description         !== undefined) page.description         = sanitizeDescription(b.description);
