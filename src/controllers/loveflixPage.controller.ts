@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import LoveflixPage, {
   ICredit,
+  ICrop,
+  IEpisode,
   IRow,
   IRowItem,
   IScene,
@@ -9,6 +11,7 @@ import LoveflixPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLock, sanitizeLoveLetter } from "../utils/loveMedia";
 
 const str = (v: unknown, max: number): string =>
   typeof v === "string" ? v.slice(0, max) : "";
@@ -42,7 +45,85 @@ type LoveflixBody = {
   finaleText?: unknown;
   finaleQuestion?: unknown;
   credits?: unknown;
+  // v2
+  recipientCrop?: unknown;
+  senderCrop?: unknown;
+  heroCrop?: unknown;
+  thirdProfile?: unknown;
+  ratingReason?: unknown;
+  genres?: unknown;
+  episodes?: unknown;
+  reasons?: unknown;
+  insideJokes?: unknown;
+  plans?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
+};
+
+/** Photo framing, clamped. Anything malformed falls back to centred. */
+const sanitizeCrop = (raw: unknown): ICrop => {
+  const src = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    x: clampNum(src.x, 50, 0, 100),
+    y: clampNum(src.y, 50, 0, 100),
+    scale: clampNum(src.scale, 100, 100, 300),
+  };
+};
+
+/** Plain strings, trimmed, blanks dropped, capped in count and length. */
+const sanitizeStrings = (raw: unknown, maxItems: number, maxLen: number): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw.slice(0, LOVEFLIX_LIMITS.maxRawItems)) {
+    if (out.length >= maxItems) break;
+    const s = str(v, maxLen).trim();
+    if (s) out.push(s);
+  }
+  return out;
+};
+
+/** An episode with no title has nothing to list, so it is dropped. */
+const sanitizeEpisodes = async (raw: unknown, userId: unknown): Promise<IEpisode[]> => {
+  if (!Array.isArray(raw)) return [];
+  const out: IEpisode[] = [];
+  for (const entry of raw.slice(0, LOVEFLIX_LIMITS.maxRawItems)) {
+    if (out.length >= LOVEFLIX_LIMITS.maxEpisodes) break;
+    const src = (entry ?? {}) as Record<string, unknown>;
+    const title = str(src.title, LOVEFLIX_LIMITS.epTitle).trim();
+    if (!title) continue;
+    out.push({
+      title,
+      synopsis: str(src.synopsis, LOVEFLIX_LIMITS.synopsis).trim(),
+      subtitle: str(src.subtitle, LOVEFLIX_LIMITS.subtitle).trim(),
+      imageUrl: await resolveImageUrl(src.imageUrl, userId, "episodes"),
+      crop: sanitizeCrop(src.crop),
+    });
+  }
+  return out;
+};
+
+/** The v2 fields, as a patch — only keys present in the body are returned. */
+const sanitizeV2 = async (b: LoveflixBody, userId: unknown): Promise<Record<string, unknown>> => {
+  const out: Record<string, unknown> = {};
+  if (b.recipientCrop !== undefined) out.recipientCrop = sanitizeCrop(b.recipientCrop);
+  if (b.senderCrop !== undefined) out.senderCrop = sanitizeCrop(b.senderCrop);
+  if (b.heroCrop !== undefined) out.heroCrop = sanitizeCrop(b.heroCrop);
+  if (b.thirdProfile !== undefined) out.thirdProfile = str(b.thirdProfile, LOVEFLIX_LIMITS.thirdProfile).trim();
+  if (b.ratingReason !== undefined) out.ratingReason = str(b.ratingReason, LOVEFLIX_LIMITS.ratingReason).trim();
+  if (b.genres !== undefined) out.genres = sanitizeStrings(b.genres, LOVEFLIX_LIMITS.maxGenres, LOVEFLIX_LIMITS.genre);
+  if (b.episodes !== undefined) out.episodes = await sanitizeEpisodes(b.episodes, userId);
+  if (b.reasons !== undefined) out.reasons = sanitizeStrings(b.reasons, LOVEFLIX_LIMITS.maxReasons, LOVEFLIX_LIMITS.reason);
+  if (b.insideJokes !== undefined) out.insideJokes = sanitizeStrings(b.insideJokes, LOVEFLIX_LIMITS.maxJokes, LOVEFLIX_LIMITS.joke);
+  if (b.plans !== undefined) out.plans = sanitizeStrings(b.plans, LOVEFLIX_LIMITS.maxPlans, LOVEFLIX_LIMITS.plan);
+  if (b.letter !== undefined) out.letter = sanitizeLoveLetter(b.letter);
+  if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+    const lock = sanitizeLock(b);
+    if (b.lockQuestion !== undefined) out.lockQuestion = lock.lockQuestion;
+    if (b.lockAnswer !== undefined) out.lockAnswer = lock.lockAnswer;
+  }
+  return out;
 };
 
 /**
@@ -222,6 +303,7 @@ export const createLoveflixPage = async (req: Request, res: Response): Promise<v
       finaleText: str(b.finaleText, LOVEFLIX_LIMITS.finaleText),
       finaleQuestion: str(b.finaleQuestion, LOVEFLIX_LIMITS.finaleQuestion),
       credits: sanitizeCredits(b.credits),
+      ...(await sanitizeV2(b, req.userId)),
       password: str(b.password, LOVEFLIX_LIMITS.password),
     });
 
@@ -289,6 +371,7 @@ export const updateLoveflixPage = async (req: Request, res: Response): Promise<v
     if (b.finaleText        !== undefined) page.finaleText        = str(b.finaleText, LOVEFLIX_LIMITS.finaleText);
     if (b.finaleQuestion    !== undefined) page.finaleQuestion    = str(b.finaleQuestion, LOVEFLIX_LIMITS.finaleQuestion);
     if (b.credits           !== undefined) page.credits           = sanitizeCredits(b.credits);
+    page.set(await sanitizeV2(b, req.userId));
     // A start id that no longer resolves would render a blank player, so it is
     // repaired against the scene list that actually ended up stored.
     if (page.scenes.length > 0 && !page.scenes.some((s) => s.id === page.startSceneId)) {
