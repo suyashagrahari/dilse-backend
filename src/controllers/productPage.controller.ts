@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import ProductPage, {
   IAboutSection,
   IBundleItem,
+  IPhotoCrop,
   IProductPrice,
   IProductSender,
   IProductSubject,
@@ -15,6 +16,7 @@ import ProductPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLoveLetter, sanitizeLock } from "../utils/loveMedia";
 
 /**
  * NOTHING IN THIS FILE PARSES MONEY. `price.amount`, `price.original` and
@@ -112,22 +114,82 @@ type ProductBody = {
   aboutSection?: unknown;
   contributorPrompt?: unknown;
   contributorsEnabled?: unknown;
+  dealLabel?: unknown;
+  boughtLine?: unknown;
+  variantLabel?: unknown;
+  variants?: unknown;
+  offers?: unknown;
+  customersSay?: unknown;
+  customersSayTags?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   password?: unknown;
 };
+
+/** A short list of short strings — variants, offers, aspect tags. Blanks dropped. */
+const strList = (raw: unknown, maxItems: number, maxChars: number): string[] =>
+  asArray(raw)
+    .map((v) => str(v, maxChars))
+    .filter(Boolean)
+    .slice(0, maxItems);
+
+const cropOf = (raw: unknown): IPhotoCrop => {
+  const src = asRecord(raw);
+  return {
+    x: clampNum(src.x, 50, 0, 100),
+    y: clampNum(src.y, 50, 0, 100),
+    scale: clampNum(src.scale, 100, 100, 300),
+  };
+};
+
+/** The premium-listing extras and the letter. Shared by create and update. */
+const sanitizeExtras = (b: ProductBody) => ({
+  dealLabel: str(b.dealLabel, PRODUCT_LIMITS.dealLabel),
+  boughtLine: str(b.boughtLine, PRODUCT_LIMITS.boughtLine),
+  variantLabel: str(b.variantLabel, PRODUCT_LIMITS.variantLabel),
+  variants: strList(b.variants, PRODUCT_LIMITS.maxVariants, PRODUCT_LIMITS.variant),
+  offers: strList(b.offers, PRODUCT_LIMITS.maxOffers, PRODUCT_LIMITS.offer),
+  customersSay: str(b.customersSay, PRODUCT_LIMITS.customersSay),
+  customersSayTags: strList(b.customersSayTags, PRODUCT_LIMITS.maxTags, PRODUCT_LIMITS.tag),
+  letter: sanitizeLoveLetter(b.letter).trim(),
+  ...sanitizeLock(b),
+});
+
+const EXTRA_KEYS = [
+  "dealLabel",
+  "boughtLine",
+  "variantLabel",
+  "variants",
+  "offers",
+  "customersSay",
+  "customersSayTags",
+  "letter",
+  "lockQuestion",
+  "lockAnswer",
+] as const;
 
 const sanitizeSubject = async (raw: unknown, userId: unknown): Promise<IProductSubject> => {
   const src = asRecord(raw);
   const photos: string[] = [];
+  const crops: IPhotoCrop[] = [];
+  const rawCrops = asArray(src.crops);
   let slot = 0;
-  for (const entry of asArray(src.photos)) {
+  for (const [i, entry] of asArray(src.photos).entries()) {
     if (photos.length >= PRODUCT_LIMITS.maxPhotos) break;
     const url = await resolveImageUrl(entry, userId, `photo-${slot++}`);
-    if (url) photos.push(url);
+    // The crop travels with its photo, so a dropped upload cannot shift every
+    // later photo onto its neighbour's framing.
+    if (url) {
+      photos.push(url);
+      crops.push(cropOf(rawCrops[i]));
+    }
   }
   return {
     firstName: str(src.firstName, PRODUCT_LIMITS.name),
     lastName: str(src.lastName, PRODUCT_LIMITS.name),
     photos,
+    crops,
   };
 };
 
@@ -275,6 +337,7 @@ export const createProductPage = async (req: Request, res: Response): Promise<vo
       aboutSection: await sanitizeAbout(b.aboutSection, req.userId),
       contributorPrompt: str(b.contributorPrompt, PRODUCT_LIMITS.prompt),
       contributorsEnabled: b.contributorsEnabled === undefined ? true : !!b.contributorsEnabled,
+      ...sanitizeExtras(b),
       password: str(b.password, PRODUCT_LIMITS.password),
     });
 
@@ -335,6 +398,10 @@ export const updateProductPage = async (req: Request, res: Response): Promise<vo
     if (b.aboutSection        !== undefined) page.aboutSection        = await sanitizeAbout(b.aboutSection, req.userId);
     if (b.contributorPrompt   !== undefined) page.contributorPrompt   = str(b.contributorPrompt, PRODUCT_LIMITS.prompt);
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = !!b.contributorsEnabled;
+    const extras = sanitizeExtras(b);
+    for (const key of EXTRA_KEYS) {
+      if (b[key] !== undefined) page.set(key, extras[key]);
+    }
     // Absent or empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, PRODUCT_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, PRODUCT_LIMITS.password);
