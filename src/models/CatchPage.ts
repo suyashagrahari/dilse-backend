@@ -2,13 +2,14 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * A falling object the recipient can catch. Each one carries exactly one line of
  * the letter, so a caught item ADDS a line and a missed one simply never arrives.
- * There is deliberately no score, no lives and no failure state anywhere in this
- * model — the game is not a gate. If a field here starts to look like a score,
- * the design has gone wrong.
+ * Scores, combos and lives exist only in the recipient's browser during a run;
+ * nothing about how well they played is stored, and every line is still shown
+ * on the results screen — the game is never a gate.
  */
 export interface IGoodItem {
   /** Stable client-side id (`g1`, `g2`, …). Used to report which lines were missed. */
@@ -46,6 +47,7 @@ export const CATCH_LIMITS = {
   itemLabel: 140,
   itemLine: 600,
   closingLine: 800,
+  tagline: 80,
   password: 128,
   durationMinMs: 20000,
   durationMaxMs: 120000,
@@ -65,7 +67,19 @@ export interface ICatchPage extends Document {
    * string is normal and supported: the client falls back to an initial.
    */
   faceUrl: string;
-  /** 8-14 in practice; hard-capped at 14. Each spawns at most once per run. */
+  /** Focal point (0–100) and zoom (100–300) of the face inside its circle. */
+  faceCropX: number;
+  faceCropY: number;
+  faceScale: number;
+  /** The ribbon under the CATCH! logo on the title screen. */
+  tagline: string;
+  /** Memory polaroids that fall as collectibles, each with a caption + note. */
+  photos: ILovePhoto[];
+  /** The main letter (LetterPop) and its optional question gate. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
+  /** 6-14 in practice; hard-capped at 14. */
   goodItems: IGoodItem[];
   /** 3-6 in practice; hard-capped at 6. */
   badItems: IBadItem[];
@@ -109,6 +123,14 @@ const catchGamePageSchema = new Schema<ICatchPage>(
     recipientName: { type: String, default: "", maxlength: CATCH_LIMITS.name },
     senderName: { type: String, default: "", maxlength: CATCH_LIMITS.name },
     faceUrl: { type: String, default: "", maxlength: CATCH_LIMITS.faceUrl },
+    faceCropX: { type: Number, default: 50, min: 0, max: 100 },
+    faceCropY: { type: Number, default: 50, min: 0, max: 100 },
+    faceScale: { type: Number, default: 100, min: 100, max: 300 },
+    tagline: { type: String, default: "", maxlength: CATCH_LIMITS.tagline },
+    photos: loveKitFields.photos,
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     goodItems: { type: [goodItemSchema], default: [] },
     badItems: { type: [badItemSchema], default: [] },
     closingLine: { type: String, default: "", maxlength: CATCH_LIMITS.closingLine },
