@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -28,6 +29,12 @@ export const CALL_LIMITS = {
   /** One revealed line of the answered message. */
   line: 200,
   prompt: 240,
+  /** "Call reason" pinned on the incoming screen. */
+  reason: 90,
+  /** What the recipient has the caller saved as ("Meera 🍓"). */
+  savedAs: 40,
+  /** The "who viewed your profile" line. */
+  viewed: 160,
   /** A plain https link. Uploaded media is turned into one before it gets here. */
   url: 2000,
   password: 128,
@@ -67,6 +74,10 @@ export interface ICaller {
   number: string;
   location: string;
   carrier: string;
+  /** Framing of the portrait: focal point 0–100 and zoom 100–300. */
+  cropX?: number;
+  cropY?: number;
+  scale?: number;
 }
 
 export interface ICallPage extends Document {
@@ -91,17 +102,29 @@ export interface ICallPage extends Document {
   contributorPrompt: string;
   /** Whether the published page accepts crowd-sourced tags at all. */
   contributorsEnabled: boolean;
+  /** Pinned on the incoming screen as the call's reason. */
+  callReason: string;
+  /** How the recipient has the caller saved in their phone. */
+  savedAs: string;
+  /** The "who viewed your profile" line on the caller-ID profile. */
+  whoViewed: string;
+  /** Shared media — framed memories, each with a caption and a little note. */
+  photos: ILovePhoto[];
+  gifs: string[];
+  theme: string;
+  /** The main letter (the voicemail), and its optional question lock. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   /**
    * Denormalised by the pre-save hook below, so this template appears on the
    * dashboard alongside the others — `share.controller`'s `getMyCreations` and
    * `getReceivedPages` read flat `senderName`/`recipientName` off every template
    * model, and without these two the row shows up as "Someone".
    *
-   * The mapping is crossed on purpose and is not a copy-paste slip. On this
-   * template `recipient` is whose phone is ringing — the person who built the
-   * page — and `caller` is the person the page is about, whose face fills the
-   * screen. So the gift's sender is `recipient.name` and the gift's recipient is
-   * `caller.name`, which is the reverse of how the two content fields read.
+   * `caller` is the gift's sender — the call, the message and the letter are
+   * from them — and `recipient` is whose phone is ringing, the gift's
+   * recipient.
    */
   senderName: string;
   recipientName: string;
@@ -122,6 +145,9 @@ const callerSchema = new Schema<ICaller>(
     number: { type: String, default: "", maxlength: CALL_LIMITS.number },
     location: { type: String, default: "", maxlength: CALL_LIMITS.location },
     carrier: { type: String, default: "", maxlength: CALL_LIMITS.carrier },
+    cropX: { type: Number, min: 0, max: 100 },
+    cropY: { type: Number, min: 0, max: 100 },
+    scale: { type: Number, min: 100, max: 300 },
   },
   { _id: false }
 );
@@ -177,8 +203,12 @@ const callPageSchema = new Schema<ICallPage>(
     callLog: { type: [callLogEntrySchema], default: [] },
     contributorPrompt: { type: String, default: "", maxlength: CALL_LIMITS.prompt },
     contributorsEnabled: { type: Boolean, default: true },
+    callReason: { type: String, default: "", maxlength: CALL_LIMITS.reason },
+    savedAs: { type: String, default: "", maxlength: CALL_LIMITS.savedAs },
+    whoViewed: { type: String, default: "", maxlength: CALL_LIMITS.viewed },
+    ...loveKitFields,
     // Denormalised for the dashboard. Written by the pre-save hook, never by a
-    // caller — see the interface for why the two are crossed.
+    // caller — see the interface.
     senderName: { type: String, default: "", maxlength: CALL_LIMITS.name },
     recipientName: { type: String, default: "", maxlength: CALL_LIMITS.name },
     // Security & meta
@@ -197,8 +227,10 @@ callPageSchema.pre("save", async function (next) {
   // update handlers instead means two copies of the same rule, and update is the
   // one someone forgets — a renamed caller would keep its old dashboard row
   // forever with no visible error anywhere.
-  this.senderName = (this.recipient?.name ?? "").slice(0, CALL_LIMITS.name);
-  this.recipientName = (this.caller?.name ?? "").slice(0, CALL_LIMITS.name);
+  // The caller is the sender: the gift is a call FROM them, ringing on the
+  // recipient's phone (`recipient` is whose phone it is).
+  this.senderName = (this.caller?.name ?? "").slice(0, CALL_LIMITS.name);
+  this.recipientName = (this.recipient?.name ?? "").slice(0, CALL_LIMITS.name);
   if (this.isModified("password") && this.password) {
     // ── Trim before hashing ──────────────────────────────────────────────────
     //
