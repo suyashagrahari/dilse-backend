@@ -1,23 +1,22 @@
 import type { AiFillTemplateSchema } from "./types";
 
 /**
- * app — a person rendered as a software listing.
+ * app — "The Listing": the person you love published as a phone-storefront app.
  *
  * Paths resolve against `AppData` in
  * client/app/(templates)/app/components/types.ts, held as `mf` in
- * useAppEditor.ts.
+ * useAppEditor.ts. The header block lives under `app.*` on the client (the
+ * document calls it `meta`, and `appDataToBody` translates) — so every path
+ * here says `app.`, never `meta.`. A `meta.*` path writes into a key the form
+ * never reads and the fill silently lands nowhere.
  *
- * `meta.iconUrl` and `screenshots[].imageUrl` are media and are absent by
- * construction — `FieldKind` has no media member and `assertNoMediaPaths`
- * refuses those leaves. Structural fields are absent too: version numbers,
- * dates, star counts, the histogram, review authors and the info-row labels are
- * scaffolding the sender controls, and a model rewriting them turns a listing
- * into noise. What is declared below is the WRITING and nothing else.
- *
- * The oldest changelog entry is deliberately NOT declared. Its note is the one
- * dry line the whole version history plays against, and handing it to a model
- * that has just been asked for five escalating jokes is the reliable way to
- * lose the contrast the template is built on.
+ * Media is absent by construction: `app.iconUrl` and `screenshots[].imageUrl`
+ * are photos the sender uploads. Structure is absent too: version numbers,
+ * dates, star counts, the ratings count and the age rating are scaffolding the
+ * sender controls. Everything the page PRINTS as writing is declared — 40
+ * fields, exactly the ceiling. The oldest two changelog entries ("Bug fixes…",
+ * "Initial release.") are deliberately left dry: the whole version history is
+ * an escalation that plays against them.
  */
 
 /**
@@ -56,233 +55,334 @@ export const app: AiFillTemplateSchema = {
   slug: "app",
   audience: "partner",
   premise:
-    "A parody software listing where the product is the sender's girlfriend: an icon, a rating with a histogram, screenshots, a description, a changelog, and reviews her friends write. The comedy only works if the page is played completely straight — the layout is an ordinary listing and the joke lives entirely in the copy. The register is deadpan release-notes English: engineering phrasing applied to a person, never winking at the reader. Warm underneath, bone-dry on the surface. Nothing in the output may name, imitate or allude to any real software marketplace, phone platform, vendor or product.",
+    "A pitch-perfect parody of a phone app-store product page where the 'app' is the sender's partner: her name is the app name, her photo is the icon, their photos are the screenshots, the version history is their relationship milestones, the reviews are written by her friends, the in-app purchases are hugs and kisses, and the privacy label lists the little things he keeps track of about her. The layout is played completely straight; the joke — and the love — live entirely in the copy. Register: deadpan release-notes English and store-listing phrasing applied to a person, specific and warm underneath, Gen-Z dry, never cringe, never generic. Use concrete details from the sender's story everywhere they fit. When the story is thin, write about the traits it implies and lean on the app joke — never invent events, places, trips, friends or habits the story does not mention. If the story is Hinglish written in Latin letters, every line stays Hinglish in Latin letters. Nothing may name, imitate or allude to any real app marketplace, phone platform, vendor or real product.",
   forbiddenOutput: [...FORBIDDEN_STOREFRONTS, ...FORBIDDEN_NAMES, ...FORBIDDEN_PRODUCTS],
   fields: [
     {
-      path: "meta.subtitle",
-      label: "Subtitle under her name",
+      path: "app.name",
+      label: "Her name (the app name)",
       kind: "text",
-      max: 60,
+      max: 30,
       required: true,
       guide:
-        "The grey line directly under her name in the header, set small. Real ones read '<what it is> · <category>' with a middle dot. Use her relationship to the sender and a dry software category. Under 40 characters — this line sits next to the install button and wraps badly if it runs long.",
-      example: "Girlfriend · Utilities",
+        "The app's name in the big bold header — which is simply the partner's first name, or the pet name the sender actually calls her if the story uses one. One or two words, no emoji, no surname, no description.",
+      example: "Meera",
     },
     {
-      path: "meta.developer",
+      path: "app.seller",
+      label: "Your name (the seller)",
+      kind: "text",
+      max: 30,
+      required: true,
+      guide:
+        "The SENDER's own first name, exactly as they'd sign a note. Printed as the 'Seller' in the information table and as the signature on the letter. One word, no surname, no emoji.",
+      example: "Karan",
+    },
+    {
+      path: "app.subtitle",
+      label: "Subtitle under her name",
+      kind: "text",
+      max: 40,
+      required: true,
+      guide:
+        "The grey line under the app name. Real subtitles are a tiny tagline; here it is '<what she is to the sender> · <a dry one-to-three-word tagline>' with a middle dot, e.g. her relationship word and what she runs on or does. Under 36 characters — it sits beside the icon and wraps badly if long.",
+      example: "Girlfriend · Runs on chai",
+    },
+    {
+      path: "app.developer",
       label: "Developer name",
-      kind: "text",
-      max: 60,
-      guide:
-        "Who 'made' her, printed as the accent-coloured link under the subtitle. Always a plausible company name built from her family name or where she grew up: '<Family> Family Enterprises', '<Family> Industries', '<City> Labs'. Never a person's full name — the joke is that a human being has a corporate parent.",
-      example: "Sharma Family Enterprises",
-    },
-    {
-      path: "meta.category",
-      label: "Category",
-      kind: "text",
-      max: 40,
-      guide:
-        "One word, the software category she is filed under. Deadpan and slightly insulting in the way a category always is: Utilities, Productivity, Lifestyle, Health & Fitness, Entertainment. Pick the one that best fits what she actually does for the sender.",
-      example: "Utilities",
-    },
-    {
-      path: "meta.size",
-      label: "Size",
-      kind: "text",
-      max: 40,
-      guide:
-        "Where a listing would print a download size. It is FREE TEXT and is never a byte count — '1 human' is the canonical answer and is very hard to beat. A variation must stay in the same register: a unit of measurement that is not a unit of measurement. Under 25 characters.",
-      example: "1 human",
-    },
-    {
-      path: "meta.languages",
-      label: "Languages",
-      kind: "text",
-      max: 60,
-      guide:
-        "A comma-separated list of the languages she actually speaks, with exactly one joke language appended at the end. The two real ones make the third land; three joke languages land nothing. Use the sender's story for the real ones.",
-      example: "English, Hindi, Sarcasm",
-    },
-    {
-      path: "meta.price",
-      label: "Price",
       kind: "text",
       max: 50,
       guide:
-        "Where the price would go. FREE TEXT, never parsed as currency. The shape is 'Free' followed by a parenthetical that quietly undercuts it. Keep it under 35 characters — it sits inside a pill.",
-      example: "Free (emotionally expensive)",
+        "Who 'made' her, shown as the pink developer link. A plausible studio name built from her family name, her hometown or her parents: '<Family> Family Enterprises', '<Hometown> Labs', 'Mummy & Papa <Family> Studios'. Never the sender. Under 34 characters.",
+      example: "Sharma Family Enterprises",
+    },
+    {
+      path: "app.category",
+      label: "Category",
+      kind: "text",
+      max: 24,
+      guide:
+        "The store category she is filed under — a REAL category name, one or two words (Lifestyle, Utilities, Productivity, Health & Fitness, Entertainment, Food & Drink, Navigation, Weather). Pick the one that is funniest-true for what she does for the sender. It also prints as 'No.1 in <category>'.",
+      example: "Lifestyle",
+    },
+    {
+      path: "app.size",
+      label: "Size",
+      kind: "text",
+      max: 24,
+      guide:
+        "Where a download size would go. Never a byte count: a number followed by a unit that is not a unit — '1 human' is canonical; a variation must stay that short (e.g. '1 human, 5 ft 2'). Under 20 characters; the big number and the rest print on two lines.",
+      example: "1 human",
+    },
+    {
+      path: "app.languages",
+      label: "Languages",
+      kind: "text",
+      max: 50,
+      guide:
+        "Comma-separated: the real languages she speaks (from the story; default to the sender's languages) plus exactly ONE joke language at the end, specific to her (e.g. 'Sarcasm', 'Voice notes', 'Eyebrow'). Two real + one joke.",
+      example: "Tamil, English, Voice notes",
+    },
+    {
+      path: "app.price",
+      label: "Price",
+      kind: "text",
+      max: 34,
+      guide:
+        "Where the price goes: 'Free' followed by a short parenthetical that quietly undercuts it, specific to her. Under 32 characters.",
+      example: "Free (costs one dessert a day)",
+    },
+    {
+      path: "app.compatibility",
+      label: "Compatibility",
+      kind: "text",
+      max: 60,
+      guide:
+        "The Compatibility row, phrased exactly like a real system-requirement line but the requirement is the SENDER: 'Requires <sender's first name> <a version number> or later.' — optionally a second clipped clause from the story. Under 48 characters.",
+      example: "Requires Karan 2.0 or later.",
     },
     {
       path: "description.short",
       label: "Description — the visible part",
       kind: "list",
       max: 2,
-      itemMax: 240,
+      itemMax: 220,
       required: true,
       guide:
-        "The first two paragraphs of the description, shown before the reader taps 'more'. Paragraph one is pure listing voice: what she does, written as a product does it, present tense, no sentiment. Paragraph two starts to leak. Each 120 to 200 characters. Pull one concrete detail from the sender's story so it could not have been written about anyone else.",
+        "The two description paragraphs shown before 'more'. Paragraph one: pure store-listing voice describing what she does as features, present tense, one concrete detail from the story. Paragraph two: one short line that starts to leak feeling while still sounding like marketing. 80–200 characters each.",
       example:
-        "Handles incoming stress, outgoing plans, and every decision about where to eat. Runs continuously. Has never once crashed in a way that mattered.",
+        "Handles incoming stress, outgoing plans, and every decision about where to eat. Runs continuously. Has never crashed in a way that mattered.",
     },
     {
       path: "description.full",
       label: "Description — the part behind 'more'",
       kind: "list",
-      max: 4,
+      max: 3,
       itemMax: 240,
       required: true,
       guide:
-        "THE EMOTIONAL PAYLOAD, and the reason the 'more' link exists. Two to four paragraphs where the listing voice falls away completely and the sender is simply talking about her. No feature language, no bullet phrasing, no jokes in the last one. Use a specific true thing rather than a summary of the relationship. 120 to 220 characters each.",
+        "THE EMOTIONAL PAYLOAD behind 'more'. Two or three paragraphs where the listing voice falls away and the sender simply talks about her — how they met, one specific true moment, why he'd 'install her again'. No feature language, and no joke in the last paragraph. 100–200 characters each, always complete sentences.",
       example:
         "I didn't plan any of this. She turned up in a group chat I almost muted, and now I check the weather in a city I don't live in.",
     },
     {
-      path: "whatsNew.notes",
-      label: "What's new — the latest release",
+      path: "versionHistory[0].notes",
+      label: "What's New — the latest version",
       kind: "list",
-      max: 4,
-      itemMax: 200,
+      max: 3,
+      itemMax: 160,
       required: true,
       guide:
-        "The release notes for the CURRENT version, shown high on the page. Three or four lines, each a real changelog line about a real thing she does — 'Fixed', 'Improved', 'Added', 'Known issue'. Under 110 characters each. This is the reader's first taste of the joke, so it should be the tightest writing on the page.",
-      example: "Fixed a bug where she said 'I'm fine' and meant the opposite. Still investigating.",
-    },
-    {
-      path: "versionHistory[0].notes",
-      label: "Changelog — newest release",
-      kind: "list",
-      max: 4,
-      itemMax: 200,
-      guide:
-        "The newest changelog entry, and the most unhinged. Three or four lines. By this point in the history the release notes have completely lost their professional composure and are openly about the sender's feelings while still using engineering verbs. Under 110 characters each.",
-      example: "Deprecated the version of me that existed before her. No migration path. None needed.",
+        "Release notes for the CURRENT version, shown high on the page as 'What's New' — where the relationship is right now. Three changelog lines ('Fixed…', 'Improved…', 'Added…', 'Deprecated…') about real things from the story; the last one openly about the sender's feelings while still using engineering verbs. Under 110 characters each. The tightest writing on the page.",
+      example: "Improved reply speed to 'reached?' texts. Now answers before the question is sent.",
     },
     {
       path: "versionHistory[1].notes",
-      label: "Changelog — one release back",
+      label: "Version history — the biggest milestone",
       kind: "list",
       max: 3,
-      itemMax: 200,
+      itemMax: 160,
       guide:
-        "Slightly more composed than the newest entry and slightly less than the one before it — the history is an escalation and every entry has to sit correctly on that curve. Two or three lines, still recognisably changelog English, under 110 characters each.",
-      example: "Added support for arguing about a film neither of us finished. Performance is excellent.",
+        "The release before the current one = the BIGGEST milestone in the story (moving in, getting engaged, going long-distance, meeting the parents — whatever the story has). First line starts 'MAJOR:' and names that milestone; one or two more changelog lines about what changed after it. Under 110 characters each.",
+      example: "MAJOR: went long-distance. Latency up, uptime unaffected.",
     },
     {
       path: "versionHistory[2].notes",
-      label: "Changelog — mid-history",
+      label: "Version history — an early milestone",
       kind: "list",
-      max: 3,
-      itemMax: 200,
+      max: 2,
+      itemMax: 140,
       guide:
-        "The middle of the escalation: the notes are still doing their job but the personal detail is starting to bleed in at the edges. Two or three lines, under 110 characters each. Use a specific habit or a running joke from the sender's story.",
-      example: "Improved handling of long silences. Reduced memory usage on old arguments.",
+        "An earlier milestone from the story (first 'I love you', first trip, the official day). One or two very short changelog lines; the first is the milestone itself in three or four words, deadpan. Under 90 characters each.",
+      example: "Said it back.",
     },
     {
       path: "versionHistory[3].notes",
-      label: "Changelog — early release",
+      label: "Version history — the first weeks",
       kind: "list",
       max: 2,
-      itemMax: 200,
+      itemMax: 120,
       guide:
-        "An early entry, so mostly straight-faced. One or two lines of plain maintenance language with exactly one detail that gives it away. Under 100 characters each. Restraint here is what makes the later entries funny.",
-      example: "Minor stability improvements. Added a second toothbrush.",
+        "Right after they met: one or two bare maintenance lines with exactly one detail from the story that gives it away (their first date spot, the first song, the first inside joke). Under 80 characters each. Restraint here makes the later entries land.",
+      example: "Minor stability improvements. Added one shared playlist.",
     },
     {
-      path: "versionHistory[4].notes",
-      label: "Changelog — earliest declared release",
+      path: "iap",
+      label: "In-app purchases",
       kind: "list",
-      max: 2,
-      itemMax: 200,
+      max: 5,
+      itemMax: 60,
       guide:
-        "Nearly the beginning, so almost entirely deadpan: one or two short lines of bare maintenance English, under 80 characters. No feelings, no jokes — this entry is the straight man for everything above it.",
-      example: "Bug fixes. Added a shared calendar.",
+        "Five in-app purchases, each formatted EXACTLY as '<item> · <price>' with a middle dot. Items are affection she can 'buy' (hugs, forehead kisses, the last bite, a 'you were right', a late-night drive) — at least two specific to the story. Prices are silly and never real money above ₹0: 'Free', '₹0', '1 kiss', 'Priceless', 'One chai'. Under 45 characters each.",
+      example: "Extra-tight hug · Free",
     },
     {
-      path: "info[3].value",
-      label: "Compatibility",
+      path: "privacy.tracked",
+      label: "Privacy — data used to track you",
+      kind: "list",
+      max: 3,
+      itemMax: 36,
+      guide:
+        "The 'Data Used to Track You' privacy card: three things the sender keeps track of about her, as short category-style labels (1–4 words), sweet not creepy — e.g. her coffee order, whether she got home safe, her period dates. Specific to the story. Under 30 characters each.",
+      example: "Location (home safe?)",
+    },
+    {
+      path: "privacy.linked",
+      label: "Privacy — data linked to you",
+      kind: "list",
+      max: 4,
+      itemMax: 36,
+      guide:
+        "The 'Data Linked to You' privacy card: four things of the sender's that are now permanently hers, as short labels (1–4 words) — his hoodie, the last slice, his playlists, and last: his whole heart (phrase it your way). Under 30 characters each.",
+      example: "My hoodie",
+    },
+    {
+      path: "screenshots[0].caption",
+      label: "Screenshot 1 — headline",
       kind: "text",
-      max: 90,
+      max: 44,
       guide:
-        "The value of the Compatibility row in the information table, where a listing would name the hardware it runs on. 'Works with me only' is the canonical answer. A variation must keep the clipped table-cell phrasing and the same implication of exclusivity. Under 45 characters — this is a table cell, not a sentence.",
-      example: "Works with me only.",
+        "The bold marketing headline printed on top of the first app screenshot (which is a photo of the couple). Real screenshot headlines are 3–6 punchy words selling a feature. Write one about her as a feature, specific to the story. No full stop, under 40 characters.",
+      example: "Wakes up already talking",
+    },
+    {
+      path: "screenshots[1].caption",
+      label: "Screenshot 2 — headline",
+      kind: "text",
+      max: 44,
+      guide:
+        "Second screenshot headline: 3–6 words, a different feature from the first, marketing voice, about something she does. No full stop, under 40 characters.",
+      example: "Syncs across two cities",
+    },
+    {
+      path: "screenshots[2].caption",
+      label: "Screenshot 3 — headline",
+      kind: "text",
+      max: 44,
+      guide:
+        "Third screenshot headline: 3–6 words, a feature about how she makes the sender feel, still in marketing voice. No full stop, under 40 characters.",
+      example: "Runs in the background of every thought",
+    },
+    {
+      path: "screenshots[3].caption",
+      label: "Screenshot 4 — headline",
+      kind: "text",
+      max: 44,
+      guide:
+        "Fourth and last screenshot headline: 3–6 words, the sweetest of the four, still phrased as a feature. No full stop, under 40 characters.",
+      example: "Unlimited storage for my hoodies",
+    },
+    {
+      path: "reviews[0].author",
+      label: "Review 1 — reviewer nickname",
+      kind: "text",
+      max: 30,
+      guide:
+        "The nickname of a friend reviewing her, the way store reviewers appear: a lowercase handle-style nickname — a first name joined to how they know her, or a relation plus an emoji. If the story names a friend or sibling, use them (the story's own spelling). Under 22 characters.",
     },
     {
       path: "reviews[0].title",
-      label: "Top review — headline",
+      label: "Review 1 — headline",
       kind: "text",
-      max: 60,
+      max: 44,
       guide:
-        "The bold headline of the most prominent review, written by one of her friends. Real review headlines are short, over-confident and slightly unhinged. Under 40 characters, no full stop.",
-      example: "Ten years of daily use, zero crashes",
+        "Bold headline of the top 5-star review from a friend: short, over-confident, product-review phrasing about her. Under 40 characters, no full stop.",
     },
     {
       path: "reviews[0].body",
-      label: "Top review — the review",
+      label: "Review 1 — the review",
       kind: "longtext",
-      max: 200,
+      max: 220,
       required: true,
       guide:
-        "A review of her written by a friend, in review English: second-hand experience, unnecessary detail, total sincerity about something trivial. 150 to 200 characters. Do NOT invent a name — the byline is set separately and a fabricated named endorsement is the one thing this template must not produce.",
+        "The friend's 5-star review written EXACTLY like an app review — she is the app: 'been using her since…', performance, lag, battery, support, updates, features — applied to an oddly specific detail from the story, total sincerity about something trivial. Refers to her as 'her'. 140–210 characters.",
       example:
-        "Been using her since college. Occasional lag when hungry, resolves itself after food. Support is responsive at 3am. The only real downside is she is not available to anyone else.",
+        "Five years of daily use. Occasional lag before breakfast, resolves after food. Support answers at 3am.",
     },
     {
       path: "reviews[0].developerResponse.text",
-      label: "Reply to the top review",
+      label: "Reply to review 1 (from you)",
       kind: "longtext",
-      max: 300,
+      max: 260,
       required: true,
       guide:
-        "THE BEST WRITING SLOT ON THE PAGE. The sender's reply, indented under the review, in the voice of a developer answering a support ticket — and it is the one place the whole listing quietly admits what it is about. Open in perfect corporate register and let it collapse in the last sentence. 120 to 250 characters.",
+        "THE BEST WRITING SLOT. The sender's 'Developer Response' under the top review. Opens like a support agent ('Thanks for the report.' / 'We appreciate the feedback.'), answers the reviewer's point in ticket language, then the LAST sentence breaks character into plain, open love for her. 120–240 characters.",
       example:
-        "Thanks for the report. The lag is expected behaviour and will not be fixed. Re: availability — correct, and this is by design.",
+        "Thanks for the report. The lag is expected behaviour and will not be fixed. Re: availability — correct, and by design.",
+    },
+    {
+      path: "reviews[1].author",
+      label: "Review 2 — reviewer nickname",
+      kind: "text",
+      max: 30,
+      guide: "A second friend's reviewer nickname, a different style from the first (e.g. 'rahul.exe', 'her gym buddy'). Under 22 characters.",
     },
     {
       path: "reviews[1].title",
-      label: "Second review — headline",
+      label: "Review 2 — headline",
       kind: "text",
-      max: 60,
-      guide:
-        "A second review headline in a different voice from the first — where one is over-confident, make this one mildly disappointed or oddly technical. Under 40 characters, no full stop.",
-      example: "Great, but the update changed things",
+      max: 44,
+      guide: "Second 5-star review headline — about a different trait, oddly technical (battery life, performance, storage). Under 40 characters, no full stop.",
     },
     {
       path: "reviews[1].body",
-      label: "Second review — the review",
+      label: "Review 2 — the review",
       kind: "longtext",
       max: 200,
-      guide:
-        "A shorter review than the first, and a different register — the review block is boring when every entry sounds like the same person. 90 to 160 characters. No invented names.",
-      example: "Does exactly one thing and does it perfectly. Wish the documentation were clearer about the mood system.",
+      guide: "A shorter 5-star review in app-review voice (a 'feature' or 'performance' of hers), different reviewer voice from the first, one specific habit of hers from the story. 80–160 characters.",
     },
     {
-      path: "reviews[1].developerResponse.text",
-      label: "Reply to the second review",
-      kind: "longtext",
-      max: 260,
-      guide:
-        "A second reply from the sender, shorter and drier than the first — a support agent who has stopped pretending. 80 to 180 characters. Never repeat the phrasing of the first reply.",
-      example: "The mood system is documented. The documentation is her face.",
+      path: "reviews[2].author",
+      label: "Review 3 — reviewer nickname",
+      kind: "text",
+      max: 30,
+      guide: "A third friend's reviewer nickname, maybe with one emoji at the end. Under 22 characters.",
     },
     {
       path: "reviews[2].title",
-      label: "Critical review — headline",
+      label: "Review 3 — headline (the 4-star one)",
       kind: "text",
-      max: 60,
-      guide:
-        "The headline of the one review that is NOT five stars. It has to be a real, small, affectionate complaint — a page where everybody agrees reads as fake. Under 40 characters.",
-      example: "Update broke my sleep schedule",
+      max: 44,
+      guide: "Headline of the one 4-star review: a real, tiny, affectionate complaint. Under 40 characters, no full stop.",
     },
     {
       path: "reviews[2].body",
-      label: "Critical review — the review",
+      label: "Review 3 — the review",
       kind: "longtext",
       max: 200,
       guide:
-        "The three-star review. Genuinely mild criticism about something trivial and specific, written by a friend who obviously adores her. Never anything that would actually hurt to read — this page is a gift and she is going to read every line of it. 90 to 170 characters.",
-      example: "Talks through films. Every film. Has never once been wrong about what happens next, which is worse.",
+        "The 4-star review: mild criticism of something trivial and specific (from the story if possible), written by a friend who obviously adores her; it ends by forgiving her. Nothing that would actually hurt — she reads this. 90–170 characters.",
+    },
+    {
+      path: "reviews[2].developerResponse.text",
+      label: "Reply to review 3 (from you)",
+      kind: "longtext",
+      max: 220,
+      guide:
+        "The sender's second Developer Response — shorter and drier than the first, a support agent siding with her against the reviewer. 70–170 characters. Don't reuse the first reply's phrasing.",
+      example: "Ticket reviewed. Behaviour confirmed as a feature. Reviewer advised to update their expectations.",
+    },
+    {
+      path: "reviews[3].author",
+      label: "Review 4 — reviewer nickname",
+      kind: "text",
+      max: 30,
+      guide: "A fourth friend's reviewer nickname (e.g. 'kabir_from_hostel_b', 'your mom's fav'). Under 22 characters.",
+    },
+    {
+      path: "reviews[3].title",
+      label: "Review 4 — headline",
+      kind: "text",
+      max: 44,
+      guide: "A 5-star headline that says she is the best in her category. Under 40 characters, no full stop.",
+    },
+    {
+      path: "reviews[3].body",
+      label: "Review 4 — the review",
+      kind: "longtext",
+      max: 200,
+      guide: "A friend's short review that ends on something genuinely kind she did (from the story if possible). 70–160 characters.",
     },
     {
       path: "contributorPrompt",
@@ -290,8 +390,32 @@ export const app: AiFillTemplateSchema = {
       kind: "text",
       max: 140,
       guide:
-        "Shown to friends who open the review link. It has to make a stranger in a group chat want to type one line, so keep it short, warm, and specific about what is being asked. Name the sender and her. Never guilt anyone into it.",
-      example: "Karan is collecting reviews of Meera. Leave one — one line is plenty.",
+        "Shown to friends who open the review link. Short and warm: name the sender and her, say what the listing is for (a surprise for her), and ask for one line in the app-review voice. Your own wording.",
+    },
+    {
+      path: "letter",
+      label: "The main letter",
+      kind: "longtext",
+      max: 1100,
+      required: true,
+      guide:
+        "The private letter that pops up in a corner envelope — the one fully sincere piece on the page, in the sender's own plain voice (how a real person texts at 2am, not a greeting card). First person, straight to her, 4 short paragraphs separated by blank lines. Open with the name he actually calls her. Retell 3 concrete moments from the story in their own words (a place, a habit, a line someone said), say what each one meant to him, nod ONCE to the app joke, and end on a simple promise. Plain words only — favour a small true detail over any metaphor. No sign-off name — the signature is added automatically. 650–1000 characters.",
+      example: "Meera,\n\nI made you a listing because I ran out of normal ways to say it…",
+    },
+    {
+      path: "lockQuestion",
+      label: "Question before the letter opens",
+      kind: "text",
+      max: 120,
+      guide:
+        "A cute yes/no question she must answer before the letter opens (its 'no' button runs away). Build it from something in THEIR story (a habit, a place, a running joke) or from updates/notifications — something only she would get. Ends with one emoji. Under 60 characters.",
+    },
+    {
+      path: "lockAnswer",
+      label: "Her 'yes' button",
+      kind: "text",
+      max: 40,
+      guide: "The label on the 'yes' button that answers the question you wrote above, in her voice — a playful, specific yes that fits that exact question. 1–4 words plus one emoji. Under 20 characters.",
     },
   ],
 };
