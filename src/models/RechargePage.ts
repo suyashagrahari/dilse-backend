@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Recharge — a prepaid top-up flow played straight: subscriber strip, category
@@ -66,6 +67,17 @@ export interface IRechargePage extends Document {
   payment: { methods: IPaymentMethod[] };
   /** The payoff, shown once the payment sheet closes. */
   receipt: { message: string[] };
+  /** Who is paying — "Paid by" on the receipt, the letter's signature. */
+  sender: { name: string };
+  /** Offer-banner captions; banner i sits over photo i. */
+  promos: string[];
+  /** The scratch card on the success screen. */
+  cashback: { title: string; note: string };
+  /** Love kit: framed photos (avatar + banners), the main letter and its lock. */
+  photos: ILovePhoto[];
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
 
   /** Carried for uniformity with the other templates; recharge has no contributor loop. */
   contributorsEnabled: boolean;
@@ -178,6 +190,29 @@ const rechargePageSchema = new Schema<IRechargePage>(
       ),
       default: () => ({ message: [] }),
     },
+
+    sender: {
+      type: new Schema<IRechargePage["sender"]>(
+        { name: { type: String, default: "", maxlength: 60 } },
+        { _id: false }
+      ),
+      default: () => ({ name: "" }),
+    },
+    promos: { type: [String], default: [] },
+    cashback: {
+      type: new Schema<IRechargePage["cashback"]>(
+        {
+          title: { type: String, default: "", maxlength: 80 },
+          note: { type: String, default: "", maxlength: 200 },
+        },
+        { _id: false }
+      ),
+      default: () => ({ title: "", note: "" }),
+    },
+    photos: loveKitFields.photos,
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
 
     contributorsEnabled: { type: Boolean, default: false },
 
