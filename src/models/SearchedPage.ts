@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -62,6 +63,30 @@ export const SEARCHED_LIMITS = {
   /** Guard against a caller posting a 100k-element array before we ever slice. */
   maxRawItems: 200,
   password: 128,
+  // ── the premium rebuild ──
+  site: 60,
+  date: 40,
+  doodleTitle: 120,
+  aiOverview: 1200,
+  aiPoint: 200,
+  maxAiPoints: 6,
+  reviewAuthor: 60,
+  reviewText: 300,
+  reviewWhen: 40,
+  maxReviews: 6,
+  storySource: 60,
+  storyTime: 40,
+  storyTitle: 200,
+  maxStories: 6,
+  videoChannel: 60,
+  videoDuration: 12,
+  videoTitle: 160,
+  maxVideos: 5,
+  placeName: 80,
+  placeKind: 80,
+  placeRating: 6,
+  placeNote: 240,
+  maxPlaces: 6,
 } as const;
 
 export interface IFakePage {
@@ -73,6 +98,8 @@ export interface IFakePage {
 
 export interface ISearchResult {
   id: string;
+  site?: string;
+  date?: string;
   title: string;
   url: string;
   snippet: string;
@@ -99,6 +126,32 @@ export interface IKnowledgePanel {
   quote?: string;
   /** Friends' names → generated initial-circles. No fetched avatars. */
   alsoSearchFor: string[];
+}
+
+export interface ISearchReview {
+  author: string;
+  stars: number;
+  text: string;
+  when?: string;
+}
+
+export interface ISearchStory {
+  source: string;
+  time: string;
+  title: string;
+}
+
+export interface ISearchVideo {
+  channel: string;
+  duration: string;
+  title: string;
+}
+
+export interface ISearchPlace {
+  name: string;
+  kind: string;
+  rating: string;
+  note: string;
 }
 
 export interface ISearchImage {
@@ -139,6 +192,19 @@ export interface ISearchedPage extends Document {
    */
   senderName: string;
   recipientName: string;
+  doodleTitle: string;
+  aiOverview: string;
+  aiPoints: string[];
+  reviews: ISearchReview[];
+  topStories: ISearchStory[];
+  videos: ISearchVideo[];
+  places: ISearchPlace[];
+  photos: ILovePhoto[];
+  gifs: string[];
+  letter: string;
+  theme: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -162,6 +228,8 @@ const fakePageSchema = new Schema<IFakePage>(
 const searchResultSchema = new Schema<ISearchResult>(
   {
     id: { type: String, default: "", maxlength: SEARCHED_LIMITS.resultId },
+    site: { type: String, maxlength: SEARCHED_LIMITS.site },
+    date: { type: String, maxlength: SEARCHED_LIMITS.date },
     title: { type: String, default: "", maxlength: SEARCHED_LIMITS.title },
     url: { type: String, default: "", maxlength: SEARCHED_LIMITS.breadcrumb },
     snippet: { type: String, default: "", maxlength: SEARCHED_LIMITS.snippet },
@@ -195,6 +263,44 @@ const knowledgePanelSchema = new Schema<IKnowledgePanel>(
     facts: { type: [knowledgeFactSchema], default: [] },
     quote: { type: String, maxlength: SEARCHED_LIMITS.quote },
     alsoSearchFor: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
+const reviewSchema = new Schema<ISearchReview>(
+  {
+    author: { type: String, default: "", maxlength: SEARCHED_LIMITS.reviewAuthor },
+    stars: { type: Number, default: 5, min: 1, max: 5 },
+    text: { type: String, default: "", maxlength: SEARCHED_LIMITS.reviewText },
+    when: { type: String, maxlength: SEARCHED_LIMITS.reviewWhen },
+  },
+  { _id: false }
+);
+
+const storySchema = new Schema<ISearchStory>(
+  {
+    source: { type: String, default: "", maxlength: SEARCHED_LIMITS.storySource },
+    time: { type: String, default: "", maxlength: SEARCHED_LIMITS.storyTime },
+    title: { type: String, default: "", maxlength: SEARCHED_LIMITS.storyTitle },
+  },
+  { _id: false }
+);
+
+const videoSchema = new Schema<ISearchVideo>(
+  {
+    channel: { type: String, default: "", maxlength: SEARCHED_LIMITS.videoChannel },
+    duration: { type: String, default: "", maxlength: SEARCHED_LIMITS.videoDuration },
+    title: { type: String, default: "", maxlength: SEARCHED_LIMITS.videoTitle },
+  },
+  { _id: false }
+);
+
+const placeSchema = new Schema<ISearchPlace>(
+  {
+    name: { type: String, default: "", maxlength: SEARCHED_LIMITS.placeName },
+    kind: { type: String, default: "", maxlength: SEARCHED_LIMITS.placeKind },
+    rating: { type: String, default: "", maxlength: SEARCHED_LIMITS.placeRating },
+    note: { type: String, default: "", maxlength: SEARCHED_LIMITS.placeNote },
   },
   { _id: false }
 );
@@ -241,6 +347,14 @@ const searchedPageSchema = new Schema<ISearchedPage>(
     alternateResults: { type: Map, of: [searchResultSchema], default: {} },
     // Denormalised for the dashboard. Written by the pre-save hook, never by a
     // caller — see the hook for why it is not done in the controller.
+    doodleTitle: { type: String, default: "", maxlength: SEARCHED_LIMITS.doodleTitle },
+    aiOverview: { type: String, default: "", maxlength: SEARCHED_LIMITS.aiOverview },
+    aiPoints: { type: [String], default: [] },
+    reviews: { type: [reviewSchema], default: [] },
+    topStories: { type: [storySchema], default: [] },
+    videos: { type: [videoSchema], default: [] },
+    places: { type: [placeSchema], default: [] },
+    ...loveKitFields,
     senderName: { type: String, default: "", maxlength: SEARCHED_LIMITS.name },
     recipientName: { type: String, default: "", maxlength: SEARCHED_LIMITS.name },
     // Security & meta
