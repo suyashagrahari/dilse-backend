@@ -6,6 +6,7 @@ import AppPage, {
   IAppDescription,
   IAppInfoRow,
   IAppMeta,
+  IAppPrivacy,
   IAppRating,
   IAppReview,
   IAppScreenshot,
@@ -15,6 +16,7 @@ import AppPage, {
 import { uploadImageDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { sanitizeLock, sanitizeLoveLetter } from "../utils/loveMedia";
 
 /**
  * NOTHING IN THIS FILE PARSES `meta.size`, `meta.price` OR `rating.count`.
@@ -82,6 +84,13 @@ const resolveImageUrl = async (raw: unknown, userId: unknown, slot: string): Pro
   }
 };
 
+/** A crop number, clamped and rounded; undefined when absent so nothing is stored. */
+const cropNum = (v: unknown, min: number, max: number): number | undefined => {
+  if (v === undefined || v === null || v === "") return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : undefined;
+};
+
 const asRecord = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 
@@ -112,6 +121,21 @@ type AppBody = {
   contributorPrompt?: unknown;
   contributorsEnabled?: unknown;
   password?: unknown;
+  iap?: unknown;
+  privacy?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
+};
+
+const sanitizeIap = (raw: unknown): string[] => lines(raw, APP_LIMITS.maxIap, APP_LIMITS.iapItem);
+
+const sanitizePrivacy = (raw: unknown): IAppPrivacy => {
+  const src = asRecord(raw);
+  return {
+    tracked: lines(src.tracked, APP_LIMITS.maxPrivacy, APP_LIMITS.privacyItem),
+    linked: lines(src.linked, APP_LIMITS.maxPrivacy, APP_LIMITS.privacyItem),
+  };
 };
 
 const sanitizeMeta = async (raw: unknown, userId: unknown): Promise<IAppMeta> => {
@@ -128,6 +152,11 @@ const sanitizeMeta = async (raw: unknown, userId: unknown): Promise<IAppMeta> =>
     languages: str(src.languages, APP_LIMITS.languages),
     // str() likewise. "Free (emotionally expensive)" survives.
     price: str(src.price, APP_LIMITS.price),
+    seller: str(src.seller, APP_LIMITS.seller),
+    compatibility: str(src.compatibility, APP_LIMITS.compatibility),
+    iconCropX: cropNum(src.iconCropX, 0, 100),
+    iconCropY: cropNum(src.iconCropY, 0, 100),
+    iconScale: cropNum(src.iconScale, 100, 300),
   };
 };
 
@@ -160,7 +189,13 @@ const sanitizeScreenshots = async (raw: unknown, userId: unknown): Promise<IAppS
     const caption = str(src.caption, APP_LIMITS.caption);
     const imageUrl = await resolveImageUrl(src.imageUrl, userId, `shot-${out.length}`);
     if (!caption && !imageUrl) continue;
-    out.push({ imageUrl, caption });
+    out.push({
+      imageUrl,
+      caption,
+      cropX: cropNum(src.cropX, 0, 100),
+      cropY: cropNum(src.cropY, 0, 100),
+      scale: cropNum(src.scale, 100, 300),
+    });
   }
   return out;
 };
@@ -277,6 +312,10 @@ export const createAppPage = async (req: Request, res: Response): Promise<void> 
       contributorPrompt: str(b.contributorPrompt, APP_LIMITS.prompt),
       contributorsEnabled: b.contributorsEnabled === undefined ? true : !!b.contributorsEnabled,
       password: str(b.password, APP_LIMITS.password),
+      iap: sanitizeIap(b.iap),
+      privacy: sanitizePrivacy(b.privacy),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
     });
 
     res.status(201).json({ success: true, data: page });
@@ -331,6 +370,14 @@ export const updateAppPage = async (req: Request, res: Response): Promise<void> 
     if (b.reviews            !== undefined) page.reviews            = sanitizeReviews(b.reviews);
     if (b.contributorPrompt  !== undefined) page.contributorPrompt  = str(b.contributorPrompt, APP_LIMITS.prompt);
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = !!b.contributorsEnabled;
+    if (b.iap                !== undefined) page.iap                = sanitizeIap(b.iap);
+    if (b.privacy            !== undefined) page.privacy            = sanitizePrivacy(b.privacy);
+    if (b.letter             !== undefined) page.letter             = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock(b);
+      if (b.lockQuestion !== undefined) page.lockQuestion = lock.lockQuestion;
+      if (b.lockAnswer   !== undefined) page.lockAnswer   = lock.lockAnswer;
+    }
     // Absent or empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, APP_LIMITS.password) !== "") {
       applyPagePassword(page, b.password, APP_LIMITS.password);

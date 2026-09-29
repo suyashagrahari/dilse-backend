@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields } from "../utils/loveMedia";
 
 /**
  * A person rendered as a software listing.
@@ -62,6 +63,12 @@ export const APP_LIMITS = {
   ago: 48,
   responseText: 800,
   prompt: 240,
+  seller: 40,
+  compatibility: 90,
+  maxIap: 8,
+  iapItem: 80,
+  maxPrivacy: 6,
+  privacyItem: 70,
   /** A plain https URL. Uploaded artwork is turned into one before it gets here. */
   url: 2000,
   password: 128,
@@ -95,6 +102,20 @@ export interface IAppMeta {
   languages: string;
   /** STRING. "Free (emotionally expensive)". See the header of this file. */
   price: string;
+  /** The sender's own name — the "Seller" row, and who signs the letter. */
+  seller: string;
+  /** "Works with me only." — the Compatibility row. */
+  compatibility: string;
+  /** Framing of the icon photo: focal point 0–100, zoom 100–300. */
+  iconCropX?: number;
+  iconCropY?: number;
+  iconScale?: number;
+}
+
+/** The privacy "nutrition label" cards. Short category names, text only. */
+export interface IAppPrivacy {
+  tracked: string[];
+  linked: string[];
 }
 
 export interface IAppRating {
@@ -109,6 +130,9 @@ export interface IAppRating {
 export interface IAppScreenshot {
   imageUrl: string;
   caption: string;
+  cropX?: number;
+  cropY?: number;
+  scale?: number;
 }
 
 export interface IAppDescription {
@@ -175,6 +199,13 @@ export interface IAppPage extends Document {
   reviews: IAppReview[];
   /** Shown to friends on the contributor landing. */
   contributorPrompt: string;
+  /** "Forehead kiss · ₹0" — one in-app purchase per line. */
+  iap: string[];
+  privacy: IAppPrivacy;
+  /** The main letter that pops in the bottom-right corner. */
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   /** Owner switch for the open review box on the shared page. */
   contributorsEnabled: boolean;
   // Security & meta
@@ -200,6 +231,11 @@ const metaSchema = new Schema<IAppMeta>(
     languages: { type: String, default: "", maxlength: APP_LIMITS.languages },
     // String. No numeric cast — "Free (emotionally expensive)" likewise.
     price: { type: String, default: "", maxlength: APP_LIMITS.price },
+    seller: { type: String, default: "", maxlength: APP_LIMITS.seller },
+    compatibility: { type: String, default: "", maxlength: APP_LIMITS.compatibility },
+    iconCropX: { type: Number, min: 0, max: 100 },
+    iconCropY: { type: Number, min: 0, max: 100 },
+    iconScale: { type: Number, min: 100, max: 300 },
   },
   { _id: false }
 );
@@ -223,6 +259,9 @@ const screenshotSchema = new Schema<IAppScreenshot>(
   {
     imageUrl: { type: String, default: "", maxlength: APP_LIMITS.url },
     caption: { type: String, default: "", maxlength: APP_LIMITS.caption },
+    cropX: { type: Number, min: 0, max: 100 },
+    cropY: { type: Number, min: 0, max: 100 },
+    scale: { type: Number, min: 100, max: 300 },
   },
   { _id: false }
 );
@@ -307,6 +346,17 @@ const appPageSchema = new Schema<IAppPage>(
     info: { type: [infoRowSchema], default: [] },
     reviews: { type: [reviewSchema], default: [] },
     contributorPrompt: { type: String, default: "", maxlength: APP_LIMITS.prompt },
+    iap: { type: [String], default: [] },
+    privacy: {
+      type: new Schema<IAppPrivacy>(
+        { tracked: { type: [String], default: [] }, linked: { type: [String], default: [] } },
+        { _id: false }
+      ),
+      default: () => ({ tracked: [], linked: [] }),
+    },
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     contributorsEnabled: { type: Boolean, default: true },
     // Security & meta
     password: { type: String, default: "" },

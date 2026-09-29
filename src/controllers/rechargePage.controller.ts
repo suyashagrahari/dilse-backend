@@ -6,6 +6,7 @@ import RechargePage, {
   IPaymentMethod,
 } from "../models/RechargePage";
 import { checkPublishAccess } from "../services/publishGate.service";
+import { sanitizeLovePhotos, sanitizeLoveLetter, sanitizeLock, userPhotoFolder } from "../utils/loveMedia";
 
 const MAX_CATEGORIES = 8;
 const MAX_PLANS = 24;
@@ -44,6 +45,18 @@ const sanitizeRows = (raw: unknown): IPlanRow[] => {
   return raw
     .slice(0, MAX_ROWS)
     .map((r) => {
+      // The editor keeps rows as "Label: Value | note" lines (that is also
+      // what the AI fill writes); older clients send objects. Both land here.
+      if (typeof r === "string") {
+        const [head, ...rest] = r.split("|");
+        const at = head.indexOf(":");
+        if (at < 0) return { label: "", value: "", note: "" };
+        return {
+          label: head.slice(0, at).trim().slice(0, 60),
+          value: head.slice(at + 1).trim().slice(0, 80),
+          note: rest.join("|").trim().slice(0, 200),
+        };
+      }
       const s = (r ?? {}) as Record<string, unknown>;
       const note = str(s.note, 200).trim();
       return { label: str(s.label, 60).trim(), value: str(s.value, 80).trim(), note };
@@ -137,7 +150,31 @@ const sanitizeReceipt = (raw: unknown): { message: string[] } => {
   return { message };
 };
 
+const MAX_PROMOS = 6;
+
+const sanitizeSender = (raw: unknown): { name: string } => {
+  const s = (raw ?? {}) as Record<string, unknown>;
+  return { name: str(s.name, 60).trim() };
+};
+
+const sanitizePromos = (raw: unknown): string[] =>
+  Array.isArray(raw)
+    ? raw.slice(0, MAX_PROMOS).map((p) => str(p, 90).trim()).filter((p) => p.length > 0)
+    : [];
+
+const sanitizeCashback = (raw: unknown): { title: string; note: string } => {
+  const s = (raw ?? {}) as Record<string, unknown>;
+  return { title: str(s.title, 80).trim(), note: str(s.note, 200).trim() };
+};
+
 type RechargeBody = {
+  sender?: unknown;
+  promos?: unknown;
+  cashback?: unknown;
+  photos?: unknown;
+  letter?: unknown;
+  lockQuestion?: unknown;
+  lockAnswer?: unknown;
   operator?: unknown;
   subscriber?: unknown;
   currentPlan?: unknown;
@@ -162,6 +199,12 @@ export const createRechargePage = async (req: Request, res: Response): Promise<v
       plans: sanitizePlans(b.plans),
       payment: sanitizePayment(b.payment),
       receipt: sanitizeReceipt(b.receipt),
+      sender: sanitizeSender(b.sender),
+      promos: sanitizePromos(b.promos),
+      cashback: sanitizeCashback(b.cashback),
+      photos: await sanitizeLovePhotos(b.photos, userPhotoFolder("recharge", req.userId)),
+      letter: sanitizeLoveLetter(b.letter),
+      ...sanitizeLock(b),
       contributorsEnabled: b.contributorsEnabled === true,
       password: str(b.password, 128),
     });
@@ -215,6 +258,16 @@ export const updateRechargePage = async (req: Request, res: Response): Promise<v
     if (b.plans               !== undefined) page.plans               = sanitizePlans(b.plans);
     if (b.payment             !== undefined) page.payment             = sanitizePayment(b.payment);
     if (b.receipt             !== undefined) page.receipt             = sanitizeReceipt(b.receipt);
+    if (b.sender              !== undefined) page.sender              = sanitizeSender(b.sender);
+    if (b.promos              !== undefined) page.promos              = sanitizePromos(b.promos);
+    if (b.cashback            !== undefined) page.cashback            = sanitizeCashback(b.cashback);
+    if (b.photos              !== undefined) page.photos              = await sanitizeLovePhotos(b.photos, userPhotoFolder("recharge", req.userId));
+    if (b.letter              !== undefined) page.letter              = sanitizeLoveLetter(b.letter);
+    if (b.lockQuestion !== undefined || b.lockAnswer !== undefined) {
+      const lock = sanitizeLock({ lockQuestion: b.lockQuestion ?? page.lockQuestion, lockAnswer: b.lockAnswer ?? page.lockAnswer });
+      page.lockQuestion = lock.lockQuestion;
+      page.lockAnswer = lock.lockAnswer;
+    }
     if (b.contributorsEnabled !== undefined) page.contributorsEnabled = b.contributorsEnabled === true;
     // Empty password on update means "unchanged", not "remove the gate".
     if (b.password !== undefined && str(b.password, 128) !== "") page.password = str(b.password, 128);

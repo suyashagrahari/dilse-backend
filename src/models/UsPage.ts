@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { loveKitFields } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -42,10 +43,28 @@ export const US_LIMITS = {
   maxFollowedBy: 10,
   /** "Up to 3. Rendered first with a pin glyph." */
   maxPinned: 3,
+  /** Carousel photos after the first, per post. */
+  maxMore: 4,
+  name: 40,
+  note: 60,
+  dm: 300,
+  maxDms: 16,
   /** Guard against a caller posting a 100k-element array before we ever slice. */
   maxRawItems: 500,
   password: 128,
 } as const;
+
+/** Framing: focal point 0–100 and zoom 100–300, as the editor's adjuster writes it. */
+export interface ICrop {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+export interface IFrame {
+  url: string;
+  crop?: ICrop;
+}
 
 export interface IComment {
   handle: string;
@@ -56,6 +75,8 @@ export interface IComment {
 export interface IPost {
   id: string;
   imageUrl: string;
+  crop?: ICrop;
+  more?: IFrame[];
   caption: string;
   likes: number;
   likedByName: string;
@@ -68,6 +89,7 @@ export interface IPost {
 
 export interface IHighlightSlide {
   imageUrl: string;
+  crop?: ICrop;
   caption?: string;
 }
 
@@ -80,6 +102,17 @@ export interface IHighlight {
 export interface IUsPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
+  /** The sender's first name — signs the letter, owns the grey DM bubbles. */
+  from: string;
+  /** The recipient's name. */
+  to: string;
+  note: string;
+  avatarCrop?: ICrop;
+  /** DM thread, alternating from → to → from… */
+  dms: string[];
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   handle: string;
   displayName: string;
   category: string;
@@ -120,6 +153,23 @@ export interface IUsPage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
+const cropSchema = new Schema<ICrop>(
+  {
+    x: { type: Number, min: 0, max: 100 },
+    y: { type: Number, min: 0, max: 100 },
+    scale: { type: Number, min: 100, max: 300 },
+  },
+  { _id: false }
+);
+
+const frameSchema = new Schema<IFrame>(
+  {
+    url: { type: String, default: "", maxlength: US_LIMITS.url },
+    crop: { type: cropSchema },
+  },
+  { _id: false }
+);
+
 const commentSchema = new Schema<IComment>(
   {
     handle: { type: String, default: "", maxlength: US_LIMITS.handle },
@@ -139,6 +189,8 @@ const postSchema = new Schema<IPost>(
   {
     id: { type: String, default: "", maxlength: US_LIMITS.postId },
     imageUrl: { type: String, default: "", maxlength: US_LIMITS.url },
+    crop: { type: cropSchema },
+    more: { type: [frameSchema], default: undefined },
     caption: { type: String, default: "", maxlength: US_LIMITS.caption },
     likes: { type: Number, default: 0, min: 0, max: US_LIMITS.maxStat },
     likedByName: { type: String, default: "", maxlength: US_LIMITS.likedByName },
@@ -154,6 +206,7 @@ const postSchema = new Schema<IPost>(
 const highlightSlideSchema = new Schema<IHighlightSlide>(
   {
     imageUrl: { type: String, default: "", maxlength: US_LIMITS.url },
+    crop: { type: cropSchema },
     caption: { type: String, maxlength: US_LIMITS.slideCaption },
   },
   { _id: false }
@@ -189,6 +242,14 @@ const usPageSchema = new Schema<IUsPage>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     shareId: { type: String, unique: true, sparse: true, index: true },
+    from: { type: String, default: "", maxlength: US_LIMITS.name },
+    to: { type: String, default: "", maxlength: US_LIMITS.name },
+    note: { type: String, default: "", maxlength: US_LIMITS.note },
+    avatarCrop: { type: cropSchema },
+    dms: { type: [String], default: [] },
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     handle: { type: String, default: "", maxlength: US_LIMITS.handle },
     displayName: { type: String, default: "", maxlength: US_LIMITS.displayName },
     category: { type: String, default: "", maxlength: US_LIMITS.category },
@@ -222,9 +283,11 @@ usPageSchema.pre("save", async function (next) {
   //
   // Both sides get `displayName`: this is one shared account, not a sender and
   // a recipient. See the interface for the full reasoning.
+  // Pages made since the names were asked for carry a real from/to pair; older
+  // ones only have the joint display name, so both sides fall back to it.
   const shared = (this.displayName ?? "").slice(0, US_LIMITS.displayName);
-  this.senderName = shared;
-  this.recipientName = shared;
+  this.senderName = (this.from || shared).slice(0, US_LIMITS.displayName);
+  this.recipientName = (this.to || shared).slice(0, US_LIMITS.displayName);
   if (this.isModified("password") && this.password) {
     // ── Trim before hashing ──────────────────────────────────────────────────
     //

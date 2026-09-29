@@ -101,6 +101,72 @@ export interface FillPeople {
   partnerPronouns?: string;
 }
 
+/**
+ * Structured answers from the client's guided-questions flow.
+ *
+ * All optional and all free text the controller has already trimmed and
+ * clamped. The story the guided flow composes carries the same facts in prose;
+ * these exist for the three things prose cannot pin down reliably:
+ *
+ *   - `language` OVERRIDES the detect-the-story's-language rule. A guided story
+ *     is assembled in English from tapped chips, so detection would always say
+ *     English even when the sender picked Hinglish.
+ *   - `tone` is a register the sender chose outright, not one to infer.
+ *   - `relation` / `occasion` stop the model guessing "girlfriend" vs "wife" or
+ *     writing an anniversary line on a birthday page.
+ */
+export interface FillHints {
+  relation?: string;
+  tone?: string;
+  /** "en" | "hi-Latn" | "hi" — anything else is ignored. */
+  language?: string;
+  occasion?: string;
+}
+
+const HINT_LANGUAGES: Record<string, { name: string; rule: string; sample: string }> = {
+  en: {
+    name: "English",
+    rule: "Write every value in natural, warm English (Latin letters). Indian English is fine; do not switch into Hindi.",
+    sample: "we met at a college fest",
+  },
+  "hi-Latn": {
+    name: "Hinglish",
+    rule: "Write every value in Hinglish — conversational Hindi mixed with English the way young Indians text, written ONLY in Latin letters (e.g. \"tum meri favourite insaan ho\"). Never use Devanagari, not even for names.",
+    sample: "hum pehli baar college fest mein mile the",
+  },
+  hi: {
+    name: "Hindi",
+    rule: "Write every value in simple, heartfelt Hindi in Devanagari script (e.g. \"तुम मेरी सबसे प्यारी इंसान हो\"). Keep the names exactly as given, in Latin letters if they were given that way.",
+    sample: "हम पहली बार कॉलेज फेस्ट में मिले थे",
+  },
+};
+
+const TONE_BRIEF: Record<string, string> = {
+  cute: "cute, playful and affectionate — soft teasing, pet names, little emoji-free sweetness",
+  funny: "funny — light roasting, witty lines, running jokes, still clearly loving underneath",
+  emotional: "emotional and heartfelt — sincere, tender, the kind of lines that make them tear up",
+  filmy: "filmy — dramatic Bollywood-style romance, over-the-top declarations, a wink of self-awareness",
+};
+
+/** The briefing block for the hints, or "" when there are none worth saying. */
+export function renderHints(hints: FillHints | null | undefined): string {
+  if (!hints) return "";
+  const bits: string[] = [];
+  if (hints.relation) {
+    bits.push(`The person this page is for is the sender's ${hints.relation}. Write in the register that relationship calls for.`);
+  }
+  if (hints.occasion) {
+    bits.push(`The occasion is: ${hints.occasion}. Where a slot can reflect it naturally, let it; never invent a different occasion.`);
+  }
+  const tone = hints.tone ? TONE_BRIEF[hints.tone.toLowerCase()] ?? hints.tone : "";
+  if (tone) bits.push(`TONE the sender chose: ${tone}. Every field should sound like this.`);
+  return bits.length ? `What the sender told us directly:\n- ${bits.join("\n- ")}` : "";
+}
+
+function hintLanguage(hints: FillHints | null | undefined) {
+  return hints?.language ? HINT_LANGUAGES[hints.language] ?? null : null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Building the Structured Outputs schema from the template's fields
 // ═══════════════════════════════════════════════════════════════════════════
@@ -695,6 +761,8 @@ export async function fillFromStory(opts: {
   story: string;
   people?: FillPeople | null;
   context?: IStoryContext | null;
+  /** Guided-flow answers. Absent for every caller that predates them. */
+  hints?: FillHints | null;
 }): Promise<FillResult> {
   if (!env.OPENAI_API_KEY) {
     throw new AiUnavailableError("OPENAI_API_KEY is not configured");
@@ -708,6 +776,10 @@ export async function fillFromStory(opts: {
 
   const who = renderPeople(opts.people, schema.audience);
   if (who) userParts.push(who);
+
+  const hinted = renderHints(opts.hints);
+  if (hinted) userParts.push(hinted);
+  const lang = hintLanguage(opts.hints);
 
   if (context) {
     userParts.push(
@@ -736,7 +808,11 @@ export async function fillFromStory(opts: {
   }
 
   userParts.push(
-    story
+    lang
+      ? // The sender picked a language outright. It beats detection, because a
+        // guided story is assembled in English whatever they chose.
+        `LANGUAGE — the sender chose ${lang.name}, and this OVERRIDES the rule about matching the story's language. ${lang.rule} Fill the fields from the material above.`
+      : story
       ? "Fill the fields from the story above, in the same language and script as the story."
       : // Context-only fill: this is the "their second template fills itself"
         // path, where the sender has typed nothing at all yet.
@@ -785,7 +861,9 @@ export async function fillFromStory(opts: {
   // back in Devanagari is the one failure the language rule exists to prevent,
   // and asking nicely was not holding. The reference is the sender's own words
   // where they wrote any, and their remembered summary otherwise.
-  const scriptReference = story || context?.summary || "";
+  // A chosen language is the reference when there is one: a Hindi page from an
+  // English-assembled guided story must not be "corrected" back into Latin.
+  const scriptReference = lang?.sample || story || context?.summary || "";
   if (scriptReference) {
     const firstText = completion.choices[0]?.message?.content ?? "";
     if (scriptMismatch(scriptReference, firstText)) {
