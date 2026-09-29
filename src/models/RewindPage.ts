@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
+import { LOVE_LIMITS, loveKitFields, type ILovePhoto } from "../utils/loveMedia";
 
 /**
  * Shared between the schema and the controller so the caps live in exactly one
@@ -18,7 +19,17 @@ export const REWIND_LIMITS = {
   maxStats: 6,
   /** Six questions today; the cap leaves room without inviting a payload. */
   maxAnswers: 12,
-  maxPhotos: 8,
+  maxPhotos: LOVE_LIMITS.maxPhotos,
+  /** "your songs" — the playlist, the top-songs slide and the player bar. */
+  maxSongs: 5,
+  maxPlaces: 5,
+  maxGenres: 4,
+  /** "Title — Artist" in one string. */
+  song: 120,
+  place: 80,
+  genre: 48,
+  fanLine: 200,
+  playlistName: 60,
   /** Guard against a caller posting a 100k-element array before we ever slice. */
   maxRawItems: 200,
   name: 80,
@@ -69,8 +80,21 @@ export interface IRewindPage extends Document {
    * `{}`, and the client coercer would then see nothing.
    */
   answers: Map<string, string>;
-  photos: string[];
+  /**
+   * Memories: framed photos with a caption and a little note. Pages published
+   * before the premium redesign stored plain URL strings here, so the path is
+   * Mixed and both shapes are read back; every write stores objects.
+   */
+  photos: (ILovePhoto | string)[];
+  songs: string[];
+  places: string[];
+  genres: string[];
+  fanLine: string;
+  playlistName: string;
   closingLine: string;
+  letter: string;
+  lockQuestion: string;
+  lockAnswer: string;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -106,8 +130,16 @@ const rewindPageSchema = new Schema<IRewindPage>(
     topReasons: { type: [String], default: [] },
     stats: { type: [statSchema], default: [] },
     answers: { type: Map, of: String, default: {} },
-    photos: { type: [String], default: [] },
+    photos: { type: [Schema.Types.Mixed], default: [] },
+    songs: { type: [String], default: [] },
+    places: { type: [String], default: [] },
+    genres: { type: [String], default: [] },
+    fanLine: { type: String, default: "", maxlength: REWIND_LIMITS.fanLine },
+    playlistName: { type: String, default: "", maxlength: REWIND_LIMITS.playlistName },
     closingLine: { type: String, default: "", maxlength: REWIND_LIMITS.closingLine },
+    letter: loveKitFields.letter,
+    lockQuestion: loveKitFields.lockQuestion,
+    lockAnswer: loveKitFields.lockAnswer,
     // Security & meta
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
