@@ -47,6 +47,12 @@ export interface IUser extends Document {
   referralCode: string;
   referredBy?: mongoose.Types.ObjectId;
   isVerified: boolean;
+  /**
+   * Asked not to receive announcements from /admin/outreach. Set by a super
+   * admin when somebody replies "unsubscribe". Never affects sign-in codes or
+   * replies to mail the person sent us — only one-to-many broadcasts.
+   */
+  emailOptOut?: boolean;
   otp?: string;
   otpExpiry?: Date;
   pendingReferralCode?: string;
@@ -145,6 +151,7 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    emailOptOut: { type: Boolean, default: false },
     otp: {
       type: String,
       select: false,
