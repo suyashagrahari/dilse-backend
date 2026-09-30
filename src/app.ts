@@ -137,19 +137,33 @@ app.use((req, res, next) => {
 });
 
 // ── Rate limiters ──────────────────────────────────────────────────────────
+// The subdomain picker checks a name on every pause in typing, and many Indian
+// users share one public IP (mobile CGNAT), so it has its own per-account
+// limiter below instead of spending this shared per-IP budget.
+const isSubdomainPicker = (path: string) => path.startsWith("/auth/subdomain");
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: env.IS_PROD ? 100 : 500,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => isSubdomainPicker(req.path),
   message: { success: false, error: "Too many requests, please try again later." },
 });
+
+// Brute-force protection for the endpoints that take a credential or send a
+// code — and ONLY those. It used to cover all of /api/auth, so /auth/me and
+// /auth/refresh on ordinary page loads spent the same 20-per-15-minutes budget,
+// and the subdomain picker's availability checks then came back 429 — which
+// the picker showed as "already taken" for every name anyone typed.
+const CREDENTIAL_PATHS = new Set(["/register", "/login", "/google", "/verify-otp", "/resend-otp", "/password"]);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: env.IS_PROD ? 20 : 100,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => !CREDENTIAL_PATHS.has(req.path),
   message: { success: false, error: "Too many login attempts. Please wait before trying again." },
 });
 
@@ -166,6 +180,19 @@ app.use("/api/generate", generateLimiter);
 // profile as /api/generate, so it gets the same per-minute cap.
 app.use("/api/court-of-love-pages/generate", generateLimiter);
 app.use("/api/auth", authLimiter);
+
+// Per signed-in account (every picker route is behind `protect`, so an
+// unauthenticated caller only ever gets a 401): generous enough for someone
+// typing and retyping names, tight enough to stop anyone enumerating them.
+const subdomainLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.headers.authorization || "anonymous"),
+  message: { success: false, error: "You're checking names very fast — give it a few seconds." },
+});
+app.use("/api/auth/subdomain", subdomainLimiter);
 
 // ── Public webhooks, ahead of the API rate limiter ─────────────────────────
 //
