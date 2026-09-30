@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getTemplateMeta } from "../controllers/templateMeta.controller";
 import authRoutes from "./auth.routes";
 import templateRoutes from "./template.routes";
 import generateRoutes from "./generate.routes";
@@ -96,6 +97,8 @@ router.use("/templates", templateRoutes);
 // the first thing a stranger loads and must not need a session to know what to
 // render. The admin write side lives under /admin/template-visibility.
 router.get("/template-visibility", getPublicTemplateVisibility);
+// Tier overrides + "most created" ranking for the gallery. Anonymous, cached.
+router.get("/template-meta", getTemplateMeta);
 router.use("/generate", protect, generateRoutes);
 router.use("/favorites", protect, favoriteRoutes);
 router.use("/content", protect, userContentRoutes);
