@@ -59,6 +59,7 @@ import {
   updateThread,
 } from "../controllers/adminThread.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
+import { getAdminTemplateTiers, setTemplateTier, clearTemplateTier } from "../controllers/templateMeta.controller";
 import { getRecurringUsers } from "../controllers/adminRetention.controller";
 
 const router = Router();
@@ -114,6 +115,12 @@ router.get("/template-pricing", requireSuperAdmin, getAdminTemplatePricing);
 router.patch("/template-pricing", requireSuperAdmin, setTemplatePricingBulk);
 router.patch("/template-pricing/:slug", requireSuperAdmin, setTemplatePricing);
 router.delete("/template-pricing/:slug", requireSuperAdmin, clearTemplatePricing);
+
+// Premium / normal tier. Super-admin only, next to pricing, because the two are
+// set together on the same screen.
+router.get("/template-tiers", requireSuperAdmin, getAdminTemplateTiers);
+router.patch("/template-tiers/:slug", requireSuperAdmin, setTemplateTier);
+router.delete("/template-tiers/:slug", requireSuperAdmin, clearTemplateTier);
 
 // ── Who gets a template before everybody else ──────────────────────────────
 //
