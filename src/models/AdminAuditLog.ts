@@ -42,6 +42,10 @@ export type AuditAction =
   // puts words in somebody else's mouth, so it is recorded with who did it.
   | "thread.inbound_pasted"
   | "thread.reply_sent"
+  // One email to many creators from /admin/outreach, and the opt-out switch
+  // that keeps somebody out of every future one.
+  | "outreach.broadcast_sent"
+  | "outreach.opt_out"
   | "impersonation.start"
   | "impersonation.end";
 

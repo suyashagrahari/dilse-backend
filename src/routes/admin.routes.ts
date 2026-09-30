@@ -61,6 +61,18 @@ import {
 import { requireSuperAdmin } from "../middleware/adminAuth";
 import { getAdminTemplateTiers, setTemplateTier, clearTemplateTier } from "../controllers/templateMeta.controller";
 import { getRecurringUsers } from "../controllers/adminRetention.controller";
+import {
+  getAudience,
+  getRecipients,
+  draftEmail as draftOutreachEmail,
+  previewEmail as previewOutreachEmail,
+  sendTest as sendOutreachTest,
+  sendBroadcast,
+  listBroadcasts,
+  getBroadcast,
+  resumeBroadcast,
+  setOptOut,
+} from "../controllers/adminOutreach.controller";
 
 const router = Router();
 
@@ -190,5 +202,22 @@ router.post("/threads/:id/inbound", requireSuperAdmin, addInboundManual);
 // conversation and cannot mail; `reply` mails and cannot generate.
 router.post("/threads/:id/draft-reply", requireSuperAdmin, draftReplyForThread);
 router.post("/threads/:id/reply", requireSuperAdmin, replyToThread);
+
+// ── One email to many creators ─────────────────────────────────────────────
+//
+// Super-admin only: `send` puts mail in many real inboxes at once. `draft`
+// calls the model and cannot mail; `send` mails and cannot call the model; and
+// `send` refuses unless the count the super admin confirmed still matches. See
+// adminOutreach.controller.ts.
+router.get("/outreach/audience", requireSuperAdmin, getAudience);
+router.post("/outreach/recipients", requireSuperAdmin, getRecipients);
+router.post("/outreach/draft", requireSuperAdmin, draftOutreachEmail);
+router.post("/outreach/preview", requireSuperAdmin, previewOutreachEmail);
+router.post("/outreach/test", requireSuperAdmin, sendOutreachTest);
+router.post("/outreach/send", requireSuperAdmin, sendBroadcast);
+router.get("/outreach/broadcasts", requireSuperAdmin, listBroadcasts);
+router.get("/outreach/broadcasts/:id", requireSuperAdmin, getBroadcast);
+router.post("/outreach/broadcasts/:id/resume", requireSuperAdmin, resumeBroadcast);
+router.patch("/outreach/users/:userId/opt-out", requireSuperAdmin, setOptOut);
 
 export default router;
