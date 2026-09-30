@@ -31,6 +31,8 @@ export type AuditAction =
   | "page.delete"
   | "template.set_pricing"
   | "template.clear_pricing"
+  | "template.set_tier"
+  | "template.clear_tier"
   | "template.grant_access"
   | "template.revoke_access"
   | "feedback.reply_sent"
