@@ -1,11 +1,6 @@
 import { Request, Response } from "express";
-import Wishlist from "../models/Wishlist";
-
-// Campaigns a user can join. Unknown keys are refused so the collection can't
-// fill up with arbitrary strings from the client.
-export const WISHLIST_CAMPAIGNS: Record<string, { discountPercent: number }> = {
-  "valentine-2027": { discountPercent: 30 },
-};
+import Wishlist, { WISHLIST_CAMPAIGNS } from "../models/Wishlist";
+import { invalidateAudience } from "../services/audience.service";
 
 const SOURCE_RE = /^[a-z0-9-]{1,40}$/;
 
@@ -71,6 +66,8 @@ export const joinWishlist = async (req: Request, res: Response): Promise<void> =
       const row = await Wishlist.create({
         userId, campaign, source, email: req.userEmail, discountPercent: config.discountPercent,
       });
+      // So the Outreach "joined the wishlist" filter sees them straight away.
+      invalidateAudience();
       res.status(201).json({ success: true, data: { joined: true, already: false, entry: await view(row) } });
     } catch (err) {
       // Two taps racing past the findOne: the unique index decides, both succeed.

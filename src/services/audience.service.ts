@@ -32,6 +32,7 @@ import User from "../models/User";
 import PageFeedback from "../models/PageFeedback";
 import PaymentOrder from "../models/PaymentOrder";
 import Broadcast from "../models/Broadcast";
+import Wishlist, { WISHLIST_CAMPAIGNS } from "../models/Wishlist";
 import { TEMPLATE_LOOKUPS } from "../controllers/share.controller";
 import { templateLabel } from "../config/templateCatalog";
 
@@ -56,6 +57,8 @@ export interface AudienceRow {
   commentCount: number;
   paidOrders: number;
   lastEmailedAt: string | null;
+  /** Wishlists joined (campaign keys), e.g. ["valentine-2027"]. */
+  wishlists: string[];
 }
 
 export interface AudienceFilters {
@@ -72,6 +75,8 @@ export interface AudienceFilters {
   provider: "any" | "google" | "local";
   paid: "any" | "yes" | "no";
   emailed: "any" | "never" | "not14" | "not30";
+  /** "any" | "none" | a campaign key — joined that wishlist. */
+  wishlist: string;
   optout: "hide" | "only";
   sort: "joined" | "pages" | "rating" | "active" | "name";
   order: "asc" | "desc";
@@ -97,6 +102,7 @@ export function parseFilters(src: Record<string, unknown> = {}): AudienceFilters
     provider: pick(src.provider, ["any", "google", "local"] as const, "any"),
     paid: pick(src.paid, ["any", "yes", "no"] as const, "any"),
     emailed: pick(src.emailed, ["any", "never", "not14", "not30"] as const, "any"),
+    wishlist: /^(any|none|[a-z0-9-]{1,40})$/.test(String(src.wishlist ?? "")) ? String(src.wishlist) : "any",
     optout: pick(src.optout, ["hide", "only"] as const, "hide"),
     sort: pick(src.sort, ["joined", "pages", "rating", "active", "name"] as const, "joined"),
     order: pick(src.order, ["asc", "desc"] as const, "desc"),
@@ -124,7 +130,7 @@ export function invalidateAudience(): void {
 interface PageAgg { _id: mongoose.Types.ObjectId | null; n: number; pub: number; last: Date | null }
 
 async function build(): Promise<AudienceRow[]> {
-  const [users, perTemplate, feedback, paid, emailed] = await Promise.all([
+  const [users, perTemplate, feedback, paid, emailed, wished] = await Promise.all([
     User.find({})
       .select("name email provider status isVerified emailOptOut createdAt")
       .lean(),
@@ -166,6 +172,7 @@ async function build(): Promise<AudienceRow[]> {
       { $match: { "recipients.status": "sent" } },
       { $group: { _id: "$recipients.userId", last: { $max: "$recipients.sentAt" } } },
     ]) as Promise<{ _id: mongoose.Types.ObjectId; last: Date }[]>,
+    Wishlist.find({}).select("userId campaign").lean(),
   ]);
 
   type Acc = { pages: number; published: number; last: number; templates: AudienceRow["templates"] };
@@ -185,6 +192,8 @@ async function build(): Promise<AudienceRow[]> {
   const fbMap = new Map(feedback.map((f) => [String(f._id), f]));
   const paidMap = new Map(paid.map((p) => [String(p._id), p.n]));
   const mailMap = new Map(emailed.map((e) => [String(e._id), e.last]));
+  const wishMap = new Map<string, string[]>();
+  for (const w of wished) wishMap.set(w.userId, [...(wishMap.get(w.userId) || []), w.campaign]);
 
   return users.map((u) => {
     const id = String(u._id);
@@ -211,6 +220,7 @@ async function build(): Promise<AudienceRow[]> {
       commentCount: f?.comments || 0,
       paidOrders: paidMap.get(id) || 0,
       lastEmailedAt: mailed ? new Date(mailed).toISOString() : null,
+      wishlists: wishMap.get(id) || [],
     };
   });
 }
@@ -274,6 +284,9 @@ export function applyFilters(rows: AudienceRow[], f: AudienceFilters): AudienceR
     if (f.emailed === "never" && r.lastEmailedAt) return false;
     if (f.emailed === "not14" && within(r.lastEmailedAt, 14)) return false;
     if (f.emailed === "not30" && within(r.lastEmailedAt, 30)) return false;
+
+    if (f.wishlist === "none" && r.wishlists.length) return false;
+    if (f.wishlist !== "any" && f.wishlist !== "none" && !r.wishlists.includes(f.wishlist)) return false;
     return true;
   });
 
@@ -310,6 +323,8 @@ export function describeFilters(f: AudienceFilters): string {
   if (f.paid === "no") parts.push("Never paid");
   if (f.emailed === "never") parts.push("Never emailed");
   if (f.emailed !== "any" && f.emailed !== "never") parts.push(`Not emailed in ${f.emailed.slice(3)}d`);
+  if (f.wishlist === "none") parts.push("Not on a wishlist");
+  else if (f.wishlist !== "any") parts.push(`On the ${WISHLIST_CAMPAIGNS[f.wishlist]?.label ?? f.wishlist} wishlist`);
   if (f.q) parts.push(`“${f.q}”`);
   return parts.length ? parts.join(" · ") : "Everyone";
 }

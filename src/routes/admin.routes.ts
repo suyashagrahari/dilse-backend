@@ -73,6 +73,7 @@ import {
   resumeBroadcast,
   setOptOut,
 } from "../controllers/adminOutreach.controller";
+import { getWishlistJoins } from "../controllers/adminWishlist.controller";
 
 const router = Router();
 
@@ -209,6 +210,7 @@ router.post("/threads/:id/reply", requireSuperAdmin, replyToThread);
 // calls the model and cannot mail; `send` mails and cannot call the model; and
 // `send` refuses unless the count the super admin confirmed still matches. See
 // adminOutreach.controller.ts.
+router.get("/wishlist", requireSuperAdmin, getWishlistJoins);
 router.get("/outreach/audience", requireSuperAdmin, getAudience);
 router.post("/outreach/recipients", requireSuperAdmin, getRecipients);
 router.post("/outreach/draft", requireSuperAdmin, draftOutreachEmail);
