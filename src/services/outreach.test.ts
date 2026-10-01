@@ -27,6 +27,7 @@ const row = (over: Partial<AudienceRow>): AudienceRow => ({
   commentCount: 0,
   paidOrders: 0,
   lastEmailedAt: null,
+  wishlists: [],
   ...over,
 });
 
@@ -58,7 +59,7 @@ describe("applyFilters", () => {
     row({ userId: "a", ratings: [1], feedbackCount: 1, avgRating: 1, pages: 1, published: 1, lastPageAt: ago(2) }),
     row({ userId: "b", ratings: [3, 5], feedbackCount: 2, avgRating: 4, pages: 6, published: 0, lastPageAt: ago(40), commentCount: 1 }),
     row({ userId: "c", pages: 0, verified: false }),
-    row({ userId: "d", pages: 2, published: 2, paidOrders: 1, lastEmailedAt: ago(3), provider: "google", joinedAt: ago(3) }),
+    row({ userId: "d", wishlists: ["valentine-2027"], pages: 2, published: 2, paidOrders: 1, lastEmailedAt: ago(3), provider: "google", joinedAt: ago(3) }),
     row({ userId: "e", optedOut: true, ratings: [1], feedbackCount: 1 }),
   ];
   const ids = (f: Record<string, unknown>) => applyFilters(rows, parseFilters(f)).map((r) => r.userId).sort();
@@ -82,6 +83,12 @@ describe("applyFilters", () => {
     assert.deepEqual(ids({ active: "idle30" }), ["b"]);
     assert.deepEqual(ids({ joined: "7" }), ["d"]);
     assert.deepEqual(ids({ emailed: "not14" }), ["a", "b"]);
+  });
+  it("filters by wishlist", () => {
+    assert.deepEqual(ids({ wishlist: "valentine-2027" }), ["d"]);
+    assert.deepEqual(ids({ wishlist: "none" }), ["a", "b"]);
+    assert.deepEqual(ids({ wishlist: "bad key!" }), ["a", "b", "d"]);
+    assert.equal(describeFilters(parseFilters({ wishlist: "valentine-2027" })), "On the Valentine's week 2027 wishlist");
   });
   it("lists only opted-out people when asked", () => assert.deepEqual(ids({ optout: "only" }), ["e"]));
   it("describes a filter in words", () => {
