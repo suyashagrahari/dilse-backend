@@ -4,6 +4,12 @@ import mongoose, { Schema, Document } from "mongoose";
 // future collection launches — the Valentine's week templates first. The offer
 // they were promised is stored on the row, so changing the headline discount
 // later never changes what an earlier joiner was told.
+// Campaigns a user can join. Unknown keys are refused so the collection can't
+// fill up with arbitrary strings from the client.
+export const WISHLIST_CAMPAIGNS: Record<string, { label: string; discountPercent: number }> = {
+  "valentine-2027": { label: "Valentine's week 2027", discountPercent: 30 },
+};
+
 export interface IWishlist extends Document {
   userId: string;
   email?: string;
