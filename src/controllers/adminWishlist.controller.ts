@@ -44,6 +44,8 @@ export const getWishlistJoins = async (req: Request, res: Response): Promise<voi
         position: i + 1,
         joinedAt: j.createdAt,
         source: j.source || null,
+        phone: j.phone || null,
+        phoneCountry: j.phoneCountry || null,
         discountPercent: j.discountPercent,
         name: u?.name || a?.name || "",
         email: u?.email || j.email || "",
@@ -68,6 +70,7 @@ export const getWishlistJoins = async (req: Request, res: Response): Promise<voi
       last7: all.filter((r) => now - new Date(r.joinedAt).getTime() < 7 * DAY).length,
       google: all.filter((r) => r.provider === "google").length,
       verified: all.filter((r) => r.verified).length,
+      withPhone: all.filter((r) => r.phone).length,
       creators: all.filter((r) => r.pages > 0).length,
       paid: all.filter((r) => r.paidOrders > 0).length,
       // Signed up within a day before joining — the wishlist brought them in.
@@ -77,7 +80,7 @@ export const getWishlistJoins = async (req: Request, res: Response): Promise<voi
     };
 
     let rows = all.slice().reverse();
-    if (q) rows = rows.filter((r) => r.email.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+    if (q) rows = rows.filter((r) => r.email.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) || (r.phone || "").includes(q.replace(/\s/g, "")));
     if (provider !== "any") rows = rows.filter((r) => r.provider === provider);
     if (kind === "creators") rows = rows.filter((r) => r.pages > 0);
     if (kind === "paid") rows = rows.filter((r) => r.paidOrders > 0);

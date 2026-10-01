@@ -16,6 +16,10 @@ export interface IWishlist extends Document {
   campaign: string;
   discountPercent: number;
   source?: string;
+  /** E.164, e.g. "+919876543210". Asked for in the join modal. */
+  phone?: string;
+  /** ISO country the number was entered for, e.g. "IN". */
+  phoneCountry?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +31,8 @@ const wishlistSchema = new Schema<IWishlist>(
     campaign: { type: String, required: true, index: true },
     discountPercent: { type: Number, required: true },
     source: { type: String, maxlength: 40 },
+    phone: { type: String, maxlength: 20 },
+    phoneCountry: { type: String, maxlength: 2 },
   },
   { timestamps: true }
 );
