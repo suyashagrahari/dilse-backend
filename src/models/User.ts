@@ -41,6 +41,8 @@ export interface IUser extends Document {
    */
   tokenVersion: number;
   subdomain?: string;
+  /** Names this user gave up by renaming; their old share links still resolve. */
+  previousSubdomains?: string[];
   refreshToken?: string;
   points: number;
   totalPointsEarned: number;
@@ -122,6 +124,11 @@ const userSchema = new Schema<IUser>(
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
+    },
+    previousSubdomains: {
+      type: [String],
+      default: undefined,
       index: true,
     },
     refreshToken: {

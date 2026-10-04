@@ -545,14 +545,21 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
   try {
     const username = req.params.username as string;
     const shareId = req.params.shareId as string;
-    const user = await User.findOne({ subdomain: username.toLowerCase() });
-    if (!user) {
-      res.status(404).json({ success: false, error: "User not found" });
+    // The subdomain is part of the link, so it is checked: a misspelt name, or
+    // somebody else's name in front of this page id, is a 404 rather than the
+    // page. Current owner first, then anyone who used to own the name — a
+    // rename keeps the old links working (User.previousSubdomains).
+    const name = username.toLowerCase();
+    const owners = await User.find({ $or: [{ subdomain: name }, { previousSubdomains: name }] })
+      .select("_id subdomain")
+      .lean();
+    if (!owners.length) {
+      res.status(404).json({ success: false, code: "SUBDOMAIN_NOT_FOUND", error: "No link with this name" });
       return;
     }
     for (const { model, templateType, editorRoute, projectShared } of TEMPLATE_LOOKUPS) {
       const page = await model.findOneAndUpdate(
-        { shareId, isPublished: true, userId: user._id },
+        { shareId, isPublished: true, userId: { $in: owners.map((o) => o._id) } },
         { $inc: { viewCount: 1 } },
         { new: true }
       );
@@ -579,13 +586,13 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
           installCount: (pageObj.installCount as number) || 0,
           viewCount: (pageObj.viewCount as number) || 0,
           senderUserId: String(pageObj.userId),
-          ownerSubdomain: user.subdomain,
+          ownerSubdomain: owners.find((o) => String(o._id) === String(pageObj.userId))?.subdomain,
           data: safeData,
         });
         return;
       }
     }
-    res.status(404).json({ success: false, error: "Page not found" });
+    res.status(404).json({ success: false, code: "PAGE_NOT_ON_SUBDOMAIN", error: "Page not found" });
   } catch (error) {
     console.error("Get shared page by username error:", error);
     res.status(500).json({ success: false, error: "Failed to fetch page" });
