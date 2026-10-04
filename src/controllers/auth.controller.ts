@@ -1143,12 +1143,6 @@ export const setSubdomain = async (
       res.status(409).json({ success: false, error: "This subdomain is already taken", alternative });
       return;
     }
-    // A rename must not break links already sent: the old name is kept as an
-    // alias that share lookups by subdomain still accept.
-    if (user.subdomain && user.subdomain !== rawName) {
-      user.previousSubdomains = [...new Set([...(user.previousSubdomains || []), user.subdomain])]
-        .filter((n) => n !== rawName);
-    }
     user.subdomain = rawName;
     try {
       await user.save();
