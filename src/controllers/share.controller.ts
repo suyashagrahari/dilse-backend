@@ -47,6 +47,7 @@ import GaneshChaturthiPage from "../models/GaneshChaturthiPage";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
+import { isApexDeployment } from "../config/env";
 import mongoose from "mongoose";
 import { projectSharedCapsuleData } from "./capsulePage.controller";
 import { projectSharedStreakData } from "./streakPage.controller";
@@ -189,6 +190,12 @@ export const getSharedPage = async (req: Request, res: Response): Promise<void> 
           viewCount: (pageObj.viewCount as number) || 0,
           senderUserId: String(pageObj.userId),
           templateVariant: (pageObj.templateVariant as string) || undefined,
+          // Where subdomains are served, a creator who has one shares ONLY
+          // `{subdomain}.{ROOT_DOMAIN}/{id}`: the bare-domain route reads this
+          // and refuses the page. Staging serves path links, so it never gets it.
+          ownerSubdomain: isApexDeployment()
+            ? (await User.findById(pageObj.userId).select("subdomain").lean())?.subdomain || undefined
+            : undefined,
           data: safeData,
         });
         return;
@@ -545,14 +552,11 @@ export const getSharedPageByUsername = async (req: Request, res: Response): Prom
   try {
     const username = req.params.username as string;
     const shareId = req.params.shareId as string;
-    // The subdomain is part of the link, so it is checked: a misspelt name, or
-    // somebody else's name in front of this page id, is a 404 rather than the
-    // page. Current owner first, then anyone who used to own the name — a
-    // rename keeps the old links working (User.previousSubdomains).
+    // The subdomain is part of the link, so it is checked against the owner's
+    // CURRENT name: a misspelt name, somebody else's name, or a name the owner
+    // has since changed away from is a 404 rather than the page.
     const name = username.toLowerCase();
-    const owners = await User.find({ $or: [{ subdomain: name }, { previousSubdomains: name }] })
-      .select("_id subdomain")
-      .lean();
+    const owners = await User.find({ subdomain: name }).select("_id subdomain").lean();
     if (!owners.length) {
       res.status(404).json({ success: false, code: "SUBDOMAIN_NOT_FOUND", error: "No link with this name" });
       return;
