@@ -32,31 +32,91 @@ import { Reader, open, type CountryResponse } from "maxmind";
 import { normalizeCountry } from "../config/currency";
 
 const DB_PATH = process.env.GEOIP_DB_PATH || path.join(process.cwd(), "geo", "country.mmdb");
+/** Set GEOIP_AUTO_DOWNLOAD=false to manage the file yourself (e.g. MaxMind). */
+const AUTO_DOWNLOAD = process.env.GEOIP_AUTO_DOWNLOAD !== "false";
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const RECHECK_MS = 24 * 60 * 60 * 1000;
 
 let reader: Reader<CountryResponse> | null = null;
 let loadedMtimeMs = 0;
 let loading: Promise<void> | null = null;
 let lastCheck = 0;
-const RECHECK_MS = 60 * 60 * 1000;
+let warned = false;
+
+function monthsToTry(now = new Date()): string[] {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth(); // 0-based
+  const cur = `${y}-${String(m + 1).padStart(2, "0")}`;
+  const prevDate = new Date(Date.UTC(y, m - 1, 1));
+  const prev = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  return [cur, prev];
+}
+
+/**
+ * Fetch DB-IP "Country Lite" (this month's, else last month's), gunzip, and
+ * replace the file atomically (write to .tmp, rename). Done by the server at
+ * runtime rather than in the Docker build: a build step is cached by Docker
+ * and would never refresh, or would cache an empty result forever.
+ */
+async function download(): Promise<boolean> {
+  const zlib = await import("zlib");
+  await fs.promises.mkdir(path.dirname(DB_PATH), { recursive: true });
+  for (const month of monthsToTry()) {
+    const url = `https://download.db-ip.com/free/dbip-country-lite-${month}.mmdb.gz`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+      if (!res.ok) continue;
+      const gz = Buffer.from(await res.arrayBuffer());
+      const db = zlib.gunzipSync(gz);
+      if (db.length < 1_000_000) continue; // not a real database
+      const tmp = `${DB_PATH}.tmp`;
+      await fs.promises.writeFile(tmp, db);
+      await fs.promises.rename(tmp, DB_PATH);
+      console.log(`[geo] downloaded dbip-country-lite-${month} (${(db.length / 1e6).toFixed(1)} MB)`);
+      return true;
+    } catch (err) {
+      console.warn(`[geo] download ${month} failed: ${(err as Error).message}`);
+    }
+  }
+  return false;
+}
 
 async function load(): Promise<void> {
+  let stat: fs.Stats | null = await fs.promises.stat(DB_PATH).catch(() => null);
+  if (AUTO_DOWNLOAD && (!stat || Date.now() - stat.mtimeMs > MAX_AGE_MS)) {
+    if (await download()) stat = await fs.promises.stat(DB_PATH).catch(() => null);
+  }
+  if (!stat) {
+    if (!warned) {
+      console.warn(`[geo] no country database at ${DB_PATH} — every request resolves to "unknown" (INR).`);
+      warned = true;
+    }
+    return;
+  }
+  if (reader && stat.mtimeMs === loadedMtimeMs) return;
   try {
-    const stat = await fs.promises.stat(DB_PATH);
-    if (reader && stat.mtimeMs === loadedMtimeMs) return;
     reader = await open<CountryResponse>(DB_PATH);
     loadedMtimeMs = stat.mtimeMs;
+    warned = false;
     console.log(`[geo] country database loaded: ${DB_PATH}`);
   } catch (err) {
-    if (!reader) {
-      console.warn(`[geo] no country database at ${DB_PATH} — every request resolves to "unknown" (INR). ${(err as Error).message}`);
-    }
+    console.error(`[geo] could not open ${DB_PATH}: ${(err as Error).message}`);
   }
 }
 
-/** Load at boot, and pick up a refreshed file at most once an hour. */
+/**
+ * Load at boot, and re-check (and refresh if older than 30 days) at most once
+ * a day — whether or not a database is loaded, so a missing file costs one
+ * check a day, not one per request.
+ */
 export async function ensureGeoLoaded(): Promise<void> {
   const now = Date.now();
-  if (reader && now - lastCheck < RECHECK_MS) return;
+  // Daily once loaded; hourly while there is still no database (a failed
+  // download at boot should not leave a whole day of INR-only quotes).
+  if (now - lastCheck < (reader ? RECHECK_MS : 60 * 60 * 1000)) {
+    if (loading) await loading;
+    return;
+  }
   lastCheck = now;
   if (!loading) loading = load().finally(() => { loading = null; });
   await loading;
@@ -103,7 +163,9 @@ export interface GeoResult {
 export async function resolveCountry(req: Request): Promise<GeoResult> {
   const fromCdn = trustedHeaderCountry(req);
   if (fromCdn) return { country: fromCdn, source: "cdn", ip: req.ip };
-  await ensureGeoLoaded();
+  // Never make a buyer wait on a download: kick the (throttled) refresh off in
+  // the background and answer from whatever database is loaded right now.
+  void ensureGeoLoaded();
   const country = countryForIp(req.ip);
   return { country, source: country ? "ip" : "unknown", ip: req.ip };
 }

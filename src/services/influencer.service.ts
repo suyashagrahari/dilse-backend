@@ -268,7 +268,7 @@ export async function buildInfluencerDashboard(
       : Promise.resolve([]),
     ids.length
       ? PaymentOrder.find({ userId: { $in: ids }, status: { $in: ["paid", "points_used"] } })
-          .select("userId pageId status amount")
+          .select("userId pageId status amount currency amountInrPaise")
           .lean()
       : Promise.resolve([]),
     InfluencerEarning.find({ influencerId: infObjectId }).sort({ createdAt: -1 }).lean(),
@@ -281,7 +281,7 @@ export async function buildInfluencerDashboard(
   for (const o of orders) {
     const key = String(o.pageId);
     // A paid order outranks a points one for the same page.
-    if (!orderByPage.has(key) || o.status === "paid") orderByPage.set(key, { status: o.status, amount: o.amount });
+    if (!orderByPage.has(key) || o.status === "paid") orderByPage.set(key, { status: o.status, amount: orderInrPaise(o) });
   }
   const earningByPage = new Map<string, number>();
   for (const e of earnings) earningByPage.set(String(e.pageId), (earningByPage.get(String(e.pageId)) || 0) + e.commissionPaise);

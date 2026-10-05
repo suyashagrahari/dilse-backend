@@ -107,7 +107,7 @@ app.use(
     // the parsed JSON would change them. Keep the raw buffer for that one path
     // only, so 40 MB page saves are not held in memory twice.
     verify: (req, _res, buf) => {
-      if ((req as { url?: string }).url?.startsWith("/api/webhooks/razorpay")) {
+      if ((req as { url?: string }).url?.toLowerCase().startsWith("/api/webhooks/razorpay")) {
         (req as unknown as { rawBody?: Buffer }).rawBody = Buffer.from(buf);
       }
     },

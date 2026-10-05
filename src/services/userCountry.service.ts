@@ -21,7 +21,12 @@ export async function stampUserCountry(
   try {
     if (!signup && lastSeenAt && Date.now() - new Date(lastSeenAt).getTime() < DAY_MS) return;
     const { country } = await resolveCountry(req);
-    if (!country) return;
+    if (!country) {
+      // Still stamp the time, so an unresolvable visitor costs one lookup a
+      // day rather than one per /auth/me.
+      if (!signup) await User.updateOne({ _id: userId }, { $set: { lastSeenCountryAt: new Date() } });
+      return;
+    }
     const set: Record<string, unknown> = { lastSeenCountry: country, lastSeenCountryAt: new Date() };
     if (signup) {
       await User.updateOne({ _id: userId, signupCountry: { $in: [null, undefined] } }, { $set: { ...set, signupCountry: country } });

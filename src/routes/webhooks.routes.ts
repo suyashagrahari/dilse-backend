@@ -17,6 +17,7 @@
 
 import { Router } from "express";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { sesInboundWebhook } from "../controllers/sesInbound.controller";
 import { razorpayWebhook } from "../controllers/razorpayWebhook.controller";
 
@@ -33,6 +34,12 @@ router.post(
 // Razorpay payment events. The body arrives already parsed by the global
 // express.json, which also kept the raw bytes for this path (see app.ts) —
 // the signature is checked against those, not the parsed object.
-router.post("/razorpay", razorpayWebhook);
+router.post(
+  "/razorpay",
+  // Razorpay sends a handful of events per payment; 120/min per source IP is
+  // far above that and stops anyone using the HMAC check as a CPU sink.
+  rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false }),
+  razorpayWebhook
+);
 
 export default router;

@@ -279,6 +279,22 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       ? localizePricing(quote.base, "INR", quote.inrPerUsd)
       : quote.pricing;
 
+    // The legacy (INR-only) contract is honoured ONLY when this buyer would be
+    // charged INR anyway. Otherwise leaving out `expectedCurrency` would be a
+    // way for anyone abroad to opt out of the USD price. They get a 409 with
+    // the real quote instead — which a current client renders and an old one
+    // reports as "price changed", prompting a reload into the new client.
+    if (legacy && quote.currency !== "INR") {
+      res.status(409).json({
+        success: false,
+        error: `This checkout is in ${quote.currency} for your location. Please review the price and try again.`,
+        code: "PRICE_CHANGED",
+        pricing: quote.base,
+        quote: { pricing: quote.pricing, currency: quote.currency, country: quote.country },
+      });
+      return;
+    }
+
     if (legacy) {
       if (Number.isInteger(body.expectedFinalPricePaise) && body.expectedFinalPricePaise !== quote.base.finalPricePaise) {
         res.status(409).json({
@@ -412,8 +428,9 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     });
 
     if (!isValid) {
-      paymentOrder.status = "failed";
-      await paymentOrder.save();
+      // Conditional: if the webhook has already marked this order paid, a bad
+      // signature arriving afterwards must not overwrite that with "failed".
+      await PaymentOrder.updateOne({ _id: paymentOrder._id, status: "created" }, { $set: { status: "failed" } });
       res.status(400).json({ success: false, error: "Payment verification failed: invalid signature" });
       return;
     }
