@@ -29,13 +29,14 @@ test("country codes are normalised and placeholders rejected", () => {
   }
 });
 
-test("derived USD rounds UP to the next .99 and never below $0.99", () => {
+test("derived USD rounds UP to the next .99 and never below $1.99", () => {
   assert.equal(deriveUsdCents(14900, 88), 199); // ₹149 → $1.69 → $1.99
   assert.equal(deriveUsdCents(9900, 88), 199); // ₹99 → $1.13 → $1.99
   assert.equal(deriveUsdCents(17512, 88), 199); // exactly $1.99 stays $1.99
   assert.equal(deriveUsdCents(17600, 88), 299); // exactly $2.00 → next .99 at or above
   assert.equal(deriveUsdCents(17700, 88), 299); // $2.01 → $2.99
-  assert.equal(deriveUsdCents(100, 88), 99); // floor
+  assert.equal(deriveUsdCents(100, 88), 199); // floor: Razorpay min $1, PayPal fees
+  assert.equal(deriveUsdCents(0, 88), 199);
   assert.equal(deriveUsdCents(14900, NaN), deriveUsdCents(14900, 88), "bad rate falls back to default");
 });
 

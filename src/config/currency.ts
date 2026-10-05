@@ -58,13 +58,15 @@ export function currencyForCountry(country: string | null, intlPricingEnabled: b
 export const MIN_INR_PER_USD = 50;
 export const MAX_INR_PER_USD = 200;
 export const DEFAULT_INR_PER_USD = 88;
+export const MIN_DERIVED_USD_CENTS = 199;
 
 /**
  * The USD price for a template that has no USD price of its own.
  *
  * Converted at the admin's rate and rounded UP to the next ".99" — ₹149 at 88
  * is $1.69, which reads as an accident; $1.99 reads as a price. Never below
- * $0.99. Rounding up rather than to nearest keeps the international price at or
+ * $1.99: Razorpay's floor is $1.00, and PayPal keeps ~$0.30 + 4.4% of every
+ * international sale, so a cheaper derived price would mostly pay fees. Rounding up rather than to nearest keeps the international price at or
  * above the Indian one after PayPal's fees, which is the direction that does
  * not lose money.
  */
@@ -72,7 +74,7 @@ export function deriveUsdCents(inrPaise: number, inrPerUsd: number): number {
   const rate = Number.isFinite(inrPerUsd) && inrPerUsd > 0 ? inrPerUsd : DEFAULT_INR_PER_USD;
   const cents = Math.ceil(Math.max(0, inrPaise) / rate - 1e-9);
   // The smallest X.99 that is >= the converted amount: 169¢ → 199¢, 199¢ → 199¢, 200¢ → 299¢.
-  return Math.max(99, Math.ceil((cents + 1) / 100) * 100 - 1);
+  return Math.max(MIN_DERIVED_USD_CENTS, Math.ceil((cents + 1) / 100) * 100 - 1);
 }
 
 /** What the paywall shows and what the order charges, in one currency. */
