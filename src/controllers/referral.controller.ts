@@ -35,14 +35,16 @@ export const getReferrerByCode = async (req: Request, res: Response): Promise<vo
       res.status(400).json({ success: false, error: "Code required" });
       return;
     }
-    const user = await User.findOne({ referralCode: code.toUpperCase().trim() }).select("name avatar");
+    const user = await User.findOne({ referralCode: code.toUpperCase().trim() }).select("name avatar influencer");
     if (!user) {
       res.status(404).json({ success: false, error: "Invalid referral code" });
       return;
     }
     res.json({
       success: true,
-      data: { name: user.name, avatar: user.avatar ?? null },
+      // Influencer codes pay commission, not points — the client must not
+      // show its "you both get 100 points" welcome for them.
+      data: { name: user.name, avatar: user.avatar ?? null, isInfluencer: user.influencer?.status === "active" },
     });
   } catch (error) {
     console.error("getReferrerByCode error:", error);

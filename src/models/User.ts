@@ -16,6 +16,15 @@ export type { UserRole };
  * user's published pages reachable — recipients hold those links and did
  * nothing wrong. `banned` also hides the pages. See `accountStatus.ts`.
  */
+export interface IInfluencerProfile {
+  status: "active" | "suspended";
+  instagram?: string;
+  upiId?: string;
+  /** Overrides the global default when set. Null/undefined = use default. */
+  commissionPercent?: number | null;
+  joinedAt: Date;
+}
+
 export type AccountStatus = "active" | "suspended" | "banned";
 
 export interface IUser extends Document {
@@ -56,6 +65,18 @@ export interface IUser extends Document {
   otp?: string;
   otpExpiry?: Date;
   pendingReferralCode?: string;
+  /**
+   * Present once the user has registered as an influencer. Influencer is NOT a
+   * role: it is orthogonal to admin/member, so staff can be influencers too
+   * and switching it on never widens what an account may do in /admin.
+   */
+  influencer?: IInfluencerProfile;
+  /**
+   * The influencer whose link this user signed up through. Set once, at
+   * signup, and never changed — attribution is "new signups, forever".
+   * Distinct from `referredBy`, which is the points-based Refer & Earn.
+   */
+  referredByInfluencer?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -164,6 +185,26 @@ const userSchema = new Schema<IUser>(
       type: String,
       select: false,
     },
+    influencer: {
+      type: new Schema<IInfluencerProfile>(
+        {
+          status: { type: String, enum: ["active", "suspended"], default: "active" },
+          instagram: { type: String, trim: true, maxlength: 60 },
+          upiId: { type: String, trim: true, maxlength: 80 },
+          commissionPercent: { type: Number, min: 0, max: 100, default: null },
+          joinedAt: { type: Date, default: Date.now },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+    referredByInfluencer: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: undefined,
+      index: true,
+      sparse: true,
+    },
   },
   {
     timestamps: true,
@@ -207,5 +248,7 @@ userSchema.methods.comparePassword = async function (
   if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+userSchema.index({ "influencer.status": 1 }, { sparse: true });
 
 export default mongoose.model<IUser>("User", userSchema);

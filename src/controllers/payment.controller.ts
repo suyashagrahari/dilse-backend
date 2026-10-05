@@ -9,6 +9,7 @@ import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
+import { recordEarningForOrder } from "../services/influencer.service";
 
 // ── Page ownership ──────────────────────────────────────────────────────────
 //
@@ -352,6 +353,10 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     paymentOrder.razorpayPaymentId = razorpayPaymentId;
     paymentOrder.razorpaySignature = razorpaySignature;
     await paymentOrder.save();
+
+    // Commission for the influencer who referred this user, if any. Never
+    // throws: bookkeeping must not fail the customer's verification.
+    await recordEarningForOrder(paymentOrder);
 
     res.json({ success: true, message: "Payment verified successfully" });
   } catch (error) {
