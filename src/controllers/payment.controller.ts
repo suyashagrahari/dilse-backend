@@ -10,6 +10,8 @@ import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 import { recordEarningForOrder } from "../services/influencer.service";
+import { quoteFor } from "../services/pricingQuote.service";
+import { localizePricing, toInrPaise } from "../config/currency";
 
 // ── Page ownership ──────────────────────────────────────────────────────────
 //
@@ -162,6 +164,42 @@ export const getPublishAccess = async (req: Request, res: Response): Promise<voi
 };
 
 /**
+ * GET /payment/quote?templateType=  — PROTECTED
+ *
+ * The price THIS buyer will be charged, in their currency. The paywall shows
+ * this, and sends back `currency` + `finalAmount` to create-order, which
+ * re-derives both and refuses (409) if they no longer match.
+ *
+ * Private and never cached: two visitors in two countries must never be handed
+ * each other's quote by a browser cache or a proxy.
+ */
+export const getQuote = async (req: Request, res: Response): Promise<void> => {
+  res.set("Cache-Control", "private, no-store");
+  res.set("Vary", "Authorization");
+  try {
+    const templateType = String(req.query.templateType || "").trim();
+    if (!templateType || templateType.length > 80) {
+      res.status(400).json({ success: false, error: "templateType is required" });
+      return;
+    }
+    const quote = await quoteFor(req, templateType);
+    res.json({
+      success: true,
+      data: {
+        pricing: quote.pricing,
+        currency: quote.currency,
+        country: quote.country,
+        // Lets the paywall say "International checkout via PayPal" for USD.
+        international: quote.currency !== "INR",
+      },
+    });
+  } catch (error) {
+    console.error("Quote error:", error);
+    res.status(500).json({ success: false, error: "Could not load the price" });
+  }
+};
+
+/**
  * POST /payment/create-order  — PROTECTED
  * Creates a Razorpay order for a given template page.
  * Returns the orderId and public key so the client can open the Razorpay checkout.
@@ -180,10 +218,11 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Read uncached: this decides what comes off a card. See `getPricingFresh`.
-    const pricing = await getPricingFresh(templateType);
+    // Read uncached: this decides what comes off a card. The country is
+    // re-resolved here, never taken from the client — see pricingQuote.service.
+    const quote = await quoteFor(req, templateType, { fresh: true });
 
-    if (pricing.isFree) {
+    if (quote.base.isFree) {
       res.status(400).json({ success: false, error: "This template is free — no payment required" });
       return;
     }
@@ -222,47 +261,94 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // ── Never charge an amount the user was not shown ────────────────────────
+    // ── Never charge an amount, or a currency, the user was not shown ────────
     //
-    // The client may send the price it displayed. If the super admin has changed
-    // it since — the public pricing endpoint is cached for 60s at the edge, so
-    // that window is real — refuse and hand back the current price so the paywall
-    // can re-render. The user then agrees to the new number before paying it.
+    // A current client sends the quote it displayed: `expectedCurrency` and
+    // `expectedAmount`. If either differs from what the server resolves NOW —
+    // the price changed, or the buyer's network moved them across a border (VPN
+    // toggled between seeing the price and pressing Pay) — refuse with 409 and
+    // the fresh quote, so they agree to the new number before paying it.
     //
-    // Optional on purpose: an older client that sends nothing still works, and
-    // gets the current price. Sending it is what buys the protection.
-    const { expectedFinalPricePaise } = req.body as { expectedFinalPricePaise?: unknown };
-    if (
-      Number.isInteger(expectedFinalPricePaise) &&
-      expectedFinalPricePaise !== pricing.finalPricePaise
-    ) {
+    // An OLDER client (cached JS from before multi-currency) sends only
+    // `expectedFinalPricePaise` and renders ₹. It is always charged INR, so it is
+    // never surprised by a dollar amount it cannot display. Those buyers can
+    // only complete an INR checkout with an Indian instrument anyway.
+    const body = req.body as { expectedFinalPricePaise?: unknown; expectedCurrency?: unknown; expectedAmount?: unknown };
+    const legacy = body.expectedCurrency === undefined;
+    const charge = legacy
+      ? localizePricing(quote.base, "INR", quote.inrPerUsd)
+      : quote.pricing;
+
+    // The legacy (INR-only) contract is honoured ONLY when this buyer would be
+    // charged INR anyway. Otherwise leaving out `expectedCurrency` would be a
+    // way for anyone abroad to opt out of the USD price. They get a 409 with
+    // the real quote instead — which a current client renders and an old one
+    // reports as "price changed", prompting a reload into the new client.
+    if (legacy && quote.currency !== "INR") {
       res.status(409).json({
         success: false,
-        error: "The price of this template changed. Please review it and try again.",
+        error: `This checkout is in ${quote.currency} for your location. Please review the price and try again.`,
         code: "PRICE_CHANGED",
-        pricing,
+        pricing: quote.base,
+        quote: { pricing: quote.pricing, currency: quote.currency, country: quote.country },
+      });
+      return;
+    }
+
+    if (legacy) {
+      if (Number.isInteger(body.expectedFinalPricePaise) && body.expectedFinalPricePaise !== quote.base.finalPricePaise) {
+        res.status(409).json({
+          success: false,
+          error: "The price of this template changed. Please review it and try again.",
+          code: "PRICE_CHANGED",
+          pricing: quote.base,
+        });
+        return;
+      }
+    } else if (body.expectedCurrency !== charge.currency || body.expectedAmount !== charge.finalAmount) {
+      res.status(409).json({
+        success: false,
+        error:
+          body.expectedCurrency !== charge.currency
+            ? `Your location changed, so this checkout is now in ${charge.currency}. Please review the price and try again.`
+            : "The price of this template changed. Please review it and try again.",
+        code: "PRICE_CHANGED",
+        pricing: quote.base,
+        quote: { pricing: charge, currency: charge.currency, country: quote.country },
       });
       return;
     }
 
     const label = templateLabel(templateType);
+    const fxRateToINR = charge.currency === "INR" ? 1 : quote.inrPerUsd;
 
     // Razorpay receipt: max 40 chars, must be unique
     const receipt = `pay_${pageId}_${Date.now()}`.slice(0, 40);
 
     const razorpayOrder = await createRazorpayOrder({
-      amount: pricing.finalPricePaise,
-      currency: "INR",
+      amount: charge.finalAmount,
+      currency: charge.currency,
       receipt,
+      notes: {
+        templateType: String(templateType).slice(0, 60),
+        pageId: String(pageId),
+        userId: String(req.userId),
+        country: quote.country || "unknown",
+      },
     });
 
-    // Persist the order so we can verify it later
+    // Persist the order so we can verify it later. The exchange rate is frozen
+    // here: revenue and influencer commission are computed from it, never from
+    // whatever the rate is on the day somebody reads a report.
     const paymentOrder = await PaymentOrder.create({
       userId:          req.userId,
       templateType,
       pageId:          new mongoose.Types.ObjectId(pageId),
-      amount:          pricing.finalPricePaise,
-      currency:        "INR",
+      amount:          charge.finalAmount,
+      currency:        charge.currency,
+      country:         quote.country,
+      fxRateToINR,
+      amountInrPaise:  toInrPaise(charge.finalAmount, charge.currency, fxRateToINR),
       status:          "created",
       razorpayOrderId: razorpayOrder.id,
     });
@@ -272,16 +358,16 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       data: {
         orderId:        razorpayOrder.id,
         paymentOrderId: String(paymentOrder._id),
-        amount:         pricing.finalPricePaise,
-        currency:       "INR",
+        amount:         charge.finalAmount,
+        currency:       charge.currency,
         keyId:          env.RAZORPAY_KEY_ID,
         name:           label,
         // `ResolvedPricing` carries no name — pricing rows store a price, not
         // copy. The human label comes from the catalogue, which is where every
         // other surface already gets it.
         description:
-          pricing.discountPercent > 0
-            ? `Unlock ${label} — ${pricing.discountPercent}% off`
+          charge.discountPercent > 0
+            ? `Unlock ${label} — ${charge.discountPercent}% off`
             : `Unlock ${label}`,
       },
     });
@@ -342,21 +428,27 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     });
 
     if (!isValid) {
-      paymentOrder.status = "failed";
-      await paymentOrder.save();
+      // Conditional: if the webhook has already marked this order paid, a bad
+      // signature arriving afterwards must not overwrite that with "failed".
+      await PaymentOrder.updateOne({ _id: paymentOrder._id, status: "created" }, { $set: { status: "failed" } });
       res.status(400).json({ success: false, error: "Payment verification failed: invalid signature" });
       return;
     }
 
-    // Mark as paid
-    paymentOrder.status            = "paid";
-    paymentOrder.razorpayPaymentId = razorpayPaymentId;
-    paymentOrder.razorpaySignature = razorpaySignature;
-    await paymentOrder.save();
-
-    // Commission for the influencer who referred this user, if any. Never
-    // throws: bookkeeping must not fail the customer's verification.
-    await recordEarningForOrder(paymentOrder);
+    // Mark as paid — atomically, conditioned on still being "created". The
+    // Razorpay webhook may confirm the same payment at the same moment; whichever
+    // write lands first wins and the other becomes a no-op, so the order is
+    // marked once and commission is recorded once.
+    const updated = await PaymentOrder.findOneAndUpdate(
+      { _id: paymentOrder._id, status: "created" },
+      { $set: { status: "paid", razorpayPaymentId, razorpaySignature } },
+      { new: true }
+    );
+    if (updated) {
+      // Commission for the influencer who referred this user, if any. Never
+      // throws: bookkeeping must not fail the customer's verification.
+      await recordEarningForOrder(updated);
+    }
 
     res.json({ success: true, message: "Payment verified successfully" });
   } catch (error) {

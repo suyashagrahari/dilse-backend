@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { orderInrPaise } from "../config/currency";
 import mongoose from "mongoose";
 import User from "../models/User";
 import PointTransaction from "../models/PointTransaction";
@@ -153,9 +154,10 @@ export const getFullUserProfile = async (req: Request, res: Response): Promise<v
           passwordProtectedPages: pages.filter((p) => p.hasPassword).length,
           totalViews: viewAgg[0]?.total || 0,
           totalContributions: contributions.length,
+          // INR paise across currencies, at each order's frozen rate.
           totalSpent: payments
             .filter((p) => (p as { status?: string }).status === "paid")
-            .reduce((s, p) => s + ((p as { amount?: number }).amount || 0), 0),
+            .reduce((s, p) => s + orderInrPaise(p as { amount?: number; currency?: string; amountInrPaise?: number }), 0),
         },
       },
     });

@@ -20,6 +20,11 @@ import {
   adminRecordPayout,
   adminDeletePayout,
 } from "../controllers/influencer.controller";
+import {
+  adminGetPaymentSettings,
+  adminUpdatePaymentSettings,
+  adminGeoCheck,
+} from "../controllers/paymentSettings.controller";
 
 /**
  * Mounted at /api/admin/super behind `protect` + `requireSuperAdmin`.
@@ -36,6 +41,11 @@ router.get("/users/:userId/profile", getFullUserProfile);
 router.get("/pages/:templateType/:pageId/content", getPageContent);
 router.get("/pages/:templateType/:pageId/password", revealPagePassword);
 router.get("/audit", getAuditLog);
+
+// International pricing (currency by country)
+router.get("/payment-settings", adminGetPaymentSettings);
+router.put("/payment-settings", adminUpdatePaymentSettings);
+router.get("/geo-check", adminGeoCheck);
 
 // Influencer programme
 router.get("/influencers", adminListInfluencers);

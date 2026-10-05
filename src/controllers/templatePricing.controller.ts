@@ -27,6 +27,7 @@ interface StoredRow {
   finalPricePaise: unknown;
   discountPercent: unknown;
   pointsCost: unknown;
+  usdPriceCents?: unknown;
   updatedByEmail?: unknown;
   updatedAt?: unknown;
 }
@@ -40,7 +41,7 @@ interface StoredRow {
 export const getAdminTemplatePricing = async (_req: Request, res: Response): Promise<void> => {
   try {
     const docs = await TemplatePricing.find({})
-      .select("slug isFree finalPricePaise discountPercent pointsCost updatedByEmail updatedAt")
+      .select("slug isFree finalPricePaise discountPercent pointsCost usdPriceCents updatedByEmail updatedAt")
       .sort({ slug: 1 })
       .lean();
 
@@ -53,6 +54,7 @@ export const getAdminTemplatePricing = async (_req: Request, res: Response): Pro
           finalPricePaise: Number(d.finalPricePaise) || 0,
           discountPercent: Number(d.discountPercent) || 0,
           pointsCost:      Number(d.pointsCost) || 0,
+          usdPriceCents:   typeof d.usdPriceCents === "number" ? d.usdPriceCents : null,
           updatedByEmail:  d.updatedByEmail ? String(d.updatedByEmail) : "",
           updatedAt:       d.updatedAt ?? null,
         })),
@@ -85,7 +87,7 @@ async function writeOne(req: Request, slug: string, body: unknown): Promise<Writ
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error };
 
   const prev = await TemplatePricing.findOne({ slug })
-    .select("slug isFree finalPricePaise discountPercent pointsCost")
+    .select("slug isFree finalPricePaise discountPercent pointsCost usdPriceCents")
     .lean();
 
   const before: PricingRow | null = prev
@@ -95,10 +97,27 @@ async function writeOne(req: Request, slug: string, body: unknown): Promise<Writ
         finalPricePaise: Number((prev as unknown as StoredRow).finalPricePaise) || 0,
         discountPercent: Number((prev as unknown as StoredRow).discountPercent) || 0,
         pointsCost: Number((prev as unknown as StoredRow).pointsCost) || 0,
+        usdPriceCents:
+          typeof (prev as unknown as StoredRow).usdPriceCents === "number"
+            ? ((prev as unknown as StoredRow).usdPriceCents as number)
+            : null,
       }
     : null;
 
-  const after: PricingRow = { ...parsed.value, slug };
+  // A client that does not send `usdPriceCents` at all (an older admin panel, a
+  // bulk INR edit) must not silently erase the USD price somebody set. Only an
+  // explicit value — a number, or null to go back to "derived" — changes it.
+  const usdProvided =
+    typeof body === "object" && body !== null && Object.prototype.hasOwnProperty.call(body, "usdPriceCents");
+  const after: PricingRow = {
+    ...parsed.value,
+    slug,
+    usdPriceCents: parsed.value.isFree
+      ? null
+      : usdProvided
+        ? parsed.value.usdPriceCents ?? null
+        : before?.usdPriceCents ?? null,
+  };
 
   await TemplatePricing.findOneAndUpdate(
     { slug },
@@ -108,6 +127,7 @@ async function writeOne(req: Request, slug: string, body: unknown): Promise<Writ
       finalPricePaise: after.finalPricePaise,
       discountPercent: after.discountPercent,
       pointsCost:      after.pointsCost,
+      usdPriceCents:   after.usdPriceCents ?? null,
       updatedByEmail:  req.userEmail || "",
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -121,6 +141,7 @@ async function writeOne(req: Request, slug: string, body: unknown): Promise<Writ
       finalPricePaise: { from: before?.finalPricePaise ?? 0, to: after.finalPricePaise },
       discountPercent: { from: before?.discountPercent ?? 0, to: after.discountPercent },
       pointsCost:      { from: before?.pointsCost ?? 0,      to: after.pointsCost },
+      usdPriceCents:   { from: before?.usdPriceCents ?? null, to: after.usdPriceCents ?? null },
     },
   });
 
