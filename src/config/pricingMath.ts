@@ -24,6 +24,11 @@ export interface PricingRow {
   finalPricePaise: number;
   discountPercent: number;
   pointsCost: number;
+  /**
+   * The USD price in cents a super admin set for international buyers. Null
+   * means "derive it from the INR price" — see `config/currency.ts`.
+   */
+  usdPriceCents?: number | null;
 }
 
 /** What every surface renders — stored values plus everything derived. */
@@ -38,6 +43,8 @@ export interface ResolvedPricing {
   savings: number;
   discountPercent: number;
   pointsCost: number;
+  /** As set by a super admin; null when it is derived. Always null when free. */
+  usdPriceCents: number | null;
 }
 
 /**
@@ -53,6 +60,14 @@ export const MAX_PRICE_PAISE = 10_000_000;
 
 /** Points are a parallel currency; the same reasoning gives them a ceiling. */
 export const MAX_POINTS_COST = 1_000_000;
+
+/**
+ * USD bounds, in cents. The floor is $1: PayPal alone keeps ~$0.30 + 4.4% of
+ * every international payment, so anything cheaper mostly pays fees. The
+ * ceiling is the same typo guard as MAX_PRICE_PAISE.
+ */
+export const MIN_USD_CENTS = 100;
+export const MAX_USD_CENTS = 100_000;
 
 const toRupees = (paise: number): number => Math.round(paise) / 100;
 
@@ -91,6 +106,7 @@ export function derivePricing(row: PricingRow): ResolvedPricing {
       savingsPaise: 0, savings: 0,
       discountPercent: 0,
       pointsCost: 0,
+      usdPriceCents: null,
     };
   }
 
@@ -107,6 +123,8 @@ export function derivePricing(row: PricingRow): ResolvedPricing {
     savingsPaise, savings: toRupees(savingsPaise),
     discountPercent,
     pointsCost: Math.max(0, Math.round(row.pointsCost) || 0),
+    usdPriceCents:
+      typeof row.usdPriceCents === "number" && row.usdPriceCents > 0 ? Math.round(row.usdPriceCents) : null,
   };
 }
 
@@ -149,7 +167,7 @@ export function validatePricingInput(
     // would mean the panel had to invent one.
     return {
       ok: true,
-      value: { slug: "", isFree: true, finalPricePaise: 0, discountPercent: 0, pointsCost: 0 },
+      value: { slug: "", isFree: true, finalPricePaise: 0, discountPercent: 0, pointsCost: 0, usdPriceCents: null },
     };
   }
 
@@ -174,6 +192,18 @@ export function validatePricingInput(
     return { ok: false, error: `pointsCost must be ${MAX_POINTS_COST.toLocaleString("en-IN")} or less` };
   }
 
+  // Optional. Absent or null means "derive from INR"; a number must be whole cents.
+  let usdPriceCents: number | null = null;
+  if (o.usdPriceCents !== undefined && o.usdPriceCents !== null) {
+    if (!isInt(o.usdPriceCents) || o.usdPriceCents < MIN_USD_CENTS || o.usdPriceCents > MAX_USD_CENTS) {
+      return {
+        ok: false,
+        error: `usdPriceCents must be whole cents from ${MIN_USD_CENTS} ($${MIN_USD_CENTS / 100}) to ${MAX_USD_CENTS} ($${MAX_USD_CENTS / 100}), or null to derive it`,
+      };
+    }
+    usdPriceCents = o.usdPriceCents;
+  }
+
   return {
     ok: true,
     value: {
@@ -182,6 +212,7 @@ export function validatePricingInput(
       finalPricePaise: o.finalPricePaise,
       discountPercent: o.discountPercent,
       pointsCost,
+      usdPriceCents,
     },
   };
 }

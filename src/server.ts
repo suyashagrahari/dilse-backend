@@ -4,9 +4,13 @@ import { connectDB } from "./config/db";
 import { rebuildBannedContent } from "./services/bannedContent";
 import { ensureSuperAdmin } from "./services/ensureSuperAdmin";
 import { startImapPoller } from "./services/imapPoller.service";
+import { ensureGeoLoaded } from "./services/geo.service";
 
 const startServer = async () => {
   await connectDB();
+  // Load the IP→country database before the first paywall needs it. A missing
+  // file only logs a warning: every visitor then resolves to INR, as before.
+  await ensureGeoLoaded();
 
   // The hidden-share set lives in memory, so it is rebuilt on every boot.
   // Non-fatal: a failure here must not stop the server from starting.

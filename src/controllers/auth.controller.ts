@@ -12,6 +12,7 @@ import { env } from "../config/env";
 import { sendOtpEmail } from "../utils/mailer";
 import { grantedSlugsFor } from "../config/templateAccess";
 import { attachInfluencerReferral } from "../services/influencer.service";
+import { stampUserCountry } from "../services/userCountry.service";
 
 /** What the client needs to show influencer nav/profile entry points. */
 function influencerBrief(user: { influencer?: { status: string } | null }) {
@@ -147,6 +148,7 @@ export const register = async (
       otpExpiry,
       pendingReferralCode: referralCode || undefined,
     });
+    void stampUserCountry(String(user._id), req, { signup: true });
 
     // The account is created either way — losing a registration because mail
     // is down would be worse. But whether the code actually went is reported,
@@ -236,6 +238,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     user.refreshToken = tokens.refreshToken;
     await user.save();
+
+    // Country for reporting (≤ once a day). Never decides a price.
+    void stampUserCountry(String(user._id), req, { lastSeenAt: user.lastSeenCountryAt });
 
     res.json({
       success: true,
@@ -482,6 +487,11 @@ export const googleAuth = async (
     user.refreshToken = tokens.refreshToken;
     await user.save();
 
+    void stampUserCountry(String(user._id), req, {
+      signup: isNewUser,
+      lastSeenAt: isNewUser ? null : user.lastSeenCountryAt,
+    });
+
     // Apply referral only for brand-new users
     if (isNewUser && referralCode) {
       await applyReferral(user._id.toString(), referralCode);
@@ -684,6 +694,10 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
     // because `protect` has already resolved `req.userId` to them. That is
     // correct: an admin viewing as a user should see what that user sees.
     const earlyAccess = [...(await grantedSlugsFor(String(user._id)))].sort();
+
+    // Country for reporting (≤ once a day). Never decides a price.
+    // Skipped while impersonating: the request's IP is the super admin's.
+    if (!req.impersonatorId) void stampUserCountry(String(user._id), req, { lastSeenAt: user.lastSeenCountryAt });
 
     res.json({
       success: true,

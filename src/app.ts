@@ -82,7 +82,9 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
+    // X-Debug-Country: honoured only for a super admin (pricingQuote.service),
+    // so the USD checkout can be tested from India. Ignored for everyone else.
+    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning", "X-Debug-Country"],
   })
 );
 
@@ -98,7 +100,19 @@ app.use(cookieParser());
 //
 // nginx caps the request first (`client_max_body_size` in nginx/backend.conf).
 // Raising this alone changes nothing until the box is raised to match.
-app.use(express.json({ limit: "40mb" }));
+app.use(
+  express.json({
+    limit: "40mb",
+    // The Razorpay webhook is signed over the exact bytes sent; re-serialising
+    // the parsed JSON would change them. Keep the raw buffer for that one path
+    // only, so 40 MB page saves are not held in memory twice.
+    verify: (req, _res, buf) => {
+      if ((req as { url?: string }).url?.startsWith("/api/webhooks/razorpay")) {
+        (req as unknown as { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+      }
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: "40mb" }));
 
 // ── HTTP request logging ───────────────────────────────────────────────────

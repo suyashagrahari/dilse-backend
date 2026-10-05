@@ -217,6 +217,9 @@ export const env = {
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client
   RAZORPAY_KEY_ID:     process.env.RAZORPAY_KEY_ID     || "",
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "",
+  // Set in Razorpay Dashboard → Webhooks. Different from the key secret. Unset
+  // = the webhook endpoint refuses everything (503) rather than trusting it.
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || "",
 
   // Helpers
   IS_PROD: APP_ENV === "production",

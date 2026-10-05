@@ -30,6 +30,8 @@ export interface ITemplatePricing extends Document {
   finalPricePaise: number;
   discountPercent: number;
   pointsCost: number;
+  /** International (USD) price in cents. Null/absent = derived from INR. */
+  usdPriceCents?: number | null;
   updatedByEmail: string;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +54,7 @@ const templatePricingSchema = new Schema<ITemplatePricing>(
     finalPricePaise: { type: Number, required: true, default: 0, min: 0 },
     discountPercent: { type: Number, required: true, default: 0, min: 0, max: 99 },
     pointsCost:      { type: Number, required: true, default: 0, min: 0 },
+    usdPriceCents:   { type: Number, default: null, min: 0 },
     updatedByEmail:  { type: String, default: "" },
   },
   { timestamps: true }

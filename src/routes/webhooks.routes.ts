@@ -18,6 +18,7 @@
 import { Router } from "express";
 import express from "express";
 import { sesInboundWebhook } from "../controllers/sesInbound.controller";
+import { razorpayWebhook } from "../controllers/razorpayWebhook.controller";
 
 const router = Router();
 
@@ -28,5 +29,10 @@ router.post(
   express.text({ type: "*/*", limit: "12mb" }),
   sesInboundWebhook
 );
+
+// Razorpay payment events. The body arrives already parsed by the global
+// express.json, which also kept the raw bytes for this path (see app.ts) —
+// the signature is checked against those, not the parsed object.
+router.post("/razorpay", razorpayWebhook);
 
 export default router;

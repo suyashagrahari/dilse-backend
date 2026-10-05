@@ -6,8 +6,14 @@ export interface IPaymentOrder extends Document {
   userId: mongoose.Types.ObjectId;
   templateType: string;
   pageId: mongoose.Types.ObjectId;
-  amount: number;               // in paise (INR × 100)
-  currency: string;
+  amount: number;               // minor units of `currency` (paise / cents)
+  currency: string;             // "INR" | "USD"
+  /** Buyer's country (ISO-2) when the order was created; null if unknown. */
+  country?: string | null;
+  /** ₹ per unit of `currency` at order time (1 for INR). Frozen for accounting. */
+  fxRateToINR?: number;
+  /** `amount` in INR paise at `fxRateToINR` — what revenue and commission use. */
+  amountInrPaise?: number;
   status: PaymentOrderStatus;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
@@ -33,6 +39,9 @@ const paymentOrderSchema = new Schema<IPaymentOrder>(
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },
     pointsUsed:        { type: Number },
+    country:           { type: String, default: null },
+    fxRateToINR:       { type: Number },
+    amountInrPaise:    { type: Number },
   },
   { timestamps: true }
 );
