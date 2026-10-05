@@ -47,7 +47,13 @@ export type AuditAction =
   | "outreach.broadcast_sent"
   | "outreach.opt_out"
   | "impersonation.start"
-  | "impersonation.end";
+  | "impersonation.end"
+  // Influencer programme: the global rate, one influencer's rate/status, and
+  // money recorded as sent to them.
+  | "influencer.settings"
+  | "influencer.update"
+  | "influencer.payout_recorded"
+  | "influencer.payout_deleted";
 
 export interface IAdminAuditLog extends Document {
   actorId: mongoose.Types.ObjectId;
