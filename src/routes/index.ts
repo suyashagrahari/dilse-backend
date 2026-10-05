@@ -48,6 +48,7 @@ import mediaRoutes from "./media.routes";
 import analyticsRoutes from "./analytics.routes";
 import contactRoutes from "./contact.routes";
 import referralRoutes from "./referral.routes";
+import influencerRoutes from "./influencer.routes";
 import paymentRoutes from "./payment.routes";
 import adminRoutes from "./admin.routes";
 import superAdminRoutes from "./superAdmin.routes";
@@ -179,6 +180,7 @@ router.use("/feedback/public", publicFeedbackRoutes);
 // address replied to must come from the session rather than the payload.
 router.use("/feedback", protect, feedbackRoutes);
 router.use("/referral", referralRoutes);
+router.use("/influencer", influencerRoutes);
 router.use("/payment", paymentRoutes);
 // Super-admin surfaces sit ABOVE the /admin mount so the more specific prefix
 // matches first, and behind their own gate rather than widening `requireAdmin`.

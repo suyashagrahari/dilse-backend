@@ -11,6 +11,12 @@ import {
 import { env } from "../config/env";
 import { sendOtpEmail } from "../utils/mailer";
 import { grantedSlugsFor } from "../config/templateAccess";
+import { attachInfluencerReferral } from "../services/influencer.service";
+
+/** What the client needs to show influencer nav/profile entry points. */
+function influencerBrief(user: { influencer?: { status: string } | null }) {
+  return user.influencer ? { status: user.influencer.status } : null;
+}
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -20,6 +26,8 @@ const REFERRAL_POINTS = 100;
 
 async function applyReferral(newUserId: string, refCode: string): Promise<void> {
   if (!refCode) return;
+  // Influencer links pay commission, never points — to either side.
+  if (await attachInfluencerReferral(newUserId, refCode)) return;
   try {
     const referrer = await User.findOne({ referralCode: refCode.toUpperCase().trim() });
     if (!referrer) return;
@@ -243,6 +251,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           subdomain: user.subdomain,
           points: user.points,
           referralCode: user.referralCode,
+          influencer: influencerBrief(user),
           // ── WHY createdAt IS ON EVERY AUTH PAYLOAD, NOT JUST /auth/me ────
           //
           // The client tells a returning creator from a brand-new one by the
@@ -494,6 +503,7 @@ export const googleAuth = async (
           subdomain: user.subdomain,
           points: freshUser?.points ?? 0,
           referralCode: freshUser?.referralCode ?? "",
+          influencer: influencerBrief(freshUser ?? user),
           createdAt: freshUser?.createdAt ?? user.createdAt,
         },
         accessToken: tokens.accessToken,
@@ -575,6 +585,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
           subdomain: user.subdomain,
           points: freshUser?.points ?? 0,
           referralCode: freshUser?.referralCode ?? "",
+          influencer: influencerBrief(freshUser ?? user),
           createdAt: freshUser?.createdAt ?? user.createdAt,
         },
         accessToken: tokens.accessToken,
@@ -688,6 +699,7 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
         createdAt: user.createdAt,
         points: user.points,
         referralCode: user.referralCode,
+        influencer: influencerBrief(user),
         /** Template slugs this user may use even while they are hidden. */
         earlyAccess,
       },
@@ -1014,7 +1026,7 @@ const SUBDOMAIN_RESERVED = new Set([
   "u", "user", "users", "share", "page", "pages", "gift", "gifts", "dilse",
 ]);
 
-function validateSubdomain(name: string): string | null {
+export function validateSubdomain(name: string): string | null {
   if (!name || typeof name !== "string") return "Subdomain is required";
   const lower = name.toLowerCase().trim();
   if (lower.length < 3) return "Subdomain must be at least 3 characters";
@@ -1060,7 +1072,7 @@ async function freeSubdomains(candidates: string[], userId?: string): Promise<Se
 }
 
 /** First free numbered variant of a taken name, or null. */
-async function firstFreeVariant(base: string, userId?: string): Promise<string | null> {
+export async function firstFreeVariant(base: string, userId?: string): Promise<string | null> {
   const variants = numberedVariants(base);
   const free = await freeSubdomains(variants, userId);
   return variants.find((v) => free.has(v)) || null;
