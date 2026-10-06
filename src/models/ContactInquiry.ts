@@ -3,6 +3,11 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IReply {
   body: string;
   sentAt: Date;
+  /** Subject it was sent with (absent on replies sent before subjects existed). */
+  subject?: string;
+  /** Whether the body started as an AI draft. Edited or not, a human sent it. */
+  aiAssisted?: boolean;
+  sentByEmail?: string;
 }
 
 export interface IContactInquiry extends Document {
@@ -23,6 +28,9 @@ const replySchema = new Schema<IReply>(
   {
     body: { type: String, required: true, maxlength: 4000 },
     sentAt: { type: Date, default: Date.now },
+    subject: { type: String, maxlength: 160 },
+    aiAssisted: { type: Boolean },
+    sentByEmail: { type: String },
   },
   { _id: false }
 );

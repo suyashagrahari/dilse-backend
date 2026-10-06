@@ -9,8 +9,11 @@ export async function sendContactReplyEmail(
   to: string,
   toName: string,
   replyBody: string,
-  originalMessage: string
+  originalMessage: string,
+  /** Optional subject; newlines stripped. Defaults to the historical one. */
+  subjectLine?: string
 ): Promise<void> {
+  const subject = (subjectLine || "").replace(/[\r\n]+/g, " ").trim().slice(0, 150) || "Re: Your message to SubhSandesh";
   if (!resend) {
     console.log(`\n[CONTACT REPLY — no RESEND_API_KEY] To: ${to} | Body: ${replyBody}\n`);
     return;
@@ -22,7 +25,7 @@ export async function sendContactReplyEmail(
     from: "SubhSandesh Support <support@subhsandesh.in>",
     to,
     replyTo: "support@subhsandesh.in",
-    subject: `Re: Your message to SubhSandesh`,
+    subject,
     text: `${replyBody}\n\n— SubhSandesh Support Team\nsupport@subhsandesh.in | subhsandesh.in`,
     html: `<!DOCTYPE html>
 <html lang="en">
