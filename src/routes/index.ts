@@ -5,6 +5,7 @@ import templateRoutes from "./template.routes";
 import generateRoutes from "./generate.routes";
 import favoriteRoutes from "./favorite.routes";
 import wishlistRoutes from "./wishlist.routes";
+import { getActivePromo } from "../controllers/promo.controller";
 import userContentRoutes from "./userContent.routes";
 import birthdayPageRoutes from "./birthdayPage.routes";
 import valentinePageRoutes from "./valentinePage.routes";
@@ -104,6 +105,8 @@ router.get("/template-meta", getTemplateMeta);
 router.use("/generate", protect, generateRoutes);
 router.use("/favorites", protect, favoriteRoutes);
 router.use("/wishlist", wishlistRoutes);
+// The wishlist sale countdown the blog and template banners render. Anonymous, cached.
+router.get("/promo/active", getActivePromo);
 router.use("/content", protect, userContentRoutes);
 router.use("/birthday-pages", birthdayPageRoutes);
 router.use("/valentine-pages", valentinePageRoutes);

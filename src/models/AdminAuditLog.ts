@@ -46,6 +46,9 @@ export type AuditAction =
   // that keeps somebody out of every future one.
   | "outreach.broadcast_sent"
   | "outreach.opt_out"
+  // The wishlist sale countdown in /admin/wishlist.
+  | "promo.start"
+  | "promo.stop"
   | "impersonation.start"
   | "impersonation.end"
   // Influencer programme: the global rate, one influencer's rate/status, and

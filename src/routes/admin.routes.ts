@@ -76,6 +76,7 @@ import {
   setOptOut,
 } from "../controllers/adminOutreach.controller";
 import { getWishlistJoins } from "../controllers/adminWishlist.controller";
+import { getPromoAdmin, startPromo, stopPromo } from "../controllers/promo.controller";
 
 const router = Router();
 
@@ -227,6 +228,10 @@ router.post("/threads/:id/reply", requireSuperAdmin, replyToThread);
 // `send` refuses unless the count the super admin confirmed still matches. See
 // adminOutreach.controller.ts.
 router.get("/wishlist", requireSuperAdmin, getWishlistJoins);
+// The wishlist sale countdown: start (or restart) and stop. Audited.
+router.get("/promo/:campaign", requireSuperAdmin, getPromoAdmin);
+router.post("/promo/:campaign/start", requireSuperAdmin, startPromo);
+router.post("/promo/:campaign/stop", requireSuperAdmin, stopPromo);
 router.get("/outreach/audience", requireSuperAdmin, getAudience);
 router.post("/outreach/recipients", requireSuperAdmin, getRecipients);
 router.post("/outreach/draft", requireSuperAdmin, draftOutreachEmail);
