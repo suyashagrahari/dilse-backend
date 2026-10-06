@@ -5,6 +5,7 @@ import InfluencerEarning from "../models/InfluencerEarning";
 import InfluencerPayout from "../models/InfluencerPayout";
 import InfluencerClick from "../models/InfluencerClick";
 import PaymentOrder, { type IPaymentOrder } from "../models/PaymentOrder";
+import { orderInrPaise } from "../config/currency";
 import { TEMPLATE_REGISTRY } from "./templateRegistry";
 import {
   commissionPaise,
@@ -137,6 +138,10 @@ export async function recordClick(influencerId: mongoose.Types.ObjectId | string
 export async function recordEarningForOrder(order: IPaymentOrder): Promise<void> {
   try {
     if (order.status !== "paid" || !order.amount || order.amount <= 0) return;
+    // Commission is on the INR value frozen on the order, so a $1.99 PayPal
+    // sale and a ₹149 UPI sale are paid out on the same basis.
+    const inrPaise = orderInrPaise(order);
+    if (inrPaise <= 0) return;
     const payer = await User.findById(order.userId).select("referredByInfluencer").lean();
     const influencerId = payer?.referredByInfluencer;
     if (!influencerId || String(influencerId) === String(order.userId)) return;
@@ -151,9 +156,11 @@ export async function recordEarningForOrder(order: IPaymentOrder): Promise<void>
       paymentOrderId: order._id,
       templateType: order.templateType,
       pageId: order.pageId,
-      amountPaise: order.amount,
+      amountPaise: inrPaise,
+      currency: order.currency || "INR",
+      originalAmount: order.amount,
       commissionPercent: percent,
-      commissionPaise: commissionPaise(order.amount, percent),
+      commissionPaise: commissionPaise(inrPaise, percent),
     });
   } catch (err) {
     if ((err as { code?: number })?.code === 11000) return;
@@ -261,7 +268,7 @@ export async function buildInfluencerDashboard(
       : Promise.resolve([]),
     ids.length
       ? PaymentOrder.find({ userId: { $in: ids }, status: { $in: ["paid", "points_used"] } })
-          .select("userId pageId status amount")
+          .select("userId pageId status amount currency amountInrPaise")
           .lean()
       : Promise.resolve([]),
     InfluencerEarning.find({ influencerId: infObjectId }).sort({ createdAt: -1 }).lean(),
@@ -274,7 +281,7 @@ export async function buildInfluencerDashboard(
   for (const o of orders) {
     const key = String(o.pageId);
     // A paid order outranks a points one for the same page.
-    if (!orderByPage.has(key) || o.status === "paid") orderByPage.set(key, { status: o.status, amount: o.amount });
+    if (!orderByPage.has(key) || o.status === "paid") orderByPage.set(key, { status: o.status, amount: orderInrPaise(o) });
   }
   const earningByPage = new Map<string, number>();
   for (const e of earnings) earningByPage.set(String(e.pageId), (earningByPage.get(String(e.pageId)) || 0) + e.commissionPaise);

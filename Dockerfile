@@ -47,6 +47,10 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=prod-deps --chown=expressjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=expressjs:nodejs /app/dist ./dist
 COPY --chown=expressjs:nodejs package.json ./
+# Writable home for the IP→country database the server downloads at boot
+# (services/geo.service.ts). Not baked in: a Docker build step is cached and
+# would never refresh. A failed download only means "everyone pays INR".
+RUN mkdir -p /app/geo && chown expressjs:nodejs /app/geo
 
 USER expressjs
 

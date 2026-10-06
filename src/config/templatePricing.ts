@@ -76,6 +76,7 @@ function toRow(d: {
   finalPricePaise: unknown;
   discountPercent: unknown;
   pointsCost: unknown;
+  usdPriceCents?: unknown;
 }): PricingRow {
   return {
     slug: String(d.slug),
@@ -83,10 +84,11 @@ function toRow(d: {
     finalPricePaise: Number(d.finalPricePaise) || 0,
     discountPercent: Number(d.discountPercent) || 0,
     pointsCost: Number(d.pointsCost) || 0,
+    usdPriceCents: typeof d.usdPriceCents === "number" ? d.usdPriceCents : null,
   };
 }
 
-const SELECT = "slug isFree finalPricePaise discountPercent pointsCost";
+const SELECT = "slug isFree finalPricePaise discountPercent pointsCost usdPriceCents";
 
 async function readAll(): Promise<Map<string, PricingRow>> {
   const docs = await TemplatePricing.find({}).select(SELECT).lean();

@@ -51,6 +51,8 @@ export type AuditAction =
   // Influencer programme: the global rate, one influencer's rate/status, and
   // money recorded as sent to them.
   | "influencer.settings"
+  // International pricing switch and the INR-per-USD rate.
+  | "payment.settings"
   | "influencer.update"
   | "influencer.payout_recorded"
   | "influencer.payout_deleted";

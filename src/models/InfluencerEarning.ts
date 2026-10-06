@@ -15,8 +15,11 @@ export interface IInfluencerEarning extends Document {
   paymentOrderId: mongoose.Types.ObjectId;
   templateType: string;
   pageId: mongoose.Types.ObjectId;
-  /** What the referred user paid, in paise. */
+  /** What the referred user paid, in INR paise (converted at the order's frozen rate). */
   amountPaise: number;
+  /** The currency actually charged, and the amount in its minor units. */
+  currency?: string;
+  originalAmount?: number;
   commissionPercent: number;
   /** Floor of amountPaise × percent / 100 — never rounds in the influencer's favour by a paisa. */
   commissionPaise: number;
@@ -31,6 +34,8 @@ const influencerEarningSchema = new Schema<IInfluencerEarning>(
     templateType: { type: String, required: true },
     pageId: { type: Schema.Types.ObjectId, required: true },
     amountPaise: { type: Number, required: true, min: 0 },
+    currency: { type: String, default: "INR" },
+    originalAmount: { type: Number },
     commissionPercent: { type: Number, required: true, min: 0, max: 100 },
     commissionPaise: { type: Number, required: true, min: 0 },
   },

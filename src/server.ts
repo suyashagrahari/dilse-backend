@@ -4,9 +4,14 @@ import { connectDB } from "./config/db";
 import { rebuildBannedContent } from "./services/bannedContent";
 import { ensureSuperAdmin } from "./services/ensureSuperAdmin";
 import { startImapPoller } from "./services/imapPoller.service";
+import { ensureGeoLoaded } from "./services/geo.service";
 
 const startServer = async () => {
   await connectDB();
+  // Load (downloading if needed) the IP→country database in the BACKGROUND:
+  // boot must not wait on a third-party download. Until it lands, every visitor
+  // resolves to INR — exactly the pre-international behaviour.
+  void ensureGeoLoaded();
 
   // The hidden-share set lives in memory, so it is rebuilt on every boot.
   // Non-fatal: a failure here must not stop the server from starting.

@@ -10,3 +10,4 @@ dist/
 # Allow the example/template file (no real secrets)
 !.env.example
 .env.satest
+geo/

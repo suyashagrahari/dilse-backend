@@ -77,6 +77,10 @@ export interface IUser extends Document {
    * Distinct from `referredBy`, which is the points-based Refer & Earn.
    */
   referredByInfluencer?: mongoose.Types.ObjectId;
+  /** ISO-2 country at signup, and the latest seen (≤ daily). Country only — never city or IP. */
+  signupCountry?: string | null;
+  lastSeenCountry?: string | null;
+  lastSeenCountryAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -198,6 +202,9 @@ const userSchema = new Schema<IUser>(
       ),
       default: undefined,
     },
+    signupCountry: { type: String, default: undefined },
+    lastSeenCountry: { type: String, default: undefined, index: true, sparse: true },
+    lastSeenCountryAt: { type: Date, default: undefined },
     referredByInfluencer: {
       type: Schema.Types.ObjectId,
       ref: "User",
