@@ -63,7 +63,7 @@ export class ThreadAiRefusedError extends Error {}
  * not. A human can still type a refund by hand — that is their authority to
  * exercise, not the model's.
  */
-const FORBIDDEN_PROMISE =
+export const FORBIDDEN_PROMISE =
   /\b(refund|discount|coupon|promo\s*code|voucher|cashback|free\s+(publish|of\s+charge)|no\s+charge|waive[dr]?|%\s?off|half\s+price|compensat\w*|reimburs\w*|guarantee\w*\s+(by|within)|will\s+be\s+(fixed|released|ready)\s+(by|on|within))\b/i;
 
 /**

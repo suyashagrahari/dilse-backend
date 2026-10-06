@@ -53,6 +53,8 @@ export type AuditAction =
   | "influencer.settings"
   // International pricing switch and the INR-per-USD rate.
   | "payment.settings"
+  // A reply to a Contact-page message, sent as support@.
+  | "contact.reply_sent"
   | "influencer.update"
   | "influencer.payout_recorded"
   | "influencer.payout_deleted";

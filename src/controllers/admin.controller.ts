@@ -706,6 +706,8 @@ export const replyToContact = async (req: Request, res: Response): Promise<void>
   try {
     const { id } = req.params;
     const body = String(req.body?.body ?? "").trim();
+    const subject = String(req.body?.subject ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 150);
+    const aiAssisted = req.body?.aiAssisted === true;
 
     if (!body || body.length < 2) {
       res.status(400).json({ success: false, error: "Reply body is required" });
@@ -722,11 +724,17 @@ export const replyToContact = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    await sendContactReplyEmail(item.email, item.name, body, item.message);
+    await sendContactReplyEmail(item.email, item.name, body, item.message, subject || undefined);
 
-    item.replies.push({ body, sentAt: new Date() });
+    item.replies.push({ body, sentAt: new Date(), subject: subject || undefined, aiAssisted, sentByEmail: req.userEmail });
     item.isRead = true;
     await item.save();
+
+    await audit(req, {
+      action: "contact.reply_sent",
+      targetUserEmail: item.email,
+      reason: `${aiAssisted ? "AI-assisted " : ""}reply: ${(subject || "Re: Your message to SubhSandesh").slice(0, 120)}`,
+    });
 
     res.json({ success: true, message: "Reply sent", data: { replies: item.replies } });
   } catch (error) {
