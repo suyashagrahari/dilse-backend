@@ -243,7 +243,7 @@ export const publishVendingMachinePage = async (req: Request, res: Response): Pr
     }).select("+creditAnswers");
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "vending-machine",
       pageId: String(page._id),

@@ -70,7 +70,7 @@ export const publishValentinePage = async (req: Request, res: Response): Promise
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
     // ── Payment gate ─────────────────────────────────────────────────────────
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId:             String(req.userId),
       templateType:       "valentine",
       pageId:             String(page._id),

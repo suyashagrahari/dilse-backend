@@ -263,7 +263,7 @@ export const publishRakshaBandhanSisterPage = async (
     });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "raksha-bandhan-sister",
       pageId: String(page._id),

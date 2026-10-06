@@ -698,7 +698,7 @@ export const publishStreakPage = async (req: Request, res: Response): Promise<vo
     );
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "streak",
       pageId: String(page._id),
