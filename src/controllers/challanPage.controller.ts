@@ -254,7 +254,7 @@ export const publishChallanPage = async (req: Request, res: Response): Promise<v
     const page = await ChallanPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "challan",
       pageId: String(page._id),

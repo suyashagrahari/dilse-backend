@@ -221,7 +221,7 @@ export const publishCourtMarriagePage = async (req: Request, res: Response): Pro
     const page = await CourtMarriagePage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "court-marriage",
       pageId: String(page._id),

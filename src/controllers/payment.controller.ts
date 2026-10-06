@@ -10,7 +10,7 @@ import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 import { recordEarningForOrder } from "../services/influencer.service";
-import { quoteFor } from "../services/pricingQuote.service";
+import { quoteFor, viewerPublishesFree } from "../services/pricingQuote.service";
 import { localizePricing, toInrPaise } from "../config/currency";
 
 // ── Page ownership ──────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ export const getPublishAccess = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType,
       pageId,
@@ -191,6 +191,9 @@ export const getQuote = async (req: Request, res: Response): Promise<void> => {
         country: quote.country,
         // Lets the paywall say "International checkout via PayPal" for USD.
         international: quote.currency !== "INR",
+        // "Only visitors outside India pay" covers this visitor: the paywall
+        // closes and the publish goes through instead of showing a price.
+        freeForViewer: quote.freeForViewer,
       },
     });
   } catch (error) {
@@ -224,6 +227,18 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
     if (quote.base.isFree) {
       res.status(400).json({ success: false, error: "This template is free — no payment required" });
+      return;
+    }
+
+    // "Only visitors outside India pay" and this is India: nothing is owed. A
+    // paywall left open across the switch being turned on lands here, and must
+    // not take money — the client closes it and publishes (gate rule 5).
+    if (quote.freeForViewer) {
+      res.status(400).json({
+        success: false,
+        error: "No payment needed — this template is free for you in India.",
+        code: "NO_PAYMENT_NEEDED",
+      });
       return;
     }
 
@@ -482,6 +497,16 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
 
     if (pricing.isFree || pricing.pointsCost === 0) {
       res.status(400).json({ success: false, error: "This template does not support points payment" });
+      return;
+    }
+
+    // Free in India right now: never take a points balance for it either.
+    if (await viewerPublishesFree(req, { fresh: true })) {
+      res.status(400).json({
+        success: false,
+        error: "No points needed — this template is free for you in India.",
+        code: "NO_PAYMENT_NEEDED",
+      });
       return;
     }
 

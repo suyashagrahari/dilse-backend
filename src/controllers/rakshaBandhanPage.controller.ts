@@ -177,7 +177,7 @@ export const publishRakshaBandhanPage = async (req: Request, res: Response): Pro
     const page = await RakshaBandhanPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "raksha-bandhan",
       pageId: String(page._id),

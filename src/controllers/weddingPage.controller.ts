@@ -210,7 +210,7 @@ export const publishWeddingPage = async (req: Request, res: Response): Promise<v
     }
 
     // ── Payment gate ─────────────────────────────────────────────────────────
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId:             String(req.userId),
       templateType:       "wedding",
       pageId:             String(page._id),

@@ -117,7 +117,7 @@ export const publishReceptionPage = async (req: Request, res: Response): Promise
     }
 
     // ── Payment gate ─────────────────────────────────────────────────────────
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId:             String(req.userId),
       templateType:       "reception",
       pageId:             String(page._id),

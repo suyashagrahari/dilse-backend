@@ -211,7 +211,7 @@ export const publishShaadiCardPage = async (req: Request, res: Response): Promis
     }
 
     // ── Payment gate ─────────────────────────────────────────────────────────
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId:             String(req.userId),
       templateType:       "shaadi",
       pageId:             String(page._id),

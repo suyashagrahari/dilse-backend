@@ -163,7 +163,7 @@ export const publishMissYouGfPage = async (req: Request, res: Response): Promise
     const page = await MissYouGfPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "missyou-gf",
       pageId: String(page._id),

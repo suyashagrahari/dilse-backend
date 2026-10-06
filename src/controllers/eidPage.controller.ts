@@ -129,7 +129,7 @@ export const publishEidPage = async (req: Request, res: Response): Promise<void>
     }
 
     // ── Payment gate ─────────────────────────────────────────────────────────
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId:             String(req.userId),
       templateType:       "eid",
       pageId:             String(page._id),
