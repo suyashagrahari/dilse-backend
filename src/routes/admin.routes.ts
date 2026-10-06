@@ -1,4 +1,6 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import { draftContactReplyHandler } from "../controllers/contactReply.controller";
 import {
   getAnalyticsOverview,
   getUserGrowthChart,
@@ -101,6 +103,20 @@ router.patch("/contacts/:id/read", markContactRead);
 router.patch("/contacts/:id/notes", updateContactNotes);
 router.delete("/contacts/:id", deleteContactInquiry);
 router.post("/contacts/:id/reply", replyToContact);
+// AI draft of a reply, from the message plus what this person has made with us.
+// Sends nothing. Limited per admin: each call is a paid model request.
+router.post(
+  "/contacts/:id/draft-reply",
+  rateLimit({
+    windowMs: 10 * 60 * 1000,
+    limit: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `admin:${req.userId || req.ip}`,
+    message: { success: false, error: "Too many drafts in a short time. Please wait a few minutes." },
+  }),
+  draftContactReplyHandler
+);
 
 // ── Which templates are live on THIS deployment ────────────────────────────
 //
