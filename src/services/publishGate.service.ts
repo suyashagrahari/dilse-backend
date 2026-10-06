@@ -1,15 +1,17 @@
+import type { Request } from "express";
 import PaymentOrder from "../models/PaymentOrder";
 import { getPricing } from "../config/templatePricing";
 import { hasGrant } from "../config/templateAccess";
 import { slugForTemplateType } from "../config/templateSlugs";
 import type { ResolvedPricing } from "../config/pricingMath";
+import { viewerPublishesFree } from "./pricingQuote.service";
 
 /**
  * Why the gate said yes. Carried so `GET /payment/access` can explain itself and
  * so a support question — "why wasn't this person charged?" — has an answer that
  * does not require re-deriving the rules by hand.
  */
-export type AllowReason = "free" | "already_published" | "already_paid" | "early_access";
+export type AllowReason = "free" | "already_published" | "already_paid" | "early_access" | "free_in_india";
 
 interface GateAllowed {
   allowed: true;
@@ -35,7 +37,8 @@ type GateResult = GateAllowed | GateDenied;
  *  2. Page is already published → allowed
  *  3. A successful PaymentOrder → allowed
  *  4. An early-access grant     → allowed
- *  5. Otherwise                 → 402 with the pricing the client renders
+ *  5. "Only visitors outside India pay" is on and this visitor is in India → allowed
+ *  6. Otherwise                 → 402 with the pricing the client renders
  *
  * ── WHY RULE 2 IS UNCONDITIONAL ────────────────────────────────────────────
  *
@@ -58,6 +61,12 @@ type GateResult = GateAllowed | GateDenied;
  * cheap half of the pair and it goes in the index that exists for it.
  */
 export async function checkPublishAccess(params: {
+  /**
+   * The publishing request — required, so every template's publish passes it
+   * and rule 5 can see where the visitor is. A new controller that forgets it
+   * does not compile, rather than silently charging (or freeing) someone.
+   */
+  req: Request;
   userId: string;
   templateType: string;
   pageId: string;
@@ -97,7 +106,17 @@ export async function checkPublishAccess(params: {
     return { allowed: true, reason: "early_access", pricing };
   }
 
-  // Rule 5: the paywall.
+  // ── Rule 5: free in India ───────────────────────────────────────────────
+  //
+  // A super admin switched "Who pays" to "Only visitors outside India". The
+  // country comes from the server's own lookup of this request (never from the
+  // client), and an unknown country pays — see config/whoPays.ts. Last of the
+  // allow rules, so a page someone actually paid for still reads "already_paid".
+  if (await viewerPublishesFree(params.req)) {
+    return { allowed: true, reason: "free_in_india", pricing };
+  }
+
+  // Rule 6: the paywall.
   return {
     allowed: false,
     error: "PAYMENT_REQUIRED",

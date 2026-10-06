@@ -212,7 +212,7 @@ export const publishNutritionPage = async (req: Request, res: Response): Promise
     const page = await NutritionPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "nutrition",
       pageId: String(page._id),

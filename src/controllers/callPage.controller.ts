@@ -282,7 +282,7 @@ export const publishCallPage = async (req: Request, res: Response): Promise<void
     const page = await CallPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "call",
       pageId: String(page._id),

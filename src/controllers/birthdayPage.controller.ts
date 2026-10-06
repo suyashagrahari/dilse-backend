@@ -91,7 +91,7 @@ export const publishBirthdayPage = async (req: Request, res: Response): Promise<
     }
 
     // ── Payment gate ─────────────────────────────────────────────────────────
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId:             String(req.userId),
       templateType:       "birthday",
       pageId:             String(page._id),

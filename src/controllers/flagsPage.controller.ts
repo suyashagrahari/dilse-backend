@@ -210,7 +210,7 @@ export const publishFlagsPage = async (req: Request, res: Response): Promise<voi
     const page = await FlagsPage.findOne({ _id: req.params.id, userId: req.userId });
     if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
 
-    const gate = await checkPublishAccess({
+    const gate = await checkPublishAccess({ req,
       userId: String(req.userId),
       templateType: "flags",
       pageId: String(page._id),

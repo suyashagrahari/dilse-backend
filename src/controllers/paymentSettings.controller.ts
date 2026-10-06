@@ -3,16 +3,25 @@ import { getPaymentSettings, updatePaymentSettings } from "../services/paymentSe
 import { resolveCountry, geoReady } from "../services/geo.service";
 import { currencyForCountry, MIN_INR_PER_USD, MAX_INR_PER_USD } from "../config/currency";
 import { audit } from "../services/adminAudit";
+import { isFreeForViewer } from "../config/whoPays";
 
 /** GET /admin/super/payment-settings */
 export const adminGetPaymentSettings = async (_req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: { ...(await getPaymentSettings(true)), geoReady: geoReady() } });
 };
 
-/** PUT /admin/super/payment-settings — { intlPricingEnabled?, inrPerUsd? } */
+/** PUT /admin/super/payment-settings — { intlPricingEnabled?, chargeOnlyAbroad?, inrPerUsd? } */
 export const adminUpdatePaymentSettings = async (req: Request, res: Response): Promise<void> => {
   try {
-    const patch: { intlPricingEnabled?: boolean; inrPerUsd?: number } = {};
+    const patch: { intlPricingEnabled?: boolean; chargeOnlyAbroad?: boolean; inrPerUsd?: number } = {};
+    // "Who pays": strictly a boolean — a truthy string must not make India free.
+    if (req.body.chargeOnlyAbroad !== undefined) {
+      if (typeof req.body.chargeOnlyAbroad !== "boolean") {
+        res.status(400).json({ success: false, error: "chargeOnlyAbroad must be true or false" });
+        return;
+      }
+      patch.chargeOnlyAbroad = req.body.chargeOnlyAbroad;
+    }
     if (req.body.intlPricingEnabled !== undefined) {
       if (typeof req.body.intlPricingEnabled !== "boolean") {
         res.status(400).json({ success: false, error: "intlPricingEnabled must be true or false" });
@@ -34,6 +43,7 @@ export const adminUpdatePaymentSettings = async (req: Request, res: Response): P
       action: "payment.settings",
       changes: {
         intlPricingEnabled: { from: before.intlPricingEnabled, to: after.intlPricingEnabled },
+        chargeOnlyAbroad: { from: before.chargeOnlyAbroad, to: after.chargeOnlyAbroad },
         inrPerUsd: { from: before.inrPerUsd, to: after.inrPerUsd },
       },
     });
@@ -62,6 +72,9 @@ export const adminGeoCheck = async (req: Request, res: Response): Promise<void> 
       geoReady: geoReady(),
       wouldCharge: currencyForCountry(geo.country, settings.intlPricingEnabled),
       intlPricingEnabled: settings.intlPricingEnabled,
+      chargeOnlyAbroad: settings.chargeOnlyAbroad,
+      // With "Who pays" as it is now, would THIS connection publish priced templates free?
+      wouldPublishFree: isFreeForViewer({ chargeOnlyAbroad: settings.chargeOnlyAbroad, country: geo.country, source: geo.source }),
     },
   });
 };
