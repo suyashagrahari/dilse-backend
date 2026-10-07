@@ -20,7 +20,7 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
 import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
-import { VALENTINE_DAY_SLUGS, VW_LIMITS, type ValentineDaySlug } from "../config/valentineDays";
+import { MUSIC_MODES, MUSIC_START_MAX, VALENTINE_DAY_SLUGS, VW_LIMITS, type MusicMode, type ValentineDaySlug } from "../config/valentineDays";
 
 /** Written only by the public `react` beacon — never by the owner's form. */
 export interface IValentineReactions {
@@ -44,7 +44,13 @@ export interface IValentineDayPage extends Document {
   photos: ILovePhoto[];
   /** slotId → "" (default sticker) | "none" (hidden) | https GIF/WebP URL. */
   gifs: Record<string, string>;
+  /** Kept for older clients: always `musicMode !== "off"`. */
   music: boolean;
+  musicMode: MusicMode;
+  /** An 11-char YouTube video id (never a URL), or "". */
+  musicYoutubeId: string;
+  /** Seconds into the song to start from, 0–600. */
+  musicStart: number;
   endLine: string;
   /** Day-specific fields, validated by the day's FieldSpec list. */
   extras: Record<string, unknown>;
@@ -83,6 +89,9 @@ const valentineDayPageSchema = new Schema<IValentineDayPage>(
     photos: loveKitFields.photos,
     gifs: { type: Schema.Types.Mixed, default: {} },
     music: { type: Boolean, default: true },
+    musicMode: { type: String, enum: MUSIC_MODES, default: "melody" },
+    musicYoutubeId: { type: String, default: "", match: [/^(|[A-Za-z0-9_-]{11})$/, "invalid YouTube id"] },
+    musicStart: { type: Number, default: 0, min: 0, max: MUSIC_START_MAX },
     endLine: { type: String, default: "", maxlength: VW_LIMITS.endLine },
     extras: { type: Schema.Types.Mixed, default: {} },
     reactions: { type: reactionsSchema, default: () => ({}) },

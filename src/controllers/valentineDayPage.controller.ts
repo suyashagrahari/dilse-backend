@@ -25,6 +25,7 @@ import {
   reactionWrite,
   sanitizeExtras,
   sanitizeGifSlots,
+  sanitizeMusic,
   type ReactionEvent,
   type ValentineDaySlug,
 } from "../config/valentineDays";
@@ -51,6 +52,9 @@ type DayBody = {
   photos?: unknown;
   gifs?: unknown;
   music?: unknown;
+  musicMode?: unknown;
+  musicYoutubeId?: unknown;
+  musicStart?: unknown;
   endLine?: unknown;
   extras?: unknown;
   password?: unknown;
@@ -118,7 +122,7 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
     letter: str(b.letter, day.letterMax),
     photos: await photosFrom(b.photos, userId),
     gifs: sanitizeGifSlots(slug, b.gifs),
-    music: b.music === undefined ? true : b.music === true || b.music === "true",
+    ...sanitizeMusic(b),
     endLine: line(b.endLine, VW_LIMITS.endLine),
     extras: sanitizeExtras(slug, b.extras),
   });
@@ -187,7 +191,20 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
       if (b.letter !== undefined) page.letter = str(b.letter, day.letterMax);
       if (b.photos !== undefined) page.photos = await photosFrom(b.photos, req.userId);
       if (b.gifs !== undefined) { page.gifs = sanitizeGifSlots(slug, b.gifs); page.markModified("gifs"); }
-      if (b.music !== undefined) page.music = b.music === true || b.music === "true";
+      if (b.music !== undefined || b.musicMode !== undefined || b.musicYoutubeId !== undefined || b.musicStart !== undefined) {
+        const m = sanitizeMusic(b, {
+          music: page.music !== false,
+          // A page saved before musicMode existed hydrates the "melody" default
+          // even when its music was off — the boolean wins for those.
+          musicMode: page.music === false ? "off" : page.musicMode ?? "melody",
+          musicYoutubeId: page.musicYoutubeId ?? "",
+          musicStart: page.musicStart ?? 0,
+        });
+        page.music = m.music;
+        page.musicMode = m.musicMode;
+        page.musicYoutubeId = m.musicYoutubeId;
+        page.musicStart = m.musicStart;
+      }
       if (b.endLine !== undefined) page.endLine = line(b.endLine, VW_LIMITS.endLine);
       if (b.extras !== undefined) { page.extras = sanitizeExtras(slug, b.extras); page.markModified("extras"); }
       // Empty password on update means "unchanged", not "remove the gate".

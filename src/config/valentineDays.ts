@@ -354,6 +354,56 @@ export function sanitizeGifSlots(slug: ValentineDaySlug, raw: unknown): Record<s
   return out;
 }
 
+// ─── Background music ────────────────────────────────────────────────────────
+//
+// `musicMode` is the source of truth; `music` (boolean) is kept for older
+// clients and is always `musicMode !== "off"`. Only an 11-char YouTube video
+// id is ever stored — never a URL — and a "youtube" choice without a valid id
+// falls back to the built-in melody so the page is never silent by accident.
+
+export const MUSIC_MODES = ["off", "melody", "youtube"] as const;
+export type MusicMode = (typeof MUSIC_MODES)[number];
+export const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+export const MUSIC_START_MAX = 600;
+
+export interface MusicFields {
+  music: boolean;
+  musicMode: MusicMode;
+  musicYoutubeId: string;
+  musicStart: number;
+}
+
+export const MUSIC_DEFAULTS: MusicFields = { music: true, musicMode: "melody", musicYoutubeId: "", musicStart: 0 };
+
+const asBool = (v: unknown): boolean | undefined => (v === true || v === "true" ? true : v === false || v === "false" ? false : undefined);
+
+/**
+ * Body → the four stored music fields. `prev` is the stored page on update, so
+ * a partial body (an old client that only sends `music`) keeps what it does
+ * not mention.
+ */
+export function sanitizeMusic(
+  raw: { music?: unknown; musicMode?: unknown; musicYoutubeId?: unknown; musicStart?: unknown },
+  prev: MusicFields = MUSIC_DEFAULTS
+): MusicFields {
+  const id = typeof raw.musicYoutubeId === "string" ? raw.musicYoutubeId.trim() : undefined;
+  const youtubeId = id === undefined ? prev.musicYoutubeId : YOUTUBE_ID_RE.test(id) ? id : "";
+
+  let mode: MusicMode;
+  if (typeof raw.musicMode === "string" && (MUSIC_MODES as readonly string[]).includes(raw.musicMode)) {
+    mode = raw.musicMode as MusicMode;
+  } else {
+    const on = asBool(raw.music);
+    mode = on === undefined ? prev.musicMode : on ? (prev.musicMode === "off" ? "melody" : prev.musicMode) : "off";
+  }
+  if (mode === "youtube" && !youtubeId) mode = "melody";
+
+  const n = typeof raw.musicStart === "number" ? raw.musicStart : typeof raw.musicStart === "string" && raw.musicStart.trim() ? Number(raw.musicStart) : NaN;
+  const start = raw.musicStart === undefined ? prev.musicStart : Number.isFinite(n) ? Math.min(MUSIC_START_MAX, Math.max(0, Math.round(n))) : 0;
+
+  return { music: mode !== "off", musicMode: mode, musicYoutubeId: youtubeId, musicStart: start };
+}
+
 // ─── Reactions ───────────────────────────────────────────────────────────────
 
 export type ReactionEvent = "opened" | "completed" | "answered";
