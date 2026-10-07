@@ -6,7 +6,44 @@ import {
   reactionWrite,
   sanitizeExtras,
   sanitizeGifSlots,
+  sanitizeMusic,
 } from "./valentineDays";
+
+describe("sanitizeMusic", () => {
+  it("defaults to the built-in melody", () => {
+    assert.deepEqual(sanitizeMusic({}), { music: true, musicMode: "melody", musicYoutubeId: "", musicStart: 0 });
+  });
+  it("keeps a valid YouTube id and start, and derives music=true", () => {
+    assert.deepEqual(sanitizeMusic({ musicMode: "youtube", musicYoutubeId: "2Vv-BfVoq4g", musicStart: 42.4 }), {
+      music: true, musicMode: "youtube", musicYoutubeId: "2Vv-BfVoq4g", musicStart: 42,
+    });
+  });
+  it("never stores a URL or a malformed id; youtube without an id falls back to melody", () => {
+    for (const bad of ["https://youtu.be/2Vv-BfVoq4g", "2Vv-BfVoq4", "2Vv-BfVoq4g1", "<script>x</s", "2Vv BfVoq4g", 12345678901]) {
+      const m = sanitizeMusic({ musicMode: "youtube", musicYoutubeId: bad as unknown as string });
+      assert.equal(m.musicYoutubeId, "", String(bad));
+      assert.equal(m.musicMode, "melody", String(bad));
+    }
+  });
+  it("rejects unknown modes and clamps the start to 0–600", () => {
+    assert.equal(sanitizeMusic({ musicMode: "spotify" }).musicMode, "melody");
+    assert.equal(sanitizeMusic({ musicStart: -5 }).musicStart, 0);
+    assert.equal(sanitizeMusic({ musicStart: 9999 }).musicStart, 600);
+    assert.equal(sanitizeMusic({ musicStart: "abc" }).musicStart, 0);
+  });
+  it("off ⇒ music false; an old client's music:false still means off", () => {
+    assert.equal(sanitizeMusic({ musicMode: "off" }).music, false);
+    assert.equal(sanitizeMusic({ music: false }).musicMode, "off");
+    assert.equal(sanitizeMusic({ music: "false" }).musicMode, "off");
+  });
+  it("a partial update keeps what it does not mention", () => {
+    const prev = { music: true, musicMode: "youtube" as const, musicYoutubeId: "450p7goxZqg", musicStart: 30 };
+    assert.deepEqual(sanitizeMusic({ music: true }, prev), prev);
+    assert.deepEqual(sanitizeMusic({ musicStart: 10 }, prev), { ...prev, musicStart: 10 });
+    assert.equal(sanitizeMusic({ music: false }, prev).musicMode, "off");
+    assert.equal(sanitizeMusic({ music: true }, { ...prev, musicMode: "off", music: false }).musicMode, "melody");
+  });
+});
 
 /**
  * The client mirror (client/app/(templates)/_valentine/days/<slug>.ts) is kept
