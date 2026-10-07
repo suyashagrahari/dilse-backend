@@ -39,8 +39,14 @@ const MEDIA_FIELD = /(photo|image|avatar|picture|voice|audio|music|recording|vid
  * passed. Verified by deleting the call sites from a controller and watching
  * this test go red.
  */
+//
+// `sanitizeLovePhotos` (utils/loveMedia.ts) is the love-kit's sanctioned path:
+// it calls uploadImageDataUrl for every data: URL before anything is stored,
+// so a controller calling it does upload. It was missing from this list, which
+// made every love-kit controller (court-of-love, legal-notice, recharge,
+// train-ticket, vending-machine, valentine-day) a false positive.
 const UPLOADS =
-  /(transformMediaPayload|uploadMediaBuffer|uploadMediaField|uploadImageDataUrl|uploadAudioDataUrl)\s*\(/;
+  /(transformMediaPayload|uploadMediaBuffer|uploadMediaField|uploadImageDataUrl|uploadAudioDataUrl|sanitizeLovePhotos)\s*\(/;
 
 describe("uploaded media never reaches the database as base64", () => {
   it("every page controller that stores a media field uploads it", () => {

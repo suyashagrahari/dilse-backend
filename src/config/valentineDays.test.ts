@@ -1,0 +1,157 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
+  VALENTINE_DAYS,
+  VALENTINE_DAY_SLUGS,
+  reactionWrite,
+  sanitizeExtras,
+  sanitizeGifSlots,
+} from "./valentineDays";
+
+/**
+ * The client mirror (client/app/(templates)/_valentine/days/<slug>.ts) is kept
+ * in step by hand. These keys are the contract: change one here and the client
+ * file must change in the same commit, or the field is silently dropped on save.
+ */
+const PINNED_KEYS: Record<string, string[]> = {
+  "happy-rose-day": ["roseColor", "colorReason", "roseCount", "openingLine", "petalStyle", "shayari", "signOff"],
+  "happy-propose-day": ["question", "teaser", "reasons", "moments", "ringStyle", "stoneColor", "noMode", "noLines", "afterYes", "shayari"],
+  "happy-chocolate-day": ["giftTag", "boxSize", "reasons", "finalAsk"],
+  "happy-teddy-day": ["teddyName", "furColor", "marquee", "nearMiss", "outfit", "winLine", "squeezeLines"],
+  "happy-promise-day": ["envelopeLine", "pinkyPrompt", "promises", "bigPromise", "lockEngraving", "lockStyle", "lockFinale"],
+  "happy-hug-day": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
+  "happy-kiss-day": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
+  "happy-valentines-day": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
+};
+
+describe("Valentine's week day configs", () => {
+  it("has exactly the eight slugs, each pinned", () => {
+    assert.deepEqual([...VALENTINE_DAY_SLUGS].sort(), Object.keys(PINNED_KEYS).sort());
+    for (const slug of VALENTINE_DAY_SLUGS) {
+      assert.deepEqual(VALENTINE_DAYS[slug].extras.map((f) => f.key), PINNED_KEYS[slug], slug);
+    }
+  });
+
+  it("every day has five GIF slots and sane limits; only Propose + Valentine's ask", () => {
+    for (const slug of VALENTINE_DAY_SLUGS) {
+      const d = VALENTINE_DAYS[slug];
+      assert.equal(d.gifSlots.length, 5, slug);
+      assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
+      assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
+    }
+    assert.deepEqual(
+      VALENTINE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
+      ["happy-propose-day", "happy-valentines-day"]
+    );
+  });
+});
+
+describe("sanitizeExtras", () => {
+  it("always returns every key and drops unknown ones", () => {
+    const out = sanitizeExtras("happy-rose-day", { evil: "x", userId: "y", roseColor: "red" });
+    assert.deepEqual(Object.keys(out), PINNED_KEYS["happy-rose-day"]);
+    assert.equal("evil" in out, false);
+  });
+
+  it("trims and caps text", () => {
+    const out = sanitizeExtras("happy-rose-day", { openingLine: "  " + "a".repeat(200) + "  " });
+    assert.equal((out.openingLine as string).length, 70);
+  });
+
+  it("falls back to the enum default on anything off-list", () => {
+    assert.equal(sanitizeExtras("happy-rose-day", { roseColor: "black" }).roseColor, "red");
+    assert.equal(sanitizeExtras("happy-rose-day", { roseColor: "coral" }).roseColor, "coral");
+    assert.equal(sanitizeExtras("happy-chocolate-day", { boxSize: 6 }).boxSize, "6");
+  });
+
+  it("clamps numbers and defaults unreadable ones", () => {
+    assert.equal(sanitizeExtras("happy-kiss-day", { kissTarget: 500 }).kissTarget, 30);
+    assert.equal(sanitizeExtras("happy-kiss-day", { kissTarget: 1 }).kissTarget, 5);
+    assert.equal(sanitizeExtras("happy-kiss-day", { kissTarget: "nope" }).kissTarget, 14);
+    assert.equal(sanitizeExtras("happy-kiss-day", { kissTarget: "12.6" }).kissTarget, 13);
+  });
+
+  it("coerces booleans with a default", () => {
+    assert.equal(sanitizeExtras("happy-promise-day", {}).lockFinale, true);
+    assert.equal(sanitizeExtras("happy-promise-day", { lockFinale: "false" }).lockFinale, false);
+    assert.equal(sanitizeExtras("happy-teddy-day", { nearMiss: 1 }).nearMiss, true);
+  });
+
+  it("lists: blanks removed, items capped, count capped", () => {
+    const reasons = Array.from({ length: 20 }, (_, i) => (i === 2 ? "   " : `reason ${i} ` + "x".repeat(200)));
+    const out = sanitizeExtras("happy-chocolate-day", { reasons }).reasons as string[];
+    assert.equal(out.length, 9);
+    assert.ok(out.every((r) => r.length <= 90 && r.trim() === r && r.length > 0));
+    assert.deepEqual(sanitizeExtras("happy-chocolate-day", { reasons: "not a list" }).reasons, []);
+    assert.deepEqual(sanitizeExtras("happy-chocolate-day", { reasons: [1, null, { a: 1 }, "ok"] }).reasons, ["ok"]);
+  });
+
+  it("objlists: leaves sanitised, empty rows dropped, extra keys stripped, count capped", () => {
+    const menu = [
+      { name: "Bear Hug", line: "tight", price: "1 smile", hack: true },
+      { name: "", line: "", price: "" },
+      ...Array.from({ length: 10 }, (_, i) => ({ name: `Hug ${i}`, line: "l".repeat(300) })),
+    ];
+    const out = sanitizeExtras("happy-hug-day", { menu }).menu as Record<string, unknown>[];
+    assert.equal(out.length, 6);
+    assert.deepEqual(out[0], { name: "Bear Hug", line: "tight", price: "1 smile" });
+    assert.equal((out[1].line as string).length, 70);
+    assert.equal(out[1].price, "");
+
+    const outfit = sanitizeExtras("happy-teddy-day", { outfit: [{ item: "jetpack", note: "zoom" }] }).outfit as Record<string, unknown>[];
+    assert.deepEqual(outfit, [{ item: "bow", note: "zoom" }]);
+  });
+
+  it("survives garbage input", () => {
+    for (const slug of VALENTINE_DAY_SLUGS) {
+      for (const raw of [null, undefined, 42, "str", [], [1, 2]]) {
+        assert.deepEqual(Object.keys(sanitizeExtras(slug, raw)), PINNED_KEYS[slug]);
+      }
+    }
+  });
+});
+
+describe("sanitizeGifSlots", () => {
+  it("keeps https links and 'none', blanks everything else, drops unknown slots", () => {
+    const out = sanitizeGifSlots("happy-rose-day", {
+      "r1-arrival": "https://media.giphy.com/media/abc/giphy.gif",
+      "r2-loves-me": "none",
+      "r3-letter": "http://insecure.gif",
+      "r4-bouquet": "javascript:alert(1)",
+      "zz-unknown": "https://x.gif",
+    });
+    assert.deepEqual(out, {
+      "r1-arrival": "https://media.giphy.com/media/abc/giphy.gif",
+      "r2-loves-me": "none",
+      "r3-letter": "",
+      "r4-bouquet": "",
+      "r5-ending": "",
+    });
+  });
+});
+
+describe("reactionWrite", () => {
+  const now = new Date("2027-02-08T21:42:00Z");
+
+  it("each event is guarded on its own field still being unset (first wins)", () => {
+    assert.deepEqual(reactionWrite("opened", {}, now).guard, { "reactions.openedAt": null });
+    assert.deepEqual(reactionWrite("completed", {}, now).guard, { "reactions.completedAt": null });
+    assert.deepEqual(reactionWrite("answered", {}, now).guard, { "reactions.answer": null });
+  });
+
+  it("answered writes yes + time + clamped counters", () => {
+    const { set } = reactionWrite("answered", { noDodges: "4", count: -3 }, now);
+    assert.deepEqual(set, {
+      "reactions.answer": "yes",
+      "reactions.answeredAt": now,
+      "reactions.noDodges": 4,
+      "reactions.count": 0,
+    });
+    assert.equal(reactionWrite("answered", { noDodges: 1e9 }, now).set["reactions.noDodges"], 999);
+    assert.equal("reactions.noDodges" in reactionWrite("answered", { noDodges: "x" }, now).set, false);
+  });
+
+  it("never touches another event's field", () => {
+    assert.deepEqual(Object.keys(reactionWrite("opened", { noDodges: 3, count: 3 }, now).set), ["reactions.openedAt"]);
+  });
+});

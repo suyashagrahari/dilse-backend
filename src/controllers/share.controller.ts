@@ -51,6 +51,8 @@ import { isApexDeployment } from "../config/env";
 import mongoose from "mongoose";
 import { projectSharedCapsuleData } from "./capsulePage.controller";
 import { projectSharedStreakData } from "./streakPage.controller";
+import { projectValentineShared } from "./valentineDayPage.controller";
+import { VALENTINE_DAY_MODELS } from "../models/ValentineDayPage";
 
 function detectDevice(ua: string): "mobile" | "desktop" | "tablet" {
   if (/tablet|ipad|playbook|silk/i.test(ua)) return "tablet";
@@ -141,6 +143,18 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: RakshaBandhanPage as mongoose.Model<unknown>, templateType: "raksha-bandhan", editorRoute: "/happy-rakshabandhan-to-brother" },
   { model: RakshaBandhanSisterPage as mongoose.Model<unknown>, templateType: "raksha-bandhan-sister", editorRoute: "/happy-rakshabandhan-to-sister" },
   { model: GaneshChaturthiPage as mongoose.Model<unknown>, templateType: "ganesh-chaturthi", editorRoute: "/happy-ganesh-chaturthi" },
+  // Valentine's week: eight DISCRIMINATOR models over one collection, so each
+  // entry sees only its own day (see models/ValentineDayPage.ts). templateType
+  // === slug === route, so each day prices, releases and reports on its own.
+  // `reactions` (opened / said yes) are the sender's — never on a share response.
+  { model: VALENTINE_DAY_MODELS["happy-rose-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-rose-day", editorRoute: "/happy-rose-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-propose-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-propose-day", editorRoute: "/happy-propose-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-chocolate-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-chocolate-day", editorRoute: "/happy-chocolate-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-teddy-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-teddy-day", editorRoute: "/happy-teddy-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-promise-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-promise-day", editorRoute: "/happy-promise-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-hug-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-hug-day", editorRoute: "/happy-hug-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-kiss-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-kiss-day", editorRoute: "/happy-kiss-day", projectShared: projectValentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-valentines-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-valentines-day", editorRoute: "/happy-valentines-day", projectShared: projectValentineShared },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {
