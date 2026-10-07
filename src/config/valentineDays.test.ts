@@ -59,17 +59,18 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-hug-day": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
   "happy-kiss-day": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
   "happy-valentines-day": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
+  "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
 };
 
 describe("Valentine's week day configs", () => {
-  it("has exactly the eight slugs, each pinned", () => {
+  it("has exactly the eight days + Halloween, each pinned", () => {
     assert.deepEqual([...VALENTINE_DAY_SLUGS].sort(), Object.keys(PINNED_KEYS).sort());
     for (const slug of VALENTINE_DAY_SLUGS) {
       assert.deepEqual(VALENTINE_DAYS[slug].extras.map((f) => f.key), PINNED_KEYS[slug], slug);
     }
   });
 
-  it("every day has five GIF slots and sane limits; only Propose + Valentine's ask", () => {
+  it("every day has five GIF slots and sane limits; only Propose, Valentine's and Halloween ask", () => {
     for (const slug of VALENTINE_DAY_SLUGS) {
       const d = VALENTINE_DAYS[slug];
       assert.equal(d.gifSlots.length, 5, slug);
@@ -78,8 +79,25 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       VALENTINE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween"]
     );
+  });
+
+  it("Halloween: tone and costume fall back to their defaults; ingredients are capped", () => {
+    const out = sanitizeExtras("happy-halloween", {
+      tone: "horror",
+      costume: "zombie",
+      carveWord: "  PUMPKINPIE-XL  ",
+      ingredients: Array.from({ length: 8 }, (_, i) => ({ name: `n${i}`, line: "l".repeat(200), evil: 1 })),
+    });
+    assert.equal(out.tone, "romantic");
+    assert.equal(out.costume, "ghost");
+    assert.equal(out.carveWord, "PUMPKINPIE");
+    const ings = out.ingredients as Record<string, unknown>[];
+    assert.equal(ings.length, 5);
+    assert.equal((ings[0].line as string).length, 70);
+    assert.equal("evil" in ings[0], false);
+    assert.equal(sanitizeExtras("happy-halloween", { tone: "kids", costume: "black-cat" }).costume, "black-cat");
   });
 });
 

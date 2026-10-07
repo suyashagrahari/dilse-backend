@@ -141,6 +141,8 @@ router.use("/happy-promise-day-pages", makeValentineDayRouter("happy-promise-day
 router.use("/happy-hug-day-pages", makeValentineDayRouter("happy-hug-day"));
 router.use("/happy-kiss-day-pages", makeValentineDayRouter("happy-kiss-day"));
 router.use("/happy-valentines-day-pages", makeValentineDayRouter("happy-valentines-day"));
+// Happy Halloween — the same engine, a ninth entry.
+router.use("/happy-halloween-pages", makeValentineDayRouter("happy-halloween"));
 router.use("/flags-pages", flagsPageRoutes);
 router.use("/date-invitation-pages", dateInvitationPageRoutes);
 router.use("/photo-puzzle-pages", photoPuzzlePageRoutes);

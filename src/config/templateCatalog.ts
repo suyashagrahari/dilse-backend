@@ -70,6 +70,7 @@ const LABELS: Record<string, string> = {
   "happy-hug-day": "Hug Day",
   "happy-kiss-day": "Kiss Day",
   "happy-valentines-day": "Valentine's Day",
+  "happy-halloween": "Happy Halloween",
   flags: "Red Flag, Green Flag",
   "date-invitation": "Date Invitation",
   "photo-puzzle": "Photo Puzzle",

@@ -39,6 +39,7 @@ const DAY_NAMES: Record<ValentineDaySlug, string> = {
   "happy-hug-day": "Hug Day",
   "happy-kiss-day": "Kiss Day",
   "happy-valentines-day": "Valentine's Day",
+  "happy-halloween": "Halloween",
 };
 
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.slice(0, max) : "");
@@ -337,6 +338,7 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
               senderName: page.senderName,
               recipientName: page.recipientName,
               dayName: DAY_NAMES[slug],
+              slug,
               question: typeof extras.question === "string" ? extras.question : "",
               noDodges: typeof set["reactions.noDodges"] === "number" ? (set["reactions.noDodges"] as number) : 0,
               link: await shareUrlFor(page.shareId, String(page.userId)),
