@@ -450,6 +450,72 @@ export async function sendDateRsvpEmail(opts: {
   }
 }
 
+/**
+ * A Valentine's-week question was answered (Propose Day, Valentine's Day).
+ * Goes to the page owner — modelled on sendDateRsvpEmail. Only ever "yes": the
+ * "No" button runs away, so there is no other answer to report. Fired once per
+ * page (the react beacon is first-wins), never blocks the recipient.
+ */
+export async function sendValentineAnswerEmail(opts: {
+  to: string;
+  senderName: string;
+  recipientName: string;
+  /** "Propose Day" / "Valentine's Day" */
+  dayName: string;
+  /** The question as the recipient saw it. */
+  question: string;
+  noDodges: number;
+  link: string;
+}): Promise<void> {
+  // The names and question are the page owner's free text and the name lands in
+  // the subject line: fold line breaks / control characters to a space.
+  const oneLine = (s: string) => (s || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  const who = oneLine(opts.recipientName) || "They";
+  const question = oneLine(opts.question);
+  const dodges =
+    opts.noDodges > 0
+      ? ` After chasing the "No" button ${opts.noDodges} ${opts.noDodges === 1 ? "time" : "times"} 😄`
+      : " First try, no hesitation.";
+  const subject = `💍 ${who} said YES`;
+  const head = `${who} said YES 💘`;
+  const body = `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
+
+  if (!resend) {
+    console.log(`\n[VALENTINE ANSWER — no RESEND_API_KEY] To: ${opts.to} | ${subject} | ${body}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${head}\n\n${body}\n\nOpen your page: ${opts.link}\n\n— SubhSandesh`,
+      html: `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#1e0f24;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#1e0f24;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#2a1240;border-radius:24px;border:1px solid rgba(255,255,255,.14);overflow:hidden;max-width:480px;width:100%;">
+        <tr><td style="background:linear-gradient(115deg,#7a1035,#d7263d,#e6c27a);padding:28px 30px;text-align:center;">
+          <p style="margin:0;color:#fff;font-size:11px;letter-spacing:.22em;font-weight:700;text-transform:uppercase;">SubhSandesh · ${escapeHtml(opts.dayName)}</p>
+          <p style="margin:8px 0 0;color:#fff;font-size:26px;font-weight:800;">${escapeHtml(head)}</p>
+        </td></tr>
+        <tr><td style="padding:28px 30px;text-align:center;">
+          <p style="margin:0 0 22px;color:#fff6ec;font-size:15px;line-height:1.7;">${escapeHtml(body)}</p>
+          <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#f6e3b4;color:#1e0f24;font-weight:800;font-size:15px;text-decoration:none;padding:13px 26px;border-radius:999px;">Open your page</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim(),
+    });
+  } catch (err) {
+    console.error("[VALENTINE ANSWER] Failed to send email:", err);
+  }
+}
+
 function escapeHtml(s: string): string {
   return (s || "")
     .replace(/&/g, "&amp;")

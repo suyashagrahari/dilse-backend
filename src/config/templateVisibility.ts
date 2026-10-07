@@ -61,6 +61,16 @@ import { isApexDeployment } from "./env";
 export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-rakshabandhan-to-brother",
   "happy-rakshabandhan-to-sister",
+  // Valentine's week ships hidden; the super admin releases each day in
+  // /admin/templates when it is ready (only bites on the apex — see below).
+  "happy-rose-day",
+  "happy-propose-day",
+  "happy-chocolate-day",
+  "happy-teddy-day",
+  "happy-promise-day",
+  "happy-hug-day",
+  "happy-kiss-day",
+  "happy-valentines-day",
 ]);
 
 /**

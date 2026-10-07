@@ -21,6 +21,14 @@ import { dateInvitation } from "./date-invitation";
 import { dedication } from "./dedication";
 import { flags } from "./flags";
 import { ganeshChaturthi } from "./happy-ganesh-chaturthi";
+import { chocolateDay } from "./happy-chocolate-day";
+import { hugDay } from "./happy-hug-day";
+import { kissDay } from "./happy-kiss-day";
+import { promiseDay } from "./happy-promise-day";
+import { proposeDay } from "./happy-propose-day";
+import { roseDay } from "./happy-rose-day";
+import { teddyDay } from "./happy-teddy-day";
+import { valentinesDay } from "./happy-valentines-day";
 import { holdMyHand } from "./hold-my-hand";
 import { kundliMilan } from "./kundli-milan";
 import { legalNotice } from "./legal-notice";
@@ -63,6 +71,14 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   dateInvitation,
   dedication,
   flags,
+  chocolateDay,
+  hugDay,
+  kissDay,
+  promiseDay,
+  proposeDay,
+  roseDay,
+  teddyDay,
+  valentinesDay,
   holdMyHand,
   kundliMilan,
   legalNotice,
