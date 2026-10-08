@@ -75,7 +75,7 @@ export const VW_FORBIDDEN: readonly string[] = [
  * ENGLISH stories into romanised-Hindi pages; the story has to decide.
  */
 export const VW_LANGUAGE =
-  " The page's own decorations use a few Hindi words, but only the sender's story decides the language of what you write: an English story gets a page written in English, a Hinglish story (Hindi in Latin letters) gets Hinglish in Latin letters, a Devanagari story gets Devanagari. Every field, short ones included, follows that one choice. When the story names a product brand, write what the thing is instead (their favourite chocolate bar, that box of truffles).";
+  " Only the sender's own sentences decide the language of what you write — not the names, places, foods or songs they mention: a story told in English sentences gets a page written in English, a Hinglish story (Hindi in Latin letters) gets Hinglish in Latin letters, a Devanagari story gets Devanagari. Every field, short ones included, follows that one choice. When the story names a product brand, write what the thing is instead (their favourite chocolate bar, that box of truffles).";
 
 export const VW_TONE =
   " Write it in the same language and script as the sender's story: an English story gets natural English (a single familiar endearment from their own story is fine), a Hinglish story gets Hinglish the way people actually text it. Never translate word for word. Warm, specific and funny — roughly 70% playful, 30% sincere: tease them about something real from the story, then mean it. Get the sender's and recipient's genders right where the story makes them clear, gender-neutral otherwise. Family-safe. Never name a brand of any product — describe the thing instead.";
