@@ -1,93 +1,105 @@
 import type { AiFillTemplateSchema } from "./types";
 import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentineShared";
 
+/** Short English stories full of Indian names were coming back in Hinglish about half the time. */
+const LANGUAGE_BY_WORDS = " Judge the language by the sender's own sentences, not by the names in them: 'Her name is Neha. I love her.' is an English story.";
+
 /**
- * happy-promise-day-premium — "The Red Thread", the ULTRA-PREMIUM twin of happy-promise-day. Owned by
- * that template's builder: started as a copy of ./happy-promise-day.ts (premise, fields
- * and guides still describe the $2 page — rewrite them for the premium design),
- * with letterMax 3000 and two premium text leaves at the end.
+ * happy-promise-day-premium — "The Red Thread", the ULTRA-PREMIUM twin of
+ * happy-promise-day (Valentine's week, 11 Feb). Owned by that template's builder.
  *
- * Base notes (from ./happy-promise-day.ts):
- * happy-promise-day — "Vaada Pakka" (Valentine's week, 11 Feb).
+ * The page: the red thread of fate. The recipient pulls a red thread tied to
+ * their little finger through the sender's photos until the other end arrives,
+ * tied to the sender's finger; the knot cinches, the thread turns gold and
+ * writes "I promise" with the big promise beneath. They thread gold rings (one
+ * promise each), read the vow (stitched in, sealed with their thumbprint), seal
+ * a promise for later in a vial, and are asked "Do you promise too?".
  *
  * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts);
- * extras keys are defined in server/src/config/valentineDays.ts.
- * Not declared: lockStyle, lockFinale (visual choices).
+ * extras keys are in server/src/config/premiumDays/happy-promise-day-premium.ts.
+ * Not declared: futureDate (a date the sender picks), distanceKm (a number only
+ * they know), threadColor (visual), and every media / timing / switch premium field.
  */
 export const promiseDayPremium: AiFillTemplateSchema = {
   slug: "happy-promise-day-premium",
   audience: "partner",
   premise:
-    "A Promise Day page on paper-and-ink: the recipient hooks a pinky with the sender's, pulls promise chits from a jar, then signs the sender's letter as a playful '₹∞ Pyaar Stamp Paper' contract (a Vachan Patra) with a thumbprint 'notarised by Cupid', and finally locks a love-lock on a bridge. Sincere at heart, funny around the edges." + VW_LANGUAGE,
+    "A cinematic Promise Day page built on the legend of the red thread of fate: an invisible red thread ties two people's little fingers together; it can stretch or tangle but never breaks. The recipient pulls the thread through the sender's photos until the other end arrives, tied to the sender's finger; the knot tightens, the thread turns gold and writes 'I promise', with the sender's biggest promise beneath. Then they thread gold rings that each hold one small promise, read the sender's vow, seal a promise for later in a glass vial that opens on a future date, and are asked 'Do you promise too?'. Quiet, tender, cinematic, with small concrete promises rather than grand clichés." + VW_LANGUAGE + LANGUAGE_BY_WORDS,
   fields: [
     ...valentineCommon({
       dayName: "Promise Day",
-      letterWhere: "It is the body of a mock-official stamp-paper contract (Vachan Patra) the recipient signs with a fingertip — warm first-person promises written like a letter, with at most one playful legal phrase.",
+      letterWhere: "It is the vow: stitched into the page one paragraph at a time with red thread, then sealed with the recipient's thumbprint. Make it a vow — what the sender promises them and why they are sure — warm and specific, not a list.",
       letterMax: 3000,
-      endLineWhere: "under the love-lock on the bridge at the very end.",
-      photosWhere: "the photos hang as polaroids on a string of fairy lights.",
-      notes: true,
-      signaturePrinted: "The contract prints signature lines for both of them right under it.",
+      signaturePrinted: "The page prints the sender's name as a signature under it.",
+      endLineWhere: "on the last screen and the keepsake poster.",
+      photosWhere: "each photo hangs from the red thread on a little wooden peg, and the caption is written under it.",
+      notes: false,
     }),
     {
-      path: "extras.envelopeLine",
-      label: "Envelope line",
+      path: "extras.gateLine",
+      label: "Opening line",
       kind: "text",
-      max: 60,
-      guide: "The line on the envelope that arrives first, addressed to them — short, sweet, a little mysterious, with a nod to the story if it fits. Under 55 characters." + VW_TONE,
+      max: 70,
+      guide: "The first line they read, under their name, on a dark screen with one red thread swaying down to their little finger. An invitation to follow this thread to whoever holds the other end, quiet and intriguing, one sentence that mentions the thread, under 65 characters." + VW_TONE,
+      example: "Pull gently. Someone's been holding the other end.",
     },
     {
-      path: "extras.pinkyPrompt",
-      label: "Pinky-swear prompt",
+      path: "extras.sharedSince",
+      label: "Together since",
       kind: "text",
-      max: 50,
-      guide: "The instruction asking them to hook their pinky with the sender's before anything opens. Playful and bossy-cute, under 45 characters, in the story's language, one emoji allowed.",
+      max: 24,
+      guide: "The moment they got together, written as just that moment — a month and year ('March 2022'), a season, an occasion ('that Diwali', 'college') — because the page prints its own lead-in before it. When the story gives only how long they have been together, or nothing, leave it empty.",
     },
     {
       path: "extras.promises",
-      label: "Promises in the jar",
+      label: "Promises (one per ring)",
       kind: "list",
-      max: 7,
+      max: 5,
       itemMax: 90,
       required: true,
-      guide: "5 to 7 promise chits, printed as numbered clauses of the contract. Each is something the SENDER promises to do, starting with 'I promise' (for a Hinglish story write it the way they would say it, e.g. 'Promise karti hoon…' with the right gender). Small, concrete and keepable, built on a habit or joke from the story — mostly funny everyday ones (sharing the last bite, waking up on time), one or two serious ones. Every promise is about the sender's own behaviour; a flaw of theirs from the story may only appear as a tease where the sender happily gives in to it. No habit the story does not mention. Each under 85 characters." + VW_TONE,
-      example: "I promise Maggi at 2 a.m., no questions asked.",
+      guide: "Exactly 5 small, concrete, keepable promises from the sender to them, each unfurling from a gold ring as a ribbon. Each one a first-person promise written wholly in the story's language and script, grounded in a real detail or habit from the story (their coffee order, the 2 a.m. calls, how fights end). No two about the same thing; no grand vague clichés. Under 80 characters each." + VW_TONE,
+      example: "I'll text you the second my flight lands. Every time.",
     },
     {
       path: "extras.bigPromise",
-      label: "The big promise",
+      label: "The promise under “I promise”",
       kind: "longtext",
-      max: 140,
-      guide: "The last, highlighted chit: the one promise that matters most, sincere and simple, one sentence under 130 characters.",
-      example: "I promise that on your worst day, I'll still choose you, every single time.",
+      max: 160,
+      required: true,
+      guide: "The one promise that matters most, shown beneath a gold 'I promise' at the climax, after the thread knots. One or two sentences, plain and sincere, in first person to them; it may use the image of the thread (staying on the other end of it), once. Under 150 characters." + VW_TONE,
+      example: "Wherever life pulls us, I'll be on the other end of this thread.",
     },
     {
-      path: "extras.lockEngraving",
-      label: "Lock engraving",
-      kind: "text",
-      max: 20,
-      guide: "What is engraved on the love-lock: their initials and a date or a two-word phrase from the story. Under 18 characters.",
-      example: "A + M · forever",
+      path: "extras.futurePromise",
+      label: "A promise for later",
+      kind: "longtext",
+      max: 200,
+      guide: "A promise sealed in a glass vial that opens on a future date the sender picks (a year or two away). Written as if read on that day, starting straight with 'By the time you read this,' (or the story language's equivalent): something the two of them will have done together by then, taken from plans or dreams in the story (a trip, a home, a ritual), ending with a small wink like 'I promised. Check.'. First person. Under 180 characters. Leave it empty when the story has no plan or dream to build it on." + VW_TONE,
     },
-    // ── Premium-only text leaves (the `premium` sub-document) ───────────────
-    // Never declared: premium.voiceNote (media), songDropAt, unlockAt,
-    // unlockTz, allowReply, voicePeaks — none of them is something a story says.
+    {
+      path: "extras.replyLine",
+      label: "Their WhatsApp reply",
+      kind: "text",
+      max: 80,
+      guide: "The message the RECIPIENT sends back to the sender from the last screen, in the recipient's voice: promising back, short and warm, with a nod to the thread. Under 70 characters, may end with one or two emoji.",
+      example: "I promise too. Both ends tied 🤞",
+    },
     {
       path: "premium.voiceCaption",
       label: "Caption under your voice note",
       kind: "text",
       max: 90,
-      guide: "The one handwritten line printed under the sender's voice note, read just before they press play (or, if no voice note is recorded, shown as a short typed 'transmission' from the sender). First person, addressed to them, one small detail or inside joke from the story. Under 85 characters, same language as the story, no hashtags.",
-      example: "Play this with headphones. Yes, that's me laughing at the end.",
+      guide: "A one-line note from the sender shown with their voice message just before the vow (or, without a recording, as a short handwritten line on its own). First person, addressed to them, one small detail from the story. Under 85 characters, no hashtags." + VW_TONE,
+      example: "Headphones on. I practised this four times and still laughed.",
     },
     {
       path: "premium.psLetter",
       label: "The sealed P.S.",
       kind: "longtext",
       max: 600,
-      guide: "A sealed P.S. envelope at the very end of the page, labelled 'open only if…'. Begin with that condition as its own first line, specific to these two (open only if you miss me tonight / open only if you ever doubt this), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
-      example: "Open only if you can't sleep.\n\nI still have the ticket from that first film. You talked through the whole thing and I've never loved a movie more.",
+      guide: "A sealed P.S. tied to the end of the thread on the last screen. Begin with an 'open only if…' condition as its own first line, specific to these two (open only if you're ever unsure / open only if the distance gets loud), then a blank line, then two to four short sentences to them in first person — quieter than the vow, built on one specific detail from the story the vow did not use; when the story has no detail left, make it a small promise or a feeling instead, never an invented memory. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
+      example: "Open only if you're ever unsure.\n\nI meant every one of them. Even the one about the last slice.",
     },
   ],
-  forbiddenOutput: VW_FORBIDDEN,
+  forbiddenOutput: [...VW_FORBIDDEN, "soulmate", "soulmates"],
 };
