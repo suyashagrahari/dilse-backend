@@ -73,7 +73,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-chocolate-day-premium": ["welcomeNote", "reasons", "embossNames", "crackLine", "ticketPromise", "letterTitle", "drizzleWord", "insideNote", "boxColor", "signOff"],
   "happy-teddy-day-premium": ["teddyName", "furColor", "eyeStyle", "pawInitial", "accessory", "parcelNote", "heartWhisper", "firstWords", "squeezeLines", "bedtimeLine", "sleepOver"],
   "happy-promise-day-premium": ["gateLine", "sharedSince", "promises", "bigPromise", "futurePromise", "futureDate", "distanceKm", "threadColor", "replyLine"],
-  "happy-hug-day-premium": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
+  "happy-hug-day-premium": ["frostLine", "distanceKm", "holdSeconds", "heartbeatBpm", "hugLines", "weatherHugs", "coupons", "hoodieTag", "replyLine"],
   "happy-kiss-day-premium": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "mosaicPhoto", "sinceDate", "kissCount", "kissBackText"],
   "happy-valentines-day-premium": ["filmTitle", "tagline", "weekLines", "metPlace", "metDate", "togetherSince", "chapterTitles", "stats", "question", "noTakes", "datePlan", "dateOn"],
   "happy-halloween-premium": ["tone", "houseName", "nightTitle", "candleMemories", "spiritWord", "spiritQA", "ingredients", "prophecy", "question", "yesLine", "specialGuest"],

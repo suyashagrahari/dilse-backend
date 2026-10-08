@@ -1,126 +1,127 @@
 import type { AiFillTemplateSchema } from "./types";
-import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentineShared";
+import { VW_FORBIDDEN, VW_TONE, valentineCommon } from "./valentineShared";
 
 /**
- * happy-hug-day-premium — "Hold Me for 20 Seconds", the ULTRA-PREMIUM twin of happy-hug-day. Owned by
- * that template's builder: started as a copy of ./happy-hug-day.ts (premise, fields
- * and guides still describe the $2 page — rewrite them for the premium design),
- * with letterMax 3000 and two premium text leaves at the end.
+ * happy-hug-day-premium — "Hold Me for 20 Seconds", the ULTRA-PREMIUM twin of
+ * happy-hug-day. Paths resolve against `ValentineDayData`
+ * (client/app/(templates)/_valentine/types.ts); the extras keys are in
+ * ../premiumDays/happy-hug-day-premium.ts.
  *
- * Base notes (from ./happy-hug-day.ts):
- * happy-hug-day — "Jaadu Ki Jhappi Café" (Valentine's week, 12 Feb).
+ * The demo seeds 4 photos, 4 hug lines, 3 mittens and 2 hug passes, so those
+ * indices exist while the sender builds.
  *
- * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts);
- * extras keys are defined in server/src/config/valentineDays.ts. The demo seeds
- * four menu items and three coupons, so those indices always exist; rows 5–6
- * are the sender's to add by hand. Photo notes are not declared to stay under
- * the 40-field ceiling. Not declared: characters (a visual choice).
+ * Not declared: distanceKm, holdSeconds, heartbeatBpm (numbers the sender
+ * sets; a story rarely states them and the model would invent them), music,
+ * GIFs, media.
+ *
+ * forbiddenOutput sweeps brand names, the $2 page's own identity (its café
+ * name) and medical framing the brief rules out — the copy says "long enough
+ * to feel it", never a health claim.
  */
+const LANGUAGE =
+  " Write in the language and script the sender's story is written in — an English story gets English, a Hinglish story gets Hinglish in Latin letters — and keep every field in that one choice. When the story names a product brand, write what the thing is instead.";
+
 export const hugDayPremium: AiFillTemplateSchema = {
   slug: "happy-hug-day-premium",
   audience: "partner",
   premise:
-    "A Hug Day page set in a cosy café, the 'Jaadu Ki Jhappi Café': the recipient squishes two chubby characters into a hug, orders from a Hug Menu where each hug is a little gesture, collects stamps in a Jhappi Passport, and tears off Hug Coupons to redeem later. Soft, warm, knitted-sweater mood." + VW_LANGUAGE,
+    "A premium Hug Day page that is the closest a phone can get to being held. The recipient wipes a frosted winter window to find their name and one line from the sender, drags two tiny figures (the two of them) together across a snowy field, then holds the phone with both thumbs for twenty seconds while two warm heat shapes melt into one, a heartbeat slows and the sender's short lines fade in breath by breath. Then they rub knitted mittens warm to open notes saved for bad days, unzip an oversized hoodie to read the letter on its lining, crawl into a blanket fort of their photos, and hug the sender back. Soft, slow, intimate and present-tense: comfort, warmth, 'I'm here' — never jokes during the hug, never therapy-speak, never health claims. It is usually for a partner who is far away, but can be for anyone who needs a hug — follow the story." +
+    LANGUAGE,
   fields: [
     ...valentineCommon({
       dayName: "Hug Day",
-      letterWhere: "It is a card tucked in a hoodie pocket, opened after the first hug. It can talk about hugging them for real soon.",
+      letterWhere:
+        "It is written on the soft lining of a hoodie they unzip, so it should read like what the sender would say with their arms around them: warm, close and specific, with one honest line about the distance or the hard part if the story has one.",
       letterMax: 3000,
-      endLineWhere: "on the final screen with the hug coupons.",
-      photosWhere: "the photos are patches on a cosy memory quilt.",
-      signaturePrinted: "The card already prints the sender's signature under it, in script.",
+      endLineWhere: "on their hug certificate at the very end.",
+      photosWhere: "the photos are sewn as patches into a quilt over a blanket fort, each with a stitched label.",
+      notes: true,
+      greetingPrinted: "The lining already shows a 'Dear <their name>,' line above it.",
+      signaturePrinted: "The lining already signs it with the sender's name underneath.",
     }),
     {
-      path: "extras.cafeSign",
-      label: "Café sign",
+      path: "extras.frostLine",
+      label: "Written behind the frost",
       kind: "text",
-      max: 40,
-      guide: "The hand-painted sign over the café door, made for them (their name, pet name or a detail from the story). Under 38 characters, same language as the story.",
-      example: "Jhappi Café · open only for you",
+      max: 50,
+      guide:
+        "The line they find under their name when they wipe a frosted window clean: a soft, short call to come close, in the sender's voice, in the present tense, with at most one small detail from the story. Under 40 characters, no emoji.",
     },
     {
-      path: "extras.squishPrompt",
-      label: "Squish prompt",
-      kind: "text",
-      max: 40,
-      guide: "The tiny instruction asking them to push the two characters together into a hug. Cute and a little dramatic, under 36 characters, in the story's language, one emoji allowed.",
+      path: "extras.hugLines",
+      label: "Lines during the hug",
+      kind: "list",
+      max: 4,
+      itemMax: 60,
+      guide:
+        "Four very short lines that fade in, one every few seconds, while they hold the screen for a twenty-second hug — the things the sender would murmur while holding them. Present tense, calm, simple words, each a different feeling (permission to rest, staying, being safe, being loved); one may carry a tiny real detail from the story. Each under 45 characters, no emoji, no questions." +
+        VW_TONE,
     },
-    {
-      path: "extras.tagMe",
-      label: "Name tag — sender's character",
-      kind: "text",
-      max: 12,
-      guide: "The name tag on the character that stands for the sender: the sender's first name, or the nickname the story gives the sender. Never a pronoun. Under 12 characters.",
-    },
-    {
-      path: "extras.tagYou",
-      label: "Name tag — their character",
-      kind: "text",
-      max: 12,
-      guide: "The name tag on the character that stands for the recipient: their pet name from the story if there is one, otherwise their first name. Never a pronoun. Under 12 characters.",
-    },
-    ...[0, 1, 2, 3].flatMap((i) => [
-      {
-        path: `extras.menu[${i}].name`,
-        label: `Hug ${i + 1} — name`,
-        kind: "text" as const,
-        max: 24,
-        guide: `The name of hug ${i + 1} on the café's Hug Menu (a kind of hug: bear hug, back hug, sleepy hug, airport hug…), each different. Under 22 characters.`,
-        example: "Bear Hug",
-      },
-      {
-        path: `extras.menu[${i}].line`,
-        label: `Hug ${i + 1} — description`,
-        kind: "text" as const,
-        max: 70,
-        guide: `The menu description for hug ${i + 1}: when to order it — a specific situation from their life in the story — and what it does, like a café menu would describe a drink. Under 65 characters. Simple, correct words; if the Hinglish phrasing is not natural, write it in English.` + VW_TONE,
-        example: "For exam nights. Comes with one head pat and zero lectures.",
-      },
-      {
-        path: `extras.menu[${i}].price`,
-        label: `Hug ${i + 1} — price`,
-        kind: "text" as const,
-        max: 20,
-        guide: `A silly 'price' for hug ${i + 1} paid in affection (a smile, two kisses, free forever). Under 18 characters.`,
-        example: "1 smile",
-      },
-    ]),
     ...[0, 1, 2].flatMap((i) => [
       {
+        path: `extras.weatherHugs[${i}].when`,
+        label: `Mitten ${i + 1} — the moment`,
+        kind: "text" as const,
+        max: 28,
+        guide: `The label knitted on mitten ${i + 1} of 3, starting with 'For': a specific kind of day this person really has, taken from the story (their exams, a hard shift, missing home, a bad commute). Three different moments across the three. Under 26 characters.`,
+      },
+      {
+        path: `extras.weatherHugs[${i}].note`,
+        label: `Mitten ${i + 1} — the note inside`,
+        kind: "text" as const,
+        max: 120,
+        guide: `The note inside mitten ${i + 1}, read on exactly that kind of day: one or two short sentences to them in the sender's voice — practical tenderness (rest, eat, call me) plus one detail only these two share. Under 110 characters.` + VW_TONE,
+      },
+    ]),
+    ...[0, 1].flatMap((i) => [
+      {
         path: `extras.coupons[${i}].title`,
-        label: `Coupon ${i + 1}`,
+        label: `Hug pass ${i + 1}`,
         kind: "text" as const,
         max: 30,
-        guide: `The headline of tear-off Hug Coupon ${i + 1} — one specific hug they can redeem later, tied to a situation from the story (the three coupons are three different kinds of hug, worded differently). Under 28 characters, same language as the story.`,
+        guide: `Hug pass ${i + 1} of 2 that they can tear off and redeem: one specific hug the sender owes them, named simply (a kind of hug and where or when it happens — only places the story mentions, or 'when we meet'). Two different hugs. Under 26 characters.`,
       },
       {
         path: `extras.coupons[${i}].detail`,
-        label: `Coupon ${i + 1} — fine print`,
+        label: `Hug pass ${i + 1} — fine print`,
         kind: "text" as const,
         max: 80,
-        guide: `The playful fine print on coupon ${i + 1}, like real terms and conditions: when it can be used, a silly condition or an expiry, with a nod to the story. Under 75 characters.`,
-        example: "Valid on bad hair days. Not valid on the remote.",
+        guide: `The fine print of hug pass ${i + 1}: when or how it can be redeemed, warm and a little playful. Tie it to something the story actually says; when the story says little, tie it to the distance between them or the next time they meet instead. Under 70 characters.`,
       },
     ]),
-    // ── Premium-only text leaves (the `premium` sub-document) ───────────────
-    // Never declared: premium.voiceNote (media), songDropAt, unlockAt,
-    // unlockTz, allowReply, voicePeaks — none of them is something a story says.
+    {
+      path: "extras.hoodieTag",
+      label: "Label stitched on the hoodie",
+      kind: "text",
+      max: 24,
+      guide: "The little label stitched inside the hoodie's collar, like a clothing tag: two to four words that say the hoodie (and the person) belongs with the sender, with a light touch. Under 22 characters, no emoji.",
+    },
+    {
+      path: "extras.replyLine",
+      label: "Their reply",
+      kind: "text",
+      max: 80,
+      guide:
+        "The prefilled WhatsApp reply the recipient sends after hugging the sender back, written in the RECIPIENT's voice to the sender (the app adds the sender's name after it, so do not sign it). Soft and sincere, one small detail from the story. Under 75 characters, at most one emoji.",
+    },
+    // ── Premium-only text leaves ─────────────────────────────────────────────
     {
       path: "premium.voiceCaption",
-      label: "Caption under your voice note",
+      label: "Line by your voice note",
       kind: "text",
       max: 90,
-      guide: "The one handwritten line printed under the sender's voice note, read just before they press play (or, if no voice note is recorded, shown as a short typed 'transmission' from the sender). First person, addressed to them, one small detail or inside joke from the story. Under 85 characters, same language as the story, no hashtags.",
-      example: "Play this with headphones. Yes, that's me laughing at the end.",
+      guide:
+        "The handwritten line beside the sender's voice note, found in the hoodie's pocket (if no voice note is recorded, this line IS the message). First person, to them, quiet and close, with one small detail from the story. Under 80 characters, same language as the story, no hashtags.",
     },
     {
       path: "premium.psLetter",
-      label: "The sealed P.S.",
+      label: "The P.S. in the other pocket",
       kind: "longtext",
       max: 600,
-      guide: "A sealed P.S. envelope at the very end of the page, labelled 'open only if…'. Begin with that condition as its own first line, specific to these two (open only if you miss me tonight / open only if you ever doubt this), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
-      example: "Open only if you can't sleep.\n\nI still have the ticket from that first film. You talked through the whole thing and I've never loved a movie more.",
+      guide:
+        "A P.S. in the hoodie's other pocket. Begin with an 'Open only on…' or 'Open only when…' condition as its own first line, specific to these two (a bad day, a night they can't sleep), then a blank line, then two to four short sentences to them in first person — quieter than the letter, built on one detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 520 characters." +
+        VW_TONE,
     },
   ],
-  forbiddenOutput: VW_FORBIDDEN,
+  forbiddenOutput: [...VW_FORBIDDEN, "oxytocin", "scientifically", "jaadu"],
 };
