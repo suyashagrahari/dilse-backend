@@ -16,21 +16,31 @@ import { VALENTINE_DAY_MODELS, type IValentineDayPage } from "../models/Valentin
 import User from "../models/User";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
-import { sanitizeLovePhotos, userPhotoFolder } from "../utils/loveMedia";
-import { sendValentineAnswerEmail } from "../utils/mailer";
+import { LOVE_LIMITS, sanitizeLovePhotos, userPhotoFolder } from "../utils/loveMedia";
+import { sendValentineAnswerEmail, sendValentineReplyEmail } from "../utils/mailer";
+import { resolvePremiumVoice, type AudioUploader } from "../utils/premiumVoice";
 import {
+  PREMIUM_BASE,
+  PREMIUM_DAY_SLUGS,
   REACTION_EVENTS,
   VALENTINE_DAYS,
   VW_LIMITS,
+  cleanReplyText,
+  isPremiumDaySlug,
+  isPremiumLocked,
   reactionWrite,
+  replyWrite,
   sanitizeExtras,
   sanitizeGifSlots,
   sanitizeMusic,
+  sanitizePremium,
+  type BaseDaySlug,
+  type PremiumFields,
   type ReactionEvent,
   type ValentineDaySlug,
 } from "../config/valentineDays";
 
-const DAY_NAMES: Record<ValentineDaySlug, string> = {
+const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "happy-rose-day": "Rose Day",
   "happy-propose-day": "Propose Day",
   "happy-chocolate-day": "Chocolate Day",
@@ -40,6 +50,15 @@ const DAY_NAMES: Record<ValentineDaySlug, string> = {
   "happy-kiss-day": "Kiss Day",
   "happy-valentines-day": "Valentine's Day",
   "happy-halloween": "Halloween",
+};
+
+/** A premium day's emails use its base day's plain name ("Rose Day"). */
+const DAY_NAMES: Record<ValentineDaySlug, string> = {
+  ...BASE_DAY_NAMES,
+  ...(Object.fromEntries(PREMIUM_DAY_SLUGS.map((s) => [s, BASE_DAY_NAMES[PREMIUM_BASE[s]]])) as Record<
+    (typeof PREMIUM_DAY_SLUGS)[number],
+    string
+  >),
 };
 
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.slice(0, max) : "");
@@ -59,6 +78,8 @@ type DayBody = {
   endLine?: unknown;
   extras?: unknown;
   password?: unknown;
+  /** Premium slugs only; ignored on a $2 slug. */
+  premium?: unknown;
 };
 
 /** The owner-visible, never-public reaction summary. */
@@ -69,16 +90,48 @@ export type ReactionsView = {
   answeredAt: Date | null;
   noDodges: number | null;
   count: number | null;
+  /** Premium slugs only (the key is absent on a $2 page). */
+  reply?: { text: string; at: Date | null } | null;
 };
 
 /**
  * Strip what a recipient must never receive. Used by getShared AND the generic resolver.
  * `userId` goes too: the viewer never reads it (fromDb ignores it), and the
  * generic resolver takes the owner from the document, not from this object.
+ *
+ * Premium pages (by `day`) additionally:
+ *  - while `premium.unlockAt` is in the future and the viewer is not the
+ *    owner, return ONLY a teaser — names, the unlock instant and `locked: true`;
+ *    no letter, photos, GIFs, extras, music, voice, end line or P.S.;
+ *  - otherwise carry `locked: false` and `replySent` — the one reaction bit a
+ *    recipient may see (so a reloaded page does not offer the reply box again).
+ * A $2 page comes back exactly as before: no `premium`, `locked` or `replySent` keys added.
  */
-export function projectValentineShared(data: Record<string, unknown>): Record<string, unknown> {
-  const { reactions: _r, password: _pw, passwordRaw: _pr, userId: _u, ...rest } = data;
-  return rest;
+export function projectValentineShared(
+  data: Record<string, unknown>,
+  opts: { now?: Date; viewerId?: string | null } = {}
+): Record<string, unknown> {
+  const { reactions, password: _pw, passwordRaw: _pr, userId, ...rest } = data;
+  if (!isPremiumDaySlug(rest.day)) return rest;
+
+  const premium = (rest.premium ?? {}) as Partial<PremiumFields>;
+  const isOwner = !!opts.viewerId && userId != null && String(userId) === String(opts.viewerId);
+  if (!isOwner && isPremiumLocked(premium, opts.now ?? new Date())) {
+    return {
+      _id: rest._id,
+      shareId: rest.shareId,
+      day: rest.day,
+      recipientName: rest.recipientName,
+      senderName: rest.senderName,
+      petName: rest.petName,
+      isPublished: rest.isPublished,
+      createdAt: rest.createdAt,
+      locked: true,
+      premium: { unlockAt: premium.unlockAt ?? "", unlockTz: premium.unlockTz ?? "" },
+    };
+  }
+  const reply = (reactions as { reply?: unknown } | undefined)?.reply;
+  return { ...rest, locked: false, replySent: !!(reply && typeof reply === "object") };
 }
 
 /** Injected in tests; the defaults are the real things. */
@@ -86,7 +139,11 @@ export interface ValentineControllerDeps {
   model?: mongoose.Model<IValentineDayPage>;
   findOwnerEmail?: (userId: unknown) => Promise<string | null>;
   sendAnswerEmail?: typeof sendValentineAnswerEmail;
+  sendReplyEmail?: typeof sendValentineReplyEmail;
   buildShareUrl?: (shareId: string, userId: string) => Promise<string>;
+  /** Premium voice-note uploader (S3 in production). */
+  uploadAudio?: AudioUploader;
+  now?: () => Date;
 }
 
 const defaultOwnerEmail = async (userId: unknown): Promise<string | null> => {
@@ -105,17 +162,36 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
   const ownerEmail = deps.findOwnerEmail ?? defaultOwnerEmail;
   const sendAnswer = deps.sendAnswerEmail ?? sendValentineAnswerEmail;
   const shareUrlFor = deps.buildShareUrl ?? defaultShareUrl;
+  const sendReply = deps.sendReplyEmail ?? sendValentineReplyEmail;
+  const nowFn = deps.now ?? (() => new Date());
+  const isPremium = isPremiumDaySlug(slug);
   const label = `${slug} page`;
 
   /**
    * Photos: inline data URLs from the editor are uploaded to S3 by
    * sanitizeLovePhotos (which calls uploadImageDataUrl per photo) BEFORE any
-   * cap is applied; only the CDN link is stored. Capped to the day's own max.
+   * cap is applied; only the CDN link is stored. Capped to the day's own max
+   * (the shared ten is the scan ceiling for $2 days, as before; premium keeps 12).
    */
   const photosFrom = async (raw: unknown, userId: unknown) =>
-    (await sanitizeLovePhotos(raw, userPhotoFolder(slug, userId))).slice(0, day.maxPhotos);
+    (await sanitizeLovePhotos(raw, userPhotoFolder(slug, userId), Math.max(LOVE_LIMITS.maxPhotos, day.maxPhotos))).slice(
+      0,
+      day.maxPhotos
+    );
 
-  /** Every content field the form owns, sanitised. Async only because of photos. */
+  /**
+   * Premium only. `prev` is the stored sub-document on update. A voiceNote in
+   * the body (data URL or https) goes through resolvePremiumVoice; a body
+   * without one keeps the stored link.
+   */
+  const premiumFrom = async (raw: unknown, userId: unknown, prev?: Partial<PremiumFields> | null): Promise<PremiumFields> => {
+    const p = sanitizePremium(raw, prev, nowFn());
+    const src = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+    if (src.voiceNote !== undefined) p.voiceNote = await resolvePremiumVoice(src.voiceNote, userId, slug, deps.uploadAudio);
+    return p;
+  };
+
+  /** Every content field the form owns, sanitised. Async only because of photos (and the voice note). */
   const contentFrom = async (b: DayBody, userId: unknown) => ({
     recipientName: line(b.recipientName, VW_LIMITS.name),
     senderName: line(b.senderName, VW_LIMITS.name),
@@ -126,11 +202,13 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
     ...sanitizeMusic(b),
     endLine: line(b.endLine, VW_LIMITS.endLine),
     extras: sanitizeExtras(slug, b.extras),
+    // Never written for a $2 slug — its documents carry no `premium` key at all.
+    ...(isPremium ? { premium: await premiumFrom(b.premium, userId) } : {}),
   });
 
   const reactionsOf = (page: IValentineDayPage): ReactionsView => {
     const r = (page.reactions ?? {}) as Record<string, unknown>;
-    return {
+    const view: ReactionsView = {
       openedAt: (r.openedAt as Date) ?? null,
       completedAt: (r.completedAt as Date) ?? null,
       answer: r.answer === "yes" ? "yes" : null,
@@ -138,6 +216,14 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
       noDodges: typeof r.noDodges === "number" ? r.noDodges : null,
       count: typeof r.count === "number" ? r.count : null,
     };
+    if (isPremium) {
+      const reply = r.reply as { text?: unknown; at?: unknown } | null | undefined;
+      view.reply =
+        reply && typeof reply.text === "string" && reply.text
+          ? { text: reply.text, at: reply.at instanceof Date ? reply.at : reply.at ? new Date(String(reply.at)) : null }
+          : null;
+    }
+    return view;
   };
 
   const create = async (req: Request, res: Response): Promise<void> => {
@@ -208,6 +294,14 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
       }
       if (b.endLine !== undefined) page.endLine = line(b.endLine, VW_LIMITS.endLine);
       if (b.extras !== undefined) { page.extras = sanitizeExtras(slug, b.extras); page.markModified("extras"); }
+      if (isPremium && b.premium !== undefined) {
+        const stored = page.premium as unknown as { toObject?: () => PremiumFields } | PremiumFields | undefined;
+        const prev = stored && typeof (stored as { toObject?: unknown }).toObject === "function"
+          ? (stored as { toObject: () => PremiumFields }).toObject()
+          : (stored as PremiumFields | undefined);
+        page.premium = await premiumFrom(b.premium, req.userId, prev);
+        page.markModified("premium");
+      }
       // Empty password on update means "unchanged", not "remove the gate".
       if (b.password !== undefined && str(b.password, VW_LIMITS.password) !== "") {
         applyPagePassword(page, b.password, VW_LIMITS.password);
@@ -256,7 +350,11 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
         { new: true }
       );
       if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
-      const safeData = projectValentineShared(page.toObject() as unknown as Record<string, unknown>);
+      // optionalAuth on the route: the signed-in owner sees their own sealed page.
+      const safeData = projectValentineShared(page.toObject() as unknown as Record<string, unknown>, {
+        now: nowFn(),
+        viewerId: req.userId ? String(req.userId) : null,
+      });
       res.json({ success: true, data: safeData, hasPassword: !!page.password, templateType: slug });
     } catch (error) {
       console.error(`Get shared ${label} error:`, error);
@@ -356,6 +454,83 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
     }
   };
 
-  return { create, getMy, get, update, publish, getShared, verify, delete: remove, react };
+  /**
+   * POST /share/:shareId/reply — premium only (the route is registered only on
+   * premium routers). Public, rate-limited, optionalAuth.
+   *
+   * Body `{ text }`. One reply per page, first write wins (replyWrite): a
+   * second tab or a replay answers `recorded: false`. Refused with 403 while
+   * the page is still sealed or when the sender switched replies off. The
+   * response never echoes anything. A recorded reply emails the owner,
+   * fire-and-forget.
+   */
+  const reply = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const text = cleanReplyText(req.body?.text);
+      if (!text) { res.status(400).json({ success: false, error: "Write a reply first" }); return; }
+
+      const shareId = String(req.params.shareId || "");
+      const page = await Model.findOne({ shareId, isPublished: true }).select(
+        "userId shareId recipientName senderName premium"
+      );
+      if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
+      const premium = (page.premium ?? {}) as Partial<PremiumFields>;
+      if (isPremiumLocked(premium, nowFn())) {
+        res.status(403).json({ success: false, error: "This page has not opened yet" });
+        return;
+      }
+      if (premium.allowReply === false) {
+        res.status(403).json({ success: false, error: "Replies are turned off for this page" });
+        return;
+      }
+      if (req.userId && String(req.userId) === String(page.userId)) {
+        res.json({ success: true, recorded: false, reason: "owner" });
+        return;
+      }
+
+      const { guard, set } = replyWrite(text, nowFn());
+      const result = await Model.updateOne({ _id: page._id, isPublished: true, ...guard }, { $set: set });
+      const recorded = (result?.modifiedCount ?? 0) > 0;
+
+      if (recorded) {
+        void (async () => {
+          try {
+            const to = await ownerEmail(page.userId);
+            if (!to) return;
+            await sendReply({
+              to,
+              senderName: page.senderName,
+              recipientName: page.recipientName,
+              dayName: DAY_NAMES[slug],
+              slug,
+              reply: text,
+              link: await shareUrlFor(page.shareId, String(page.userId)),
+            });
+          } catch (err) {
+            console.error(`${label} reply email error:`, err);
+          }
+        })();
+      }
+
+      res.json({ success: true, recorded });
+    } catch (error) {
+      console.error(`Reply ${label} error:`, error);
+      res.status(500).json({ success: false, error: "Failed to send reply" });
+    }
+  };
+
+  return {
+    create,
+    getMy,
+    get,
+    update,
+    publish,
+    getShared,
+    verify,
+    delete: remove,
+    react,
+    /** Premium slugs only; undefined on a $2 controller. */
+    reply: isPremium ? reply : undefined,
+  };
 }
 

@@ -23,9 +23,20 @@ export function makeValentineDayRouter(slug: ValentineDaySlug): Router {
   const reactLimit = rateLimit({ windowMs: 60 * 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 
   // Public — the recipient's entry points. Must stay above `protect`.
-  router.get("/share/:shareId", c.getShared);
+  // optionalAuth on the read: a signed-in owner sees a premium page before its unlock time.
+  router.get("/share/:shareId", optionalAuth, c.getShared);
   router.post("/share/:shareId/verify", c.verify);
   router.post("/share/:shareId/react", reactLimit, optionalAuth, c.react);
+  if (c.reply) {
+    // Premium only: one reply per page (first write wins), so 10 an hour per IP is plenty.
+    const replyLimit = rateLimit({ windowMs: 60 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false });
+    router.post("/share/:shareId/reply", replyLimit, optionalAuth, c.reply);
+  } else {
+    // A $2 day takes no replies: a plain 404 here, rather than falling through to `protect` (401).
+    router.post("/share/:shareId/reply", (_req, res) => {
+      res.status(404).json({ success: false, error: "Not found" });
+    });
+  }
 
   router.use(protect);
   router.post("/", live, c.create);

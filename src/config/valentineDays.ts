@@ -17,7 +17,18 @@
 //   2. the client's spec-driven EditSheet
 //   3. config/aiFill/<slug>.ts — which extras the AI may write (text leaves only)
 
-export const VALENTINE_DAY_SLUGS = [
+import roseDayPremium from "./premiumDays/happy-rose-day-premium";
+import proposeDayPremium from "./premiumDays/happy-propose-day-premium";
+import chocolateDayPremium from "./premiumDays/happy-chocolate-day-premium";
+import teddyDayPremium from "./premiumDays/happy-teddy-day-premium";
+import promiseDayPremium from "./premiumDays/happy-promise-day-premium";
+import hugDayPremium from "./premiumDays/happy-hug-day-premium";
+import kissDayPremium from "./premiumDays/happy-kiss-day-premium";
+import valentinesDayPremium from "./premiumDays/happy-valentines-day-premium";
+import halloweenPremium from "./premiumDays/happy-halloween-premium";
+
+/** The nine $2 templates. */
+export const BASE_DAY_SLUGS = [
   "happy-rose-day",
   "happy-propose-day",
   "happy-chocolate-day",
@@ -29,6 +40,48 @@ export const VALENTINE_DAY_SLUGS = [
   // Not a Valentine day: an occasion that runs on the same engine (9th entry).
   "happy-halloween",
 ] as const;
+
+export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
+
+/**
+ * The ultra-premium tier: one twin per base slug, on the same engine, plus the
+ * shared `premium` sub-document (voice note, scheduled unlock, reply, P.S.).
+ * Each one's config lives in its own file, config/premiumDays/<slug>.ts.
+ */
+export const PREMIUM_DAY_SLUGS = [
+  "happy-rose-day-premium",
+  "happy-propose-day-premium",
+  "happy-chocolate-day-premium",
+  "happy-teddy-day-premium",
+  "happy-promise-day-premium",
+  "happy-hug-day-premium",
+  "happy-kiss-day-premium",
+  "happy-valentines-day-premium",
+  "happy-halloween-premium",
+] as const;
+
+export type PremiumDaySlug = (typeof PREMIUM_DAY_SLUGS)[number];
+
+export const PREMIUM_BASE: Record<PremiumDaySlug, BaseDaySlug> = {
+  "happy-rose-day-premium": "happy-rose-day",
+  "happy-propose-day-premium": "happy-propose-day",
+  "happy-chocolate-day-premium": "happy-chocolate-day",
+  "happy-teddy-day-premium": "happy-teddy-day",
+  "happy-promise-day-premium": "happy-promise-day",
+  "happy-hug-day-premium": "happy-hug-day",
+  "happy-kiss-day-premium": "happy-kiss-day",
+  "happy-valentines-day-premium": "happy-valentines-day",
+  "happy-halloween-premium": "happy-halloween",
+};
+
+export const isPremiumDaySlug = (s: unknown): s is PremiumDaySlug =>
+  typeof s === "string" && (PREMIUM_DAY_SLUGS as readonly string[]).includes(s);
+
+/** A premium slug's $2 twin; any other string comes back unchanged. */
+export const baseDaySlug = (s: string): string => (isPremiumDaySlug(s) ? PREMIUM_BASE[s] : s);
+
+/** Every slug the engine serves: the nine $2 days, then their premium twins. */
+export const VALENTINE_DAY_SLUGS = [...BASE_DAY_SLUGS, ...PREMIUM_DAY_SLUGS] as const;
 
 export type ValentineDaySlug = (typeof VALENTINE_DAY_SLUGS)[number];
 
@@ -54,10 +107,12 @@ export interface ValentineDayConfig {
   extras: readonly FieldSpec[];
   maxPhotos: number;
   letterMax: number;
-  /** The five sticker moments, in the order they appear. */
+  /** The sticker moments, in the order they appear (five on $2 days, six on premium). */
   gifSlots: readonly string[];
   /** Propose, Valentine's and Halloween ask yes/no: an "answered" reaction emails the owner. */
   asksQuestion: boolean;
+  /** The ultra-premium tier: stores the `premium` sub-document and takes replies. */
+  premium?: boolean;
 }
 
 /** Shared caps for the common (non-extras) fields. Server caps are the hard ones. */
@@ -302,6 +357,17 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "yesLine", kind: "text", max: 80 },
     ],
   },
+
+  // ── The ultra-premium twins — one file each in ./premiumDays ──────────────
+  "happy-rose-day-premium": roseDayPremium,
+  "happy-propose-day-premium": proposeDayPremium,
+  "happy-chocolate-day-premium": chocolateDayPremium,
+  "happy-teddy-day-premium": teddyDayPremium,
+  "happy-promise-day-premium": promiseDayPremium,
+  "happy-hug-day-premium": hugDayPremium,
+  "happy-kiss-day-premium": kissDayPremium,
+  "happy-valentines-day-premium": valentinesDayPremium,
+  "happy-halloween-premium": halloweenPremium,
 };
 
 // ─── Sanitising ──────────────────────────────────────────────────────────────
@@ -485,4 +551,174 @@ export function reactionWrite(
   if (noDodges !== undefined) set["reactions.noDodges"] = noDodges;
   if (count !== undefined) set["reactions.count"] = count;
   return { guard: { "reactions.answer": null }, set };
+}
+
+// ─── Premium: the shared sub-document ────────────────────────────────────────
+//
+// Every premium day carries the same extra shape, stored as a top-level
+// `premium` sub-document — never inside `extras`, and never written for a $2
+// slug (their payloads stay byte-for-byte what they were).
+
+export interface PremiumFields {
+  /** "" or an https URL. A data URL is uploaded by resolvePremiumVoice first. */
+  voiceNote: string;
+  /** 0–60, whole seconds. */
+  voiceNoteSec: number;
+  /** ≤ 64 ints 0–100 — the waveform, computed client-side. */
+  voicePeaks: number[];
+  /** ≤ 90, trimmed. */
+  voiceCaption: string;
+  /** 0–600 whole seconds into the song where the "drop" lands; 0 = none. */
+  songDropAt: number;
+  /** "" or a normalised ISO-8601 instant (toISOString()). In the future ⇒ locked for everyone but the owner. */
+  unlockAt: string;
+  /** IANA zone the sender picked the unlock time in — display only. */
+  unlockTz: string;
+  /** The recipient may send one reply. Default true. */
+  allowReply: boolean;
+  /** ≤ 600, newlines kept — the sealed "open only if…" P.S. */
+  psLetter: string;
+}
+
+export const PREMIUM_LIMITS = {
+  voiceSec: 60,
+  voiceBytes: 2 * 1024 * 1024,
+  voicePeaks: 64,
+  voiceCaption: 90,
+  psLetter: 600,
+  songDropMax: 600,
+  unlockTz: 40,
+  reply: 280,
+  voiceUrl: 600,
+} as const;
+
+export const PREMIUM_DEFAULT_TZ = "Asia/Kolkata";
+export const UNLOCK_TZ_RE = /^[A-Za-z]+(?:\/[A-Za-z0-9_+-]+){0,2}$/;
+/** An unlock further out than this is a typo (or a year field gone wrong) — dropped to "". */
+export const UNLOCK_MAX_AHEAD_MS = 2 * 366 * 24 * 60 * 60 * 1000;
+
+export const PREMIUM_DEFAULTS: PremiumFields = {
+  voiceNote: "",
+  voiceNoteSec: 0,
+  voicePeaks: [],
+  voiceCaption: "",
+  songDropAt: 0,
+  unlockAt: "",
+  unlockTz: PREMIUM_DEFAULT_TZ,
+  allowReply: true,
+  psLetter: "",
+};
+
+/** C0 controls except \n, DEL and C1. */
+const CONTROL_EXCEPT_NL = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F]/g;
+
+const intIn = (v: unknown, min: number, max: number): number | undefined => {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : undefined;
+};
+
+export const premiumVoiceUrl = (v: unknown): string => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s.length <= PREMIUM_LIMITS.voiceUrl && /^https:\/\/\S+$/i.test(s) ? s : "";
+};
+
+/** "" unless a parseable instant no more than two years ahead; normalised to toISOString(). */
+export const sanitizeUnlockAt = (v: unknown, now: Date = new Date()): string => {
+  if (typeof v !== "string" && !(v instanceof Date)) return "";
+  const raw = typeof v === "string" ? v.trim().slice(0, 64) : v;
+  if (raw === "") return "";
+  const ms = raw instanceof Date ? raw.getTime() : Date.parse(raw);
+  if (!Number.isFinite(ms)) return "";
+  if (ms - now.getTime() > UNLOCK_MAX_AHEAD_MS) return "";
+  return new Date(ms).toISOString();
+};
+
+export const sanitizeUnlockTz = (v: unknown): string => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s && s.length <= PREMIUM_LIMITS.unlockTz && UNLOCK_TZ_RE.test(s) ? s : PREMIUM_DEFAULT_TZ;
+};
+
+const premiumText = (v: unknown, max: number, keepNewlines: boolean): string => {
+  if (typeof v !== "string") return "";
+  let s = v.replace(/\r\n?/g, "\n");
+  s = keepNewlines ? s.replace(CONTROL_EXCEPT_NL, "") : s.replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ");
+  return Array.from(s.trim()).slice(0, max).join("").trim();
+};
+
+const sanitizePeaks = (v: unknown): number[] => {
+  if (!Array.isArray(v)) return [];
+  const out: number[] = [];
+  for (const p of v.slice(0, PREMIUM_LIMITS.voicePeaks)) {
+    const n = intIn(p, 0, 100);
+    out.push(n ?? 0);
+  }
+  return out;
+};
+
+/**
+ * Body `premium` → the stored sub-document. Pure and synchronous: `voiceNote`
+ * keeps only an https URL here (the controller swaps in an uploaded data URL
+ * via resolvePremiumVoice). On update `prev` is the stored sub-document and a
+ * key the body does not carry keeps its stored value.
+ */
+export function sanitizePremium(raw: unknown, prev?: Partial<PremiumFields> | null, now: Date = new Date()): PremiumFields {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const base: PremiumFields = { ...PREMIUM_DEFAULTS, ...(prev ?? {}) };
+  const has = (k: keyof PremiumFields) => Object.prototype.hasOwnProperty.call(src, k) && src[k] !== undefined;
+  const allow = has("allowReply")
+    ? src.allowReply === false || src.allowReply === "false"
+      ? false
+      : src.allowReply === true || src.allowReply === "true"
+        ? true
+        : base.allowReply !== false
+    : base.allowReply !== false;
+  return {
+    voiceNote: has("voiceNote") ? premiumVoiceUrl(src.voiceNote) : premiumVoiceUrl(base.voiceNote),
+    voiceNoteSec: has("voiceNoteSec") ? intIn(src.voiceNoteSec, 0, PREMIUM_LIMITS.voiceSec) ?? 0 : intIn(base.voiceNoteSec, 0, PREMIUM_LIMITS.voiceSec) ?? 0,
+    voicePeaks: has("voicePeaks") ? sanitizePeaks(src.voicePeaks) : sanitizePeaks(base.voicePeaks),
+    voiceCaption: premiumText(has("voiceCaption") ? src.voiceCaption : base.voiceCaption, PREMIUM_LIMITS.voiceCaption, false),
+    songDropAt: has("songDropAt") ? intIn(src.songDropAt, 0, PREMIUM_LIMITS.songDropMax) ?? 0 : intIn(base.songDropAt, 0, PREMIUM_LIMITS.songDropMax) ?? 0,
+    // A stored unlockAt is re-validated against `now` only when it is re-sent.
+    unlockAt: has("unlockAt") ? sanitizeUnlockAt(src.unlockAt, now) : typeof base.unlockAt === "string" ? base.unlockAt : "",
+    unlockTz: sanitizeUnlockTz(has("unlockTz") ? src.unlockTz : base.unlockTz),
+    allowReply: allow,
+    psLetter: premiumText(has("psLetter") ? src.psLetter : base.psLetter, PREMIUM_LIMITS.psLetter, true),
+  };
+}
+
+/** True when a premium sub-document is still sealed at `now`. */
+export const isPremiumLocked = (premium: unknown, now: Date = new Date()): boolean => {
+  const at = premium && typeof premium === "object" ? (premium as { unlockAt?: unknown }).unlockAt : undefined;
+  const ms = typeof at === "string" && at ? Date.parse(at) : at instanceof Date ? at.getTime() : NaN;
+  return Number.isFinite(ms) && ms > now.getTime();
+};
+
+// ─── Premium: the recipient's one reply ─────────────────────────────────────
+
+/** Bidi overrides/isolates and zero-width characters — invisible, and abusable. */
+const INVISIBLE = /[‪-‮⁦-⁩​-‏﻿]/g;
+
+/**
+ * The recipient's reply text, cleaned. "" means "reject": nothing left after
+ * stripping control, bidi and zero-width characters. Newlines are kept (CRLF
+ * folded to LF, 3+ in a row folded to a blank line); capped at 280 code points
+ * so a surrogate pair is never split.
+ */
+export function cleanReplyText(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  let s = raw.slice(0, 8000).replace(/\r\n?/g, "\n");
+  s = s.replace(CONTROL_EXCEPT_NL, "").replace(INVISIBLE, "");
+  s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return Array.from(s).slice(0, PREMIUM_LIMITS.reply).join("").trim();
+}
+
+/**
+ * The single atomic write for a reply — first write wins, like reactionWrite:
+ * the guard only matches while `reactions.reply` is null or missing.
+ */
+export function replyWrite(
+  text: string,
+  now: Date
+): { guard: Record<string, null>; set: Record<string, unknown> } {
+  return { guard: { "reactions.reply": null }, set: { "reactions.reply": { text, at: now } } };
 }

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middleware/auth";
+import { optionalAuth, protect } from "../middleware/auth";
 import {
   getSharedPage,
   getSharedPageByUsername,
@@ -23,8 +23,10 @@ router.get("/me/creations", protect, getMyCreations);
 router.delete("/me/drafts/:templateType/:pageId", protect, discardMyDraft);
 
 router.get("/u/:username", getPublicProfile);
-router.get("/u/:username/:shareId", getSharedPageByUsername);
-router.get("/:shareId", getSharedPage);
+// optionalAuth: a premium Valentine-engine page that is still sealed is shown in
+// full only to its signed-in owner (see projectValentineShared).
+router.get("/u/:username/:shareId", optionalAuth, getSharedPageByUsername);
+router.get("/:shareId", optionalAuth, getSharedPage);
 router.post("/:shareId/install", trackInstall);
 router.post("/:shareId/access", protect, recordAccess);
 router.post("/:shareId/pw-verified", protect, markPasswordVerified);

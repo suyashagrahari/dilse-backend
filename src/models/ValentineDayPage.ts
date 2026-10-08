@@ -20,9 +20,18 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { rememberPagePassword } from "../services/pagePasswordRecovery";
 import { loveKitFields, type ILovePhoto } from "../utils/loveMedia";
-import { MUSIC_MODES, MUSIC_START_MAX, VALENTINE_DAY_SLUGS, VW_LIMITS, type MusicMode, type ValentineDaySlug } from "../config/valentineDays";
+import {
+  MUSIC_MODES,
+  MUSIC_START_MAX,
+  PREMIUM_LIMITS,
+  VALENTINE_DAY_SLUGS,
+  VW_LIMITS,
+  type MusicMode,
+  type PremiumFields,
+  type ValentineDaySlug,
+} from "../config/valentineDays";
 
-/** Written only by the public `react` beacon — never by the owner's form. */
+/** Written only by the public `react` / `reply` endpoints — never by the owner's form. */
 export interface IValentineReactions {
   openedAt?: Date | null;
   completedAt?: Date | null;
@@ -30,7 +39,12 @@ export interface IValentineReactions {
   answeredAt?: Date | null;
   noDodges?: number | null;
   count?: number | null;
+  /** Premium only: the recipient's one reply (first write wins). Absent until then. */
+  reply?: { text: string; at: Date } | null;
 }
+
+/** Max letter length on this model — the premium tier's 3000 (each day applies its own cap first). */
+export const VALENTINE_LETTER_MAX = 3000;
 
 export interface IValentineDayPage extends Document {
   userId: mongoose.Types.ObjectId;
@@ -54,6 +68,8 @@ export interface IValentineDayPage extends Document {
   endLine: string;
   /** Day-specific fields, validated by the day's FieldSpec list. */
   extras: Record<string, unknown>;
+  /** Premium slugs only — absent (not `{}`) on every $2 page. */
+  premium?: PremiumFields;
   reactions: IValentineReactions;
   password: string;
   passwordRaw: string;
@@ -64,6 +80,14 @@ export interface IValentineDayPage extends Document {
   comparePassword(candidate: string): Promise<boolean>;
 }
 
+const replySchema = new Schema(
+  {
+    text: { type: String, default: "", maxlength: PREMIUM_LIMITS.reply },
+    at: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const reactionsSchema = new Schema<IValentineReactions>(
   {
     openedAt: { type: Date, default: null },
@@ -72,6 +96,35 @@ const reactionsSchema = new Schema<IValentineReactions>(
     answeredAt: { type: Date, default: null },
     noDodges: { type: Number, default: null, min: 0, max: VW_LIMITS.maxNoDodges },
     count: { type: Number, default: null, min: 0, max: VW_LIMITS.maxCount },
+    // No default: a $2 page's reactions must not grow a `reply: null` key. The
+    // reply guard `{ "reactions.reply": null }` matches a missing field too.
+    reply: { type: replySchema, default: undefined },
+  },
+  { _id: false }
+);
+
+/**
+ * The premium sub-document. Sanitised in config/valentineDays.ts
+ * (sanitizePremium); these limits are the backstop. Single-nested with no
+ * default, so a $2 page never carries a `premium` key at all — with
+ * `minimize: false` on the parent a default of `{}` would show up in every
+ * $2 payload.
+ */
+const premiumSchema = new Schema<PremiumFields>(
+  {
+    voiceNote: { type: String, default: "", maxlength: PREMIUM_LIMITS.voiceUrl },
+    voiceNoteSec: { type: Number, default: 0, min: 0, max: PREMIUM_LIMITS.voiceSec },
+    voicePeaks: {
+      type: [{ type: Number, min: 0, max: 100 }],
+      default: [],
+      validate: [(v: number[]) => !v || v.length <= PREMIUM_LIMITS.voicePeaks, "too many voice peaks"],
+    },
+    voiceCaption: { type: String, default: "", maxlength: PREMIUM_LIMITS.voiceCaption },
+    songDropAt: { type: Number, default: 0, min: 0, max: PREMIUM_LIMITS.songDropMax },
+    unlockAt: { type: String, default: "", maxlength: 40 },
+    unlockTz: { type: String, default: "Asia/Kolkata", maxlength: PREMIUM_LIMITS.unlockTz },
+    allowReply: { type: Boolean, default: true },
+    psLetter: { type: String, default: "", maxlength: PREMIUM_LIMITS.psLetter },
   },
   { _id: false }
 );
@@ -83,9 +136,10 @@ const valentineDayPageSchema = new Schema<IValentineDayPage>(
     recipientName: { type: String, default: "", maxlength: VW_LIMITS.name },
     senderName: { type: String, default: "", maxlength: VW_LIMITS.name },
     petName: { type: String, default: "", maxlength: VW_LIMITS.petName },
-    // The longest day (Valentine's) allows 2000; the controller applies each
-    // day's own cap before this one is ever reached.
-    letter: loveKitFields.letter,
+    // The longest $2 day (Valentine's) allows 2000 and every premium day 3000;
+    // the controller applies each day's own cap before this one is ever
+    // reached. Raised here only — LOVE_LIMITS.letter (other templates) is untouched.
+    letter: { ...loveKitFields.letter, maxlength: VALENTINE_LETTER_MAX },
     photos: loveKitFields.photos,
     gifs: { type: Schema.Types.Mixed, default: {} },
     music: { type: Boolean, default: true },
@@ -94,6 +148,8 @@ const valentineDayPageSchema = new Schema<IValentineDayPage>(
     musicStart: { type: Number, default: 0, min: 0, max: MUSIC_START_MAX },
     endLine: { type: String, default: "", maxlength: VW_LIMITS.endLine },
     extras: { type: Schema.Types.Mixed, default: {} },
+    // Premium slugs only; see premiumSchema. Never defaulted.
+    premium: { type: premiumSchema, default: undefined },
     reactions: { type: reactionsSchema, default: () => ({}) },
     // Security & meta
     password: { type: String, default: "" },

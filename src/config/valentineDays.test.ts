@@ -1,9 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  BASE_DAY_SLUGS,
+  PREMIUM_BASE,
+  PREMIUM_DAY_SLUGS,
   VALENTINE_DAYS,
   VALENTINE_DAY_SLUGS,
+  baseDaySlug,
+  isPremiumDaySlug,
   reactionWrite,
+  type PremiumDaySlug,
   sanitizeExtras,
   sanitizeGifSlots,
   sanitizeMusic,
@@ -60,27 +66,69 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-kiss-day": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
   "happy-valentines-day": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
+  // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
+  // of its base day's extras; a builder changing one updates its line here.
+  "happy-rose-day-premium": ["roseColor", "colorReason", "roseCount", "openingLine", "petalStyle", "shayari", "signOff"],
+  "happy-propose-day-premium": ["question", "teaser", "reasons", "moments", "ringStyle", "stoneColor", "noMode", "noLines", "afterYes", "shayari"],
+  "happy-chocolate-day-premium": ["giftTag", "boxSize", "reasons", "finalAsk"],
+  "happy-teddy-day-premium": ["teddyName", "furColor", "marquee", "nearMiss", "outfit", "winLine", "squeezeLines"],
+  "happy-promise-day-premium": ["envelopeLine", "pinkyPrompt", "promises", "bigPromise", "lockEngraving", "lockStyle", "lockFinale"],
+  "happy-hug-day-premium": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
+  "happy-kiss-day-premium": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
+  "happy-valentines-day-premium": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
+  "happy-halloween-premium": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
+};
+
+const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
+  "happy-rose-day-premium": ["pr1-door", "pr2-thorn", "pr3-petals", "pr4-letter", "pr5-memories", "pr6-forever"],
+  "happy-propose-day-premium": ["pp1-nervous", "pp2-candles", "pp3-lookup", "pp4-please", "pp5-yes", "pp6-ticket"],
+  "happy-chocolate-day-premium": ["pc1-open", "pc2-smash", "pc3-yum", "pc4-ticket", "pc5-photos", "pc6-box"],
+  "happy-teddy-day-premium": ["pt1-parcel", "pt2-heart", "pt3-alive", "pt4-letter", "pt5-found", "pt6-sleep"],
+  "happy-promise-day-premium": ["pp1-gate", "pp2-pull", "pp3-knot", "pp4-rings", "pp5-vial", "pp6-promised"],
+  "happy-hug-day-premium": ["ph1-window", "ph2-walk", "ph3-held", "ph4-mitten", "ph5-fort", "ph6-back"],
+  "happy-kiss-day-premium": ["pk1-shy", "pk2-catch", "pk3-wow", "pk4-mirror", "pk5-booth", "pk6-back"],
+  "happy-valentines-day-premium": ["pv1-ticket", "pv2-starring", "pv3-stars", "pv4-please", "pv5-yes", "pv6-credits"],
+  "happy-halloween-premium": ["p1-invite", "p2-candle", "p3-portrait", "p4-seance", "p5-cauldron", "p6-yes"],
 };
 
 describe("Valentine's week day configs", () => {
-  it("has exactly the eight days + Halloween, each pinned", () => {
+  it("has exactly the eight days + Halloween + their nine premium twins, each pinned", () => {
     assert.deepEqual([...VALENTINE_DAY_SLUGS].sort(), Object.keys(PINNED_KEYS).sort());
+    assert.equal(VALENTINE_DAY_SLUGS.length, 18);
+    assert.deepEqual([...VALENTINE_DAY_SLUGS.slice(0, 9)], [...BASE_DAY_SLUGS]);
+    assert.deepEqual([...VALENTINE_DAY_SLUGS.slice(9)], [...PREMIUM_DAY_SLUGS]);
     for (const slug of VALENTINE_DAY_SLUGS) {
       assert.deepEqual(VALENTINE_DAYS[slug].extras.map((f) => f.key), PINNED_KEYS[slug], slug);
     }
   });
 
-  it("every day has five GIF slots and sane limits; only Propose, Valentine's and Halloween ask", () => {
-    for (const slug of VALENTINE_DAY_SLUGS) {
+  it("every $2 day has five GIF slots and sane limits; only Propose, Valentine's and Halloween ask", () => {
+    for (const slug of BASE_DAY_SLUGS) {
       const d = VALENTINE_DAYS[slug];
       assert.equal(d.gifSlots.length, 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
       assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
+      assert.notEqual(d.premium, true, slug);
     }
     assert.deepEqual(
-      VALENTINE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
+      BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
       ["happy-propose-day", "happy-valentines-day", "happy-halloween"]
     );
+  });
+
+  it("every premium twin: premium, 12 photos, 3000-char letter, six pinned GIF slots, asks like its base", () => {
+    for (const slug of PREMIUM_DAY_SLUGS) {
+      const d = VALENTINE_DAYS[slug];
+      assert.equal(d.premium, true, slug);
+      assert.equal(d.maxPhotos, 12, slug);
+      assert.equal(d.letterMax, 3000, slug);
+      assert.deepEqual([...d.gifSlots], PINNED_PREMIUM_GIFS[slug], slug);
+      assert.equal(d.asksQuestion, VALENTINE_DAYS[PREMIUM_BASE[slug]].asksQuestion, slug);
+      assert.equal(baseDaySlug(slug), PREMIUM_BASE[slug]);
+      assert.ok(isPremiumDaySlug(slug));
+      assert.ok(!isPremiumDaySlug(PREMIUM_BASE[slug]));
+    }
+    assert.equal(baseDaySlug("happy-halloween"), "happy-halloween");
   });
 
   it("Halloween: tone and costume fall back to their defaults; ingredients are capped", () => {
