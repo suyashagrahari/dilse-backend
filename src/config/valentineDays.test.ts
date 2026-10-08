@@ -70,7 +70,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "roseCount", "openingLine", "petalStyle", "shayari", "signOff"],
   "happy-propose-day-premium": ["question", "teaser", "reasons", "moments", "ringStyle", "stoneColor", "noMode", "noLines", "afterYes", "shayari"],
-  "happy-chocolate-day-premium": ["giftTag", "boxSize", "reasons", "finalAsk"],
+  "happy-chocolate-day-premium": ["welcomeNote", "reasons", "embossNames", "crackLine", "ticketPromise", "letterTitle", "drizzleWord", "insideNote", "boxColor", "signOff"],
   "happy-teddy-day-premium": ["teddyName", "furColor", "marquee", "nearMiss", "outfit", "winLine", "squeezeLines"],
   "happy-promise-day-premium": ["envelopeLine", "pinkyPrompt", "promises", "bigPromise", "lockEngraving", "lockStyle", "lockFinale"],
   "happy-hug-day-premium": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
