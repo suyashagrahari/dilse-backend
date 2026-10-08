@@ -10,7 +10,7 @@
 
 import { parseAnyDataUrl, sniffMedia } from "../services/mediaSniff";
 import { uploadAudioBuffer } from "../services/mediaProcessor.service";
-import { PREMIUM_LIMITS, premiumVoiceUrl } from "../config/valentineDays";
+import { PREMIUM_LIMITS, premiumVoiceUrl, premiumVoiceUrlShape } from "../config/valentineDays";
 
 export type AudioUploader = (buffer: Buffer, mimeType: string, folder: string) => Promise<{ url: string }>;
 
@@ -56,7 +56,7 @@ export async function resolvePremiumVoice(
       return "";
     }
     const uploaded = await upload(parsed.buffer, sniffed.mimeType, premiumVoiceFolder(slug, userId));
-    return premiumVoiceUrl(uploaded?.url);
+    return premiumVoiceUrlShape(uploaded?.url);
   } catch (error) {
     console.error(`[premium voice] ${slug}: upload error`, error);
     return "";

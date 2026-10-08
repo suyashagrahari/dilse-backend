@@ -617,9 +617,42 @@ const intIn = (v: unknown, min: number, max: number): number | undefined => {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : undefined;
 };
 
-export const premiumVoiceUrl = (v: unknown): string => {
+/**
+ * Hosts a voice note may live on: only where our own upload puts it (the CDN,
+ * the configured public base, the bucket's S3 host). Anything else is dropped,
+ * so a page can't be made to play — or ping — an arbitrary third-party URL.
+ */
+const voiceHosts = (): Set<string> => {
+  const hosts = new Set(["cdn.subhsandesh.in"]);
+  const base = process.env.S3_PUBLIC_BASE_URL;
+  if (base) {
+    try {
+      hosts.add(new URL(base).host.toLowerCase());
+    } catch {
+      /* malformed base — ignore */
+    }
+  }
+  const bucket = process.env.S3_BUCKET_NAME;
+  const region = process.env.S3_REGION;
+  if (bucket && region) hosts.add(`${bucket}.s3.${region}.amazonaws.com`.toLowerCase());
+  return hosts;
+};
+
+/** Shape only (https, ≤ limit) — for the URL our own uploader just returned. */
+export const premiumVoiceUrlShape = (v: unknown): string => {
   const s = typeof v === "string" ? v.trim() : "";
   return s.length <= PREMIUM_LIMITS.voiceUrl && /^https:\/\/\S+$/i.test(s) ? s : "";
+};
+
+/** Shape AND host — for any voice URL that arrives from a client. */
+export const premiumVoiceUrl = (v: unknown): string => {
+  const s = premiumVoiceUrlShape(v);
+  if (!s) return "";
+  try {
+    return voiceHosts().has(new URL(s).host.toLowerCase()) ? s : "";
+  } catch {
+    return "";
+  }
 };
 
 /** "" unless a parseable instant no more than two years ahead; normalised to toISOString(). */
@@ -673,7 +706,8 @@ export function sanitizePremium(raw: unknown, prev?: Partial<PremiumFields> | nu
         : base.allowReply !== false
     : base.allowReply !== false;
   return {
-    voiceNote: has("voiceNote") ? premiumVoiceUrl(src.voiceNote) : premiumVoiceUrl(base.voiceNote),
+    // A stored value was put there by our own uploader; only a client-sent one is host-checked.
+    voiceNote: has("voiceNote") ? premiumVoiceUrl(src.voiceNote) : premiumVoiceUrlShape(base.voiceNote),
     voiceNoteSec: has("voiceNoteSec") ? intIn(src.voiceNoteSec, 0, PREMIUM_LIMITS.voiceSec) ?? 0 : intIn(base.voiceNoteSec, 0, PREMIUM_LIMITS.voiceSec) ?? 0,
     voicePeaks: has("voicePeaks") ? sanitizePeaks(src.voicePeaks) : sanitizePeaks(base.voicePeaks),
     voiceCaption: premiumText(has("voiceCaption") ? src.voiceCaption : base.voiceCaption, PREMIUM_LIMITS.voiceCaption, false),

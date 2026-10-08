@@ -28,7 +28,8 @@ describe("resolvePremiumVoice", () => {
 
   it("keeps an https link (≤ 600) without uploading; http and other schemes → ''", async () => {
     const { calls, upload } = spyUploader();
-    assert.equal(await resolvePremiumVoice("https://cdn.x/a.webm", "u1", "s", upload), "https://cdn.x/a.webm");
+    assert.equal(await resolvePremiumVoice("https://cdn.subhsandesh.in/a.webm", "u1", "s", upload), "https://cdn.subhsandesh.in/a.webm");
+    assert.equal(await resolvePremiumVoice("https://cdn.x/a.webm", "u1", "s", upload), "");
     assert.equal(await resolvePremiumVoice("https://cdn.x/" + "a".repeat(700), "u1", "s", upload), "");
     assert.equal(await resolvePremiumVoice("http://cdn.x/a.webm", "u1", "s", upload), "");
     assert.equal(await resolvePremiumVoice("javascript:alert(1)", "u1", "s", upload), "");

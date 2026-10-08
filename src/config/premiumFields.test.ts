@@ -22,7 +22,7 @@ describe("sanitizePremium", () => {
 
   it("keeps an https voice link only (data URLs are the async resolver's job)", () => {
     assert.equal(sanitizePremium({ voiceNote: " https://cdn.subhsandesh.in/v.webm " }, null, NOW).voiceNote, "https://cdn.subhsandesh.in/v.webm");
-    for (const bad of ["http://x/v.webm", "data:audio/webm;base64,AAAA", "javascript:alert(1)", "https://" + "a".repeat(600), 7]) {
+    for (const bad of ["http://x/v.webm", "data:audio/webm;base64,AAAA", "javascript:alert(1)", "https://" + "a".repeat(600), 7, "https://evil.example.com/v.webm", "https://cdn.subhsandesh.in.evil.com/v.webm"]) {
       assert.equal(sanitizePremium({ voiceNote: bad }, null, NOW).voiceNote, "", String(bad).slice(0, 30));
     }
   });
