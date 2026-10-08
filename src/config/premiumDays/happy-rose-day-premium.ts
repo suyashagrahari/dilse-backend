@@ -3,14 +3,13 @@ import type { ValentineDayConfig } from "../valentineDays";
 /**
  * happy-rose-day-premium — "The Glasshouse Rose", the premium twin of happy-rose-day.
  *
- * Owned by this template's builder: edit only this file (and
- * config/aiFill/happy-rose-day-premium.ts). The extras below started as a literal copy of
- * happy-rose-day's; change them freely, then keep the client mirror and the
- * PINNED_KEYS entry in valentineDays.test.ts in step.
+ * A glasshouse at dusk: a fogged door with their name, thorns (hard times you got through), a garden of roses that
+ * blooms in a heart on the song's drop, falling word-petals, a pressed-book letter, dew-drop photos and the rose
+ * sealed under an engraved glass dome.
  *
- * Shared premium fields (voice note, scheduled unlock, reply, P.S. letter…)
- * are NOT extras — they live in the top-level `premium` sub-document
- * (see PremiumFields in ../valentineDays.ts).
+ * The client mirror is client/app/(templates)/_valentine/days/happy-rose-day-premium.ts (same keys and limits);
+ * PINNED_KEYS in ../valentineDays.test.ts pins the order. Keys shared with the $2 day keep its key. The chorus
+ * second is the shared premium.songDropAt, not an extra.
  */
 const config: ValentineDayConfig = {
   title: "The Glasshouse Rose",
@@ -22,11 +21,18 @@ const config: ValentineDayConfig = {
   extras: [
     { key: "roseColor", kind: "enum", options: ["red", "pink", "lavender", "peach", "white", "yellow", "orange", "coral"], default: "red" },
     { key: "colorReason", kind: "text", max: 90 },
-    { key: "roseCount", kind: "enum", options: ["1", "3", "7", "9", "11", "12", "99"], default: "1" },
+    { key: "roseCount", kind: "enum", options: ["1", "3", "7", "9", "11", "12", "99"], default: "99" },
     { key: "openingLine", kind: "text", max: 70 },
-    { key: "petalStyle", kind: "enum", options: ["classic", "desi", "french"], default: "classic" },
+    /** 0–5 gentle "hard times we got through" lines; empty = the thorn scene is skipped. */
+    { key: "thorns", kind: "list", maxItems: 5, itemMax: 60 },
+    /** ≤ 7 words, one per falling petal. */
+    { key: "petalSentence", kind: "text", max: 60, min: 12 },
+    /** Free text ("14 Feb 2022", "our first monsoon"). */
+    { key: "sinceDate", kind: "text", max: 24 },
+    { key: "engraving", kind: "text", max: 40 },
+    { key: "secretLine", kind: "text", max: 80 },
+    { key: "signOff", kind: "text", max: 40 },
     { key: "shayari", kind: "longtext", max: 160 },
-    { key: "signOff", kind: "text", max: 30 },
   ],
 };
 

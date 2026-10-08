@@ -68,7 +68,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
-  "happy-rose-day-premium": ["roseColor", "colorReason", "roseCount", "openingLine", "petalStyle", "shayari", "signOff"],
+  "happy-rose-day-premium": ["roseColor", "colorReason", "roseCount", "openingLine", "thorns", "petalSentence", "sinceDate", "engraving", "secretLine", "signOff", "shayari"],
   "happy-propose-day-premium": ["texts", "reasons", "moments", "lookUpLine", "initials", "question", "ringStyle", "stoneColor", "handTone", "noLines", "afterYes", "shayari"],
   "happy-chocolate-day-premium": ["welcomeNote", "reasons", "embossNames", "crackLine", "ticketPromise", "letterTitle", "drizzleWord", "insideNote", "boxColor", "signOff"],
   "happy-teddy-day-premium": ["teddyName", "furColor", "eyeStyle", "pawInitial", "accessory", "parcelNote", "heartWhisper", "firstWords", "squeezeLines", "bedtimeLine", "sleepOver"],
