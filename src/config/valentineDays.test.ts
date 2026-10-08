@@ -75,7 +75,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-promise-day-premium": ["envelopeLine", "pinkyPrompt", "promises", "bigPromise", "lockEngraving", "lockStyle", "lockFinale"],
   "happy-hug-day-premium": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
   "happy-kiss-day-premium": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
-  "happy-valentines-day-premium": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
+  "happy-valentines-day-premium": ["filmTitle", "tagline", "weekLines", "metPlace", "metDate", "togetherSince", "chapterTitles", "stats", "question", "noTakes", "datePlan", "dateOn"],
   "happy-halloween-premium": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
 };
 
