@@ -143,6 +143,16 @@ router.use("/happy-kiss-day-pages", makeValentineDayRouter("happy-kiss-day"));
 router.use("/happy-valentines-day-pages", makeValentineDayRouter("happy-valentines-day"));
 // Happy Halloween — the same engine, a ninth entry.
 router.use("/happy-halloween-pages", makeValentineDayRouter("happy-halloween"));
+// The ultra-premium tier: a twin of each day on the same engine (+ voice note, unlock, reply).
+router.use("/happy-rose-day-premium-pages", makeValentineDayRouter("happy-rose-day-premium"));
+router.use("/happy-propose-day-premium-pages", makeValentineDayRouter("happy-propose-day-premium"));
+router.use("/happy-chocolate-day-premium-pages", makeValentineDayRouter("happy-chocolate-day-premium"));
+router.use("/happy-teddy-day-premium-pages", makeValentineDayRouter("happy-teddy-day-premium"));
+router.use("/happy-promise-day-premium-pages", makeValentineDayRouter("happy-promise-day-premium"));
+router.use("/happy-hug-day-premium-pages", makeValentineDayRouter("happy-hug-day-premium"));
+router.use("/happy-kiss-day-premium-pages", makeValentineDayRouter("happy-kiss-day-premium"));
+router.use("/happy-valentines-day-premium-pages", makeValentineDayRouter("happy-valentines-day-premium"));
+router.use("/happy-halloween-premium-pages", makeValentineDayRouter("happy-halloween-premium"));
 router.use("/flags-pages", flagsPageRoutes);
 router.use("/date-invitation-pages", dateInvitationPageRoutes);
 router.use("/photo-puzzle-pages", photoPuzzlePageRoutes);

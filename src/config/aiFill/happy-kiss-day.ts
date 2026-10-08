@@ -15,7 +15,7 @@ export const kissDay: AiFillTemplateSchema = {
   slug: "happy-kiss-day",
   audience: "partner",
   premise:
-    "A Kiss Day page, cute and family-safe: the recipient taps to stamp cartoon kisses into a heart jar until it overflows with a giant MWAH, then opens a lipstick-sealed envelope with the sender's letter, sees their photos on a Kiss-Cam, scratches kiss coupons and blows a kiss back. Blush, playful, sweet — cheek, forehead and blown kisses only. This holds in every field, photo notes included: whatever words the story uses for a kiss, the page only ever calls it sweet, shy, tiny or cute — it could be read aloud to grandparents." + VW_LANGUAGE,
+    "A Kiss Day page, cute and family-safe: the recipient taps to stamp cartoon kisses into a heart jar until it overflows with a giant MWAH, then opens a lipstick-sealed envelope with the sender's letter, sees their photos on a Kiss-Cam, scratches kiss coupons and blows a kiss back. Blush, playful, sweet — cheek, forehead and blown kisses only. This holds in every field, photo notes included: whatever words the story uses for a kiss, the page only ever calls it sweet, shy, tiny or cute — it could be read aloud to grandparents. A story told in English sentences is an English story even when it names Indian places, foods, songs or a borrowed word or two: then every field is natural English, and only a pet name the sender actually uses stays as it is." + VW_LANGUAGE,
   fields: [
     ...valentineCommon({
       dayName: "Kiss Day",
@@ -56,7 +56,7 @@ export const kissDay: AiFillTemplateSchema = {
       kind: "text",
       max: 80,
       guide: "The prefilled WhatsApp reply the recipient sends back to the sender after blowing a kiss back, written in the RECIPIENT's voice to the sender (the app adds the sender's name after it, so do not sign it). Cute and a little teasing, in the story's language, correct and natural. Under 75 characters.",
-      example: "Received your kisses 💋 Here's one back, pagal 😘",
+      example: "Received your kisses 💋 Here's one back, silly 😘",
     },
   ],
   forbiddenOutput: VW_FORBIDDEN,

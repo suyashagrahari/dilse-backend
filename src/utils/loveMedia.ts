@@ -74,11 +74,16 @@ const clampNum = (v: unknown, min: number, max: number): number | undefined => {
  * S3 here, only the link is stored) or as links already uploaded. A failed
  * upload drops that one photo rather than failing the save.
  */
-export const sanitizeLovePhotos = async (raw: unknown, folder: string): Promise<ILovePhoto[]> => {
+export const sanitizeLovePhotos = async (
+  raw: unknown,
+  folder: string,
+  /** Templates that allow more than the shared ten (the premium tier keeps 12). */
+  max: number = LOVE_LIMITS.maxPhotos
+): Promise<ILovePhoto[]> => {
   if (!Array.isArray(raw)) return [];
   const out: ILovePhoto[] = [];
   for (const item of raw.slice(0, 40)) {
-    if (out.length >= LOVE_LIMITS.maxPhotos) break;
+    if (out.length >= max) break;
     const src = (item ?? {}) as Record<string, unknown>;
     let url = typeof src.url === "string" ? src.url.trim() : "";
     if (url.startsWith("data:")) {

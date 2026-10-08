@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { sendSesEmail, threadReplyToAddress } from "../services/ses.service";
 import { env } from "../config/env";
 import { rfcMessageIdFor } from "../services/emailThread.service";
+import { baseDaySlug } from "../config/valentineDays";
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
@@ -474,7 +475,8 @@ export async function sendValentineAnswerEmail(opts: {
   const oneLine = (s: string) => (s || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
   const who = oneLine(opts.recipientName) || "They";
   const question = oneLine(opts.question);
-  const halloween = opts.slug === "happy-halloween";
+  // The premium twin ("happy-halloween-premium") gets the same wording.
+  const halloween = baseDaySlug(opts.slug ?? "") === "happy-halloween";
   const times = (n: number) => `${n} ${n === 1 ? "time" : "times"}`;
   const dodges = halloween
     ? opts.noDodges > 0
@@ -524,6 +526,77 @@ export async function sendValentineAnswerEmail(opts: {
     });
   } catch (err) {
     console.error("[VALENTINE ANSWER] Failed to send email:", err);
+  }
+}
+
+/**
+ * The recipient of a premium page wrote back (the one reply it allows).
+ * Modelled on sendValentineAnswerEmail. Everything the recipient or the owner
+ * typed is HTML-escaped; the names that reach the subject lose CR/LF and every
+ * other control character; the reply keeps its line breaks (as <br>).
+ * Fire-and-forget from the controller — never blocks the recipient.
+ */
+export async function sendValentineReplyEmail(opts: {
+  to: string;
+  senderName: string;
+  recipientName: string;
+  /** "Rose Day" / "Halloween" — the base day's plain name. */
+  dayName: string;
+  slug?: string;
+  /** Already cleaned by cleanReplyText (≤ 280, newlines kept). */
+  reply: string;
+  link: string;
+}): Promise<void> {
+  const oneLine = (s: string) =>
+    (s || "").replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const esc = (s: string) => escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const who = oneLine(opts.recipientName) || "They";
+  const dayName = oneLine(opts.dayName);
+  const halloween = baseDaySlug(opts.slug ?? "") === "happy-halloween";
+  const reply = (opts.reply || "").replace(/\r\n?/g, "\n");
+  const subject = halloween ? `🦇 ${who} left you a note on your ${dayName} page` : `💌 ${who} wrote back`;
+  const head = halloween ? `${who} wrote back 🎃` : `${who} wrote back 💌`;
+  const intro = `${who} replied on your ${dayName} page:`;
+  const replyHtml = esc(reply).replace(/\n/g, "<br />");
+  const band = halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
+  const pageBg = halloween ? "#17122b" : "#1e0f24";
+  const cardBg = halloween ? "#251842" : "#2a1240";
+  const button = halloween ? "#ff8a3d" : "#f6e3b4";
+
+  if (!resend) {
+    console.log(`\n[VALENTINE REPLY — no RESEND_API_KEY] To: ${opts.to} | ${subject} | ${intro} ${JSON.stringify(reply)}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${head}\n\n${intro}\n\n${reply}\n\nOpen your page: ${opts.link}\n\n— SubhSandesh`,
+      html: `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:${pageBg};font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${pageBg};padding:40px 16px;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:${cardBg};border-radius:24px;border:1px solid rgba(255,255,255,.14);overflow:hidden;max-width:480px;width:100%;">
+        <tr><td style="background:${band};padding:28px 30px;text-align:center;">
+          <p style="margin:0;color:#fff;font-size:11px;letter-spacing:.22em;font-weight:700;text-transform:uppercase;">SubhSandesh · ${esc(dayName)}</p>
+          <p style="margin:8px 0 0;color:#fff;font-size:26px;font-weight:800;">${esc(head)}</p>
+        </td></tr>
+        <tr><td style="padding:28px 30px;text-align:center;">
+          <p style="margin:0 0 14px;color:#fff6ec;font-size:15px;line-height:1.7;">${esc(intro)}</p>
+          <p style="margin:0 0 22px;padding:16px 18px;border-radius:16px;background:rgba(255,255,255,.08);color:#fff6ec;font-size:16px;line-height:1.7;text-align:left;white-space:normal;word-break:break-word;">${replyHtml}</p>
+          <a href="${esc(opts.link)}" style="display:inline-block;background:${button};color:#1e0f24;font-weight:800;font-size:15px;text-decoration:none;padding:13px 26px;border-radius:999px;">Open your page</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim(),
+    });
+  } catch (err) {
+    console.error("[VALENTINE REPLY] Failed to send email:", err);
   }
 }
 
