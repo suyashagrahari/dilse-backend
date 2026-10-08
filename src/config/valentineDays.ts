@@ -1,7 +1,7 @@
-// ─── Valentine's week — the eight days, one engine ───────────────────────────
+// ─── Valentine's week — the eight days, one engine (+ Halloween) ─────────────
 //
 // Rose Day (7 Feb) → Valentine's Day (14 Feb) are eight templates that share one
-// data shape. Everything every day has (names, the letter, photos, five GIF
+// data shape. Happy Halloween (31 Oct) is a ninth template on the same engine. Everything every day has (names, the letter, photos, five GIF
 // slots, music, the ending line) is a real field on ValentineDayPage; everything
 // that belongs to one day only (the rose colour, the chocolate reasons, the hug
 // menu) lives in `extras` and is described here as a FieldSpec list.
@@ -26,6 +26,8 @@ export const VALENTINE_DAY_SLUGS = [
   "happy-hug-day",
   "happy-kiss-day",
   "happy-valentines-day",
+  // Not a Valentine day: an occasion that runs on the same engine (9th entry).
+  "happy-halloween",
 ] as const;
 
 export type ValentineDaySlug = (typeof VALENTINE_DAY_SLUGS)[number];
@@ -54,7 +56,7 @@ export interface ValentineDayConfig {
   letterMax: number;
   /** The five sticker moments, in the order they appear. */
   gifSlots: readonly string[];
-  /** Propose + Valentine's ask yes/no: an "answered" reaction emails the owner. */
+  /** Propose, Valentine's and Halloween ask yes/no: an "answered" reaction emails the owner. */
   asksQuestion: boolean;
 }
 
@@ -260,6 +262,44 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "noLines", kind: "list", maxItems: 10, itemMax: 40 },
       { key: "datePlan", kind: "text", max: 80 },
       { key: "ps", kind: "text", max: 100 },
+    ],
+  },
+
+  // ── 31 Oct ── Happy Halloween: the little haunted house (an occasion on the
+  //    same engine — knock, trick or treat, carve, fogged portraits, a letter
+  //    by flashlight, a love potion, "Will you be my boo?") ─────────────────
+  "happy-halloween": {
+    title: "The Little Haunted House",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    gifSlots: ["h1-doorstep", "h2-treat", "h3-portrait", "h4-potion", "h5-boo"],
+    extras: [
+      /** Who it's for — changes the default question, the license and kids-safe mode. */
+      { key: "tone", kind: "enum", options: ["romantic", "friends", "family", "kids"], default: "romantic" },
+      { key: "houseName", kind: "text", max: 40 },
+      { key: "trickLine", kind: "text", max: 80 },
+      { key: "carveWord", kind: "text", max: 10 },
+      {
+        key: "costume",
+        kind: "enum",
+        options: ["ghost", "witch", "vampire", "pumpkin", "black-cat", "skeleton", "mummy", "bat"],
+        default: "ghost",
+      },
+      { key: "costumeWhy", kind: "text", max: 70 },
+      {
+        key: "ingredients",
+        kind: "objlist",
+        maxItems: 5,
+        minItems: 3,
+        item: [
+          { key: "name", kind: "text", max: 30 },
+          { key: "line", kind: "text", max: 70 },
+        ],
+      },
+      { key: "potionSpell", kind: "text", max: 90 },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
     ],
   },
 };

@@ -155,6 +155,8 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: VALENTINE_DAY_MODELS["happy-hug-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-hug-day", editorRoute: "/happy-hug-day", projectShared: projectValentineShared },
   { model: VALENTINE_DAY_MODELS["happy-kiss-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-kiss-day", editorRoute: "/happy-kiss-day", projectShared: projectValentineShared },
   { model: VALENTINE_DAY_MODELS["happy-valentines-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-valentines-day", editorRoute: "/happy-valentines-day", projectShared: projectValentineShared },
+  // Happy Halloween — a ninth discriminator on the same engine.
+  { model: VALENTINE_DAY_MODELS["happy-halloween"] as unknown as mongoose.Model<unknown>, templateType: "happy-halloween", editorRoute: "/happy-halloween", projectShared: projectValentineShared },
 ];
 
 export const getSharedPage = async (req: Request, res: Response): Promise<void> => {

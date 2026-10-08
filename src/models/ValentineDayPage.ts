@@ -147,7 +147,7 @@ valentineDayPageSchema.methods.comparePassword = async function (candidate: stri
 
 export const ValentineDayPage = mongoose.model<IValentineDayPage>("ValentineDayPage", valentineDayPageSchema);
 
-/** "happy-rose-day" → "RoseDayPage", "happy-valentines-day" → "ValentinesDayPage". */
+/** "happy-rose-day" → "RoseDayPage", "happy-valentines-day" → "ValentinesDayPage", "happy-halloween" → "HalloweenPage". */
 const modelName = (slug: string): string =>
   slug
     .replace(/^happy-/, "")

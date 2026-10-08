@@ -71,6 +71,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-hug-day",
   "happy-kiss-day",
   "happy-valentines-day",
+  // Halloween ships hidden the same way; released in /admin/templates.
+  "happy-halloween",
 ]);
 
 /**
