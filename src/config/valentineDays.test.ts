@@ -71,7 +71,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-rose-day-premium": ["roseColor", "colorReason", "roseCount", "openingLine", "petalStyle", "shayari", "signOff"],
   "happy-propose-day-premium": ["question", "teaser", "reasons", "moments", "ringStyle", "stoneColor", "noMode", "noLines", "afterYes", "shayari"],
   "happy-chocolate-day-premium": ["welcomeNote", "reasons", "embossNames", "crackLine", "ticketPromise", "letterTitle", "drizzleWord", "insideNote", "boxColor", "signOff"],
-  "happy-teddy-day-premium": ["teddyName", "furColor", "marquee", "nearMiss", "outfit", "winLine", "squeezeLines"],
+  "happy-teddy-day-premium": ["teddyName", "furColor", "eyeStyle", "pawInitial", "accessory", "parcelNote", "heartWhisper", "firstWords", "squeezeLines", "bedtimeLine", "sleepOver"],
   "happy-promise-day-premium": ["envelopeLine", "pinkyPrompt", "promises", "bigPromise", "lockEngraving", "lockStyle", "lockFinale"],
   "happy-hug-day-premium": ["cafeSign", "squishPrompt", "characters", "tagMe", "tagYou", "menu", "coupons"],
   "happy-kiss-day-premium": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],

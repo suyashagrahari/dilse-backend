@@ -1,6 +1,9 @@
 import type { AiFillField, AiFillTemplateSchema } from "./types";
 import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentineShared";
 
+/** Short English stories full of Indian names were coming back in Hinglish about half the time. */
+const LANGUAGE_BY_WORDS = " Judge the language by the sender's own sentences, not by the names in them: 'Her name is Neha. I love her.' is an English story.";
+
 /**
  * happy-chocolate-day-premium — "The Midnight Chocolatier", the ULTRA-PREMIUM twin of
  * happy-chocolate-day (Valentine's week, 9 Feb). Owned by that template's builder.
@@ -57,7 +60,7 @@ export const chocolateDayPremium: AiFillTemplateSchema = {
   slug: "happy-chocolate-day-premium",
   audience: "partner",
   premise:
-    "A cinematic Chocolate Day page set in a tiny chocolate shop that opens at midnight just for the recipient. They pour and set a chocolate heart, smash it open with a little gold hammer, and taste the truffles hidden inside — each truffle carries a flavour and one reason the sender loves them. Then they unwrap a chocolate bar to find a golden ticket printed with a real, doable promise from the sender, read the sender's letter (its first line is piped in chocolate, the rest is written on the shop's 'Recipe for us' card), see their photos as labelled bonbons in a glass display case, and tie the box with a ribbon. Cosy, candle-lit, sweet and funny, made-by-hand." + VW_LANGUAGE,
+    "A cinematic Chocolate Day page set in a tiny chocolate shop that opens at midnight just for the recipient. They pour and set a chocolate heart, smash it open with a little gold hammer, and taste the truffles hidden inside — each truffle carries a flavour and one reason the sender loves them. Then they unwrap a chocolate bar to find a golden ticket printed with a real, doable promise from the sender, read the sender's letter (its first line is piped in chocolate, the rest is written on the shop's 'Recipe for us' card), see their photos as labelled bonbons in a glass display case, and tie the box with a ribbon. Cosy, candle-lit, sweet and funny, made-by-hand." + VW_LANGUAGE + LANGUAGE_BY_WORDS,
   fields: [
     ...valentineCommon({
       dayName: "Chocolate Day",
