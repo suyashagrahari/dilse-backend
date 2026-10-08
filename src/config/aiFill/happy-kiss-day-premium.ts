@@ -1,88 +1,81 @@
 import type { AiFillTemplateSchema } from "./types";
-import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentineShared";
+import { VW_FORBIDDEN, VW_TONE, valentineCommon } from "./valentineShared";
+
+/** Not VW_LANGUAGE: its note about the page's Hindi decorations pulled English stories into Hindi here (live runs). */
+const LANGUAGE =
+  " Write in the language and script the sender's story is written in — an English story gets English, a Hinglish story gets Hinglish in Latin letters — and keep every field in that one choice. When the story names a product brand, write what the thing is instead.";
 
 /**
- * happy-kiss-day-premium — "A Thousand Kisses", the ULTRA-PREMIUM twin of happy-kiss-day. Owned by
- * that template's builder: started as a copy of ./happy-kiss-day.ts (premise, fields
- * and guides still describe the $2 page — rewrite them for the premium design),
- * with letterMax 3000 and two premium text leaves at the end.
+ * happy-kiss-day-premium — "A Thousand Kisses", the ULTRA-PREMIUM twin of
+ * happy-kiss-day. Paths resolve against `ValentineDayData`
+ * (client/app/(templates)/_valentine/types.ts); the extras keys are in
+ * ../premiumDays/happy-kiss-day-premium.ts.
  *
- * Base notes (from ./happy-kiss-day.ts):
- * happy-kiss-day — "Sealed With a Kiss" (Valentine's week, 13 Feb).
- *
- * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts);
- * extras keys are defined in server/src/config/valentineDays.ts.
- * Not declared: kissStyle, lipShade, kissTarget (visual/number choices).
+ * Not declared: kissStyle, lipShade, kissTarget, mosaicPhoto, kissCount
+ * (visual / number choices the sender taps) and sinceDate (a date the model
+ * would invent more often than find). Music, GIFs and media never.
  *
  * Family-safe by default: the page may be opened on a shared family phone, so
- * every guide keeps kisses at cheek / forehead / blown-kiss level.
+ * every guide keeps kisses at cheek / forehead / blown-kiss level, and a few
+ * words that would break that are swept after generation (forbiddenOutput).
  */
 export const kissDayPremium: AiFillTemplateSchema = {
   slug: "happy-kiss-day-premium",
   audience: "partner",
   premise:
-    "A Kiss Day page, cute and family-safe: the recipient taps to stamp cartoon kisses into a heart jar until it overflows with a giant MWAH, then opens a lipstick-sealed envelope with the sender's letter, sees their photos on a Kiss-Cam, scratches kiss coupons and blows a kiss back. Blush, playful, sweet — cheek, forehead and blown kisses only. This holds in every field, photo notes included: whatever words the story uses for a kiss, the page only ever calls it sweet, shy, tiny or cute — it could be read aloud to grandparents." + VW_LANGUAGE,
+    "A premium Kiss Day page shot like a perfume advert, where kisses are the medium: the recipient opens a perfumed envelope, warms a lip-pressed wax seal until it melts open, catches falling kisses in a little glass heart jar while 'A kiss for…' notes pop out, swipes two thousand tiny kisses into one of their photos (the picture resolves out of kisses), reads the sender's letter written in lipstick on a steamy vanity mirror, gets a photo-booth strip printed and stamps it with their own kiss, and finally kisses the screen back. Flirty-elegant and sweet — cheek, forehead and blown kisses only. This holds in every field, photo notes included: whatever words the story uses for a kiss, the page only ever calls it sweet, shy, tiny or soft — it could be read aloud to grandparents. A story told in English sentences is an English story even when it names Indian places, foods, songs or a borrowed word or two: then every field is natural English, and only a pet name the sender actually uses stays as it is." + LANGUAGE,
   fields: [
     ...valentineCommon({
       dayName: "Kiss Day",
-      letterWhere: "It is inside an envelope sealed with a lipstick kiss, dragged up to read. Keep every kiss reference sweet: forehead kisses, goodnight kisses, blown kisses, 'sealed with a kiss'. If the story describes a kiss in an intimate or intense way, keep only where and when it happened and make it shy and sweet; never describe how a kiss felt physically.",
+      letterWhere: "It writes itself in lipstick across a steamy vanity mirror, paragraph by paragraph, each paragraph ending in a tiny kiss mark, so short paragraphs read best. Keep every kiss reference sweet: forehead kisses, goodnight kisses, blown kisses, 'sealed with a kiss'. If the story describes a kiss in an intimate or intense way, keep only where and when it happened and make it shy and sweet; never describe how a kiss felt physically.",
       letterMax: 3000,
-      endLineWhere: "on the final 'blow a kiss back' screen.",
-      photosWhere: "the photos play on a stadium Kiss-Cam jumbotron.",
+      endLineWhere: "under the photo-booth strip they keep at the very end.",
+      photosWhere: "the photos become a mosaic made of tiny kisses and a vintage kiss-booth photo strip.",
       notes: true,
+      greetingPrinted: "The mirror already shows a 'Dear <their name>,' line above it.",
+      signaturePrinted: "The mirror already signs it with the sender's name and an x underneath.",
     }),
     {
       path: "extras.openingLine",
-      label: "Envelope teaser",
+      label: "Written on the envelope",
       kind: "text",
       max: 60,
-      guide: "The shy teaser on the closed envelope, written like a phone notification or a delivery alert, with a nod to something from the story. Under 55 characters, one emoji allowed, same language as the story.",
+      guide: "The line handwritten on the perfumed envelope, the very first thing they read: flirty-elegant and short, like the tagline of a perfume advert — a few words that tease what is inside, with a nod to one detail of the story. Under 40 characters, at most one emoji, same language as the story.",
     },
     {
       path: "extras.kissNotes",
-      label: "Notes that pop with the kisses",
-      kind: "list",
-      max: 5,
-      itemMax: 60,
-      guide: "3 to 5 tiny notes that pop up as the kiss jar fills, each 'for' one specific thing about them from the story, e.g. 'Kiss #7 — for every reached-home text'. Each under 58 characters, sweet and family-safe, each about a different detail." + VW_TONE,
-      example: "Kiss #1 — for the way you laugh at my bad jokes",
-    },
-    {
-      path: "extras.coupons",
-      label: "Kiss coupons",
+      label: "A kiss for…",
       kind: "list",
       max: 4,
-      itemMax: 50,
-      guide: "Up to 4 scratch-off kiss coupons, each 'what you get — when it's valid'. Each a different sweet gesture (a forehead kiss, a goodnight kiss on a call, a kiss to end any argument) with different, specific terms tied to the story — no two with the same validity. Each under 44 characters (anything past 50 is cut off), family-safe.",
-      example: "1 forehead kiss — valid after every exam",
+      itemMax: 70,
+      guide: "Four little notes that pop out of the jar as they catch falling kisses. Each starts with 'A kiss for' and names ONE specific thing about them from the story — a habit, a phrase they say, a small kindness — each a different detail. Under 60 characters each, sweet and family-safe." + VW_TONE,
+      example: "A kiss for every 'reached home?' text",
     },
     {
       path: "extras.kissBackText",
       label: "Their reply",
       kind: "text",
       max: 80,
-      guide: "The prefilled WhatsApp reply the recipient sends back to the sender after blowing a kiss back, written in the RECIPIENT's voice to the sender (the app adds the sender's name after it, so do not sign it). Cute and a little teasing, in the story's language, correct and natural. Under 75 characters.",
-      example: "Received your kisses 💋 Here's one back, pagal 😘",
+      guide: "The prefilled WhatsApp reply the recipient sends back to the sender after kissing the screen, written in the RECIPIENT's voice to the sender (the app adds the sender's name after it, so do not sign it). Cute and a little teasing, in the story's language, correct and natural. Under 75 characters.",
+      example: "Kisses received. Sending one back before you even ask 😘",
     },
     // ── Premium-only text leaves (the `premium` sub-document) ───────────────
     // Never declared: premium.voiceNote (media), songDropAt, unlockAt,
     // unlockTz, allowReply, voicePeaks — none of them is something a story says.
     {
       path: "premium.voiceCaption",
-      label: "Caption under your voice note",
+      label: "Line by your voice note",
       kind: "text",
       max: 90,
-      guide: "The one handwritten line printed under the sender's voice note, read just before they press play (or, if no voice note is recorded, shown as a short typed 'transmission' from the sender). First person, addressed to them, one small detail or inside joke from the story. Under 85 characters, same language as the story, no hashtags.",
-      example: "Play this with headphones. Yes, that's me laughing at the end.",
+      guide: "The handwritten line beside the sender's voice note, left on the vanity under the mirror (if no voice note is recorded, this line IS the message). First person, to them, playful and soft, with one small detail from the story. Under 80 characters, same language as the story, no hashtags.",
     },
     {
       path: "premium.psLetter",
       label: "The sealed P.S.",
       kind: "longtext",
       max: 600,
-      guide: "A sealed P.S. envelope at the very end of the page, labelled 'open only if…'. Begin with that condition as its own first line, specific to these two (open only if you miss me tonight / open only if you ever doubt this), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
-      example: "Open only if you can't sleep.\n\nI still have the ticket from that first film. You talked through the whole thing and I've never loved a movie more.",
+      guide: "A P.S. card tucked into the mirror's frame. Begin with an 'Open only when…' condition as its own first line, specific to these two (open only when you miss me / open only when you can't sleep), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
     },
   ],
-  forbiddenOutput: VW_FORBIDDEN,
+  forbiddenOutput: [...VW_FORBIDDEN, "sexy", "seductive", "naughty"],
 };

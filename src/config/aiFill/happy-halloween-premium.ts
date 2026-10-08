@@ -14,7 +14,8 @@ import { VW_FORBIDDEN, VW_TONE, valentineCommon } from "./valentineShared";
  * the page is for, and whether the board answers YES / NO / ALWAYS / SOON, are
  * things a story decides, and the whisper line must agree with the answer.
  *
- * Never declared: music, GIFs, photos' URLs, premium.voiceNote / songDropAt /
+ * Never declared: extras.specialGuest (thin stories got an invented pet 2/3 times
+ * even with a substitute instruction — an optional field the sender types), music, GIFs, photos' URLs, premium.voiceNote / songDropAt /
  * unlockAt / allowReply (media and switches — nothing a story says).
  *
  * forbiddenOutput: brand names (VW_FORBIDDEN) plus the one word the board must
@@ -152,14 +153,6 @@ export const halloweenPremium: AiFillTemplateSchema = {
         "What appears the moment they say yes, as the bats turn into firework hearts and the sun comes up over the manor: the sender's reply in first person, joyful, one short sentence with a playful callback to the story. Under 70 characters." +
         VW_TONE,
       example: "Booked. Booed. Yours. See you at sunrise.",
-    },
-    {
-      path: "extras.specialGuest",
-      label: "A special guest at the ball",
-      kind: "text",
-      max: 40,
-      guide:
-        "One extra guest signed into the manor's guest book at the end: a pet, a best friend or a place the story names, with a tiny playful role in brackets ('Biscuit the cat (as himself)'). When the story names no pet, friend or place, sign in the thing the recipient loves most in the story instead, the same way ('The monsoon (as itself)'). Under 36 characters.",
     },
     // ── Premium-only text leaves (the `premium` sub-document) ───────────────
     {
