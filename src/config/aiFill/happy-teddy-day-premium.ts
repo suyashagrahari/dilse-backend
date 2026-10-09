@@ -4,39 +4,42 @@ import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentine
 /** Short English stories full of Indian names were coming back in Hinglish about half the time. */
 const LANGUAGE_BY_WORDS = " Judge the language by the sender's own sentences, not by the names in them: 'Her name is Neha. I love her.' is an English story.";
 
+/** The page prints "Teddy Day · 10 February" right above this line, so it is not a day greeting. */
+const END_LINE =
+  "The very last line, set large above the signed adoption certificate (the date and day are already printed above it). One short, complete sentence addressed to them (the sign-off and names are printed elsewhere), in the sender's voice, that hands the teddy over for good and says one true thing about the two of them, with a pet name or a callback to one detail from the story. Under 60 characters, same language as the story, no emoji." + VW_TONE;
+
 /**
- * happy-teddy-day-premium — "Made With a Heart", the ULTRA-PREMIUM twin of
- * happy-teddy-day (Valentine's week, 10 Feb). Owned by that template's builder.
+ * happy-teddy-day-premium — "Adoption Papers", the ULTRA-PREMIUM twin of happy-teddy-day (Valentine's week,
+ * 10 Feb). Owned by that template's builder.
  *
- * The page: a parcel holds an unfinished teddy. In a toy workshop the recipient
- * stuffs it, holds the sender's little fabric heart (hands, cheek, then ear —
- * where it whispers a line), kisses it, sews it in, and the teddy wakes up and
- * says its first words. Lights out: they read the letter by torchlight in a
- * blanket fort, see photos as moons from a star lamp, play hide-and-seek (the
- * teddy says a line each time it is found), then tuck it in and it whispers
- * goodnight.
+ * The page: a manila parcel tag, then a real teddy bear with a woven tag carrying both names; squeezed, he says
+ * his first words. His file follows: the couple's photos clipped in as "the family", satin care labels that flip
+ * over to love notes written as care instructions, the sender's letter folded in three, the sender's voice. Then
+ * a typeset Certificate of Adoption (place of birth, temperament, released by the sender) that the recipient
+ * signs with a finger; the gold seal presses and ADOPTED is stamped on it. The signed certificate is the keepsake.
  *
- * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts);
- * extras keys are in server/src/config/premiumDays/happy-teddy-day-premium.ts.
- * Not declared: furColor, eyeStyle, accessory, sleepOver (visual choices),
- * pawInitial (the sender's own initial) and every media / timing / switch
- * premium field.
+ * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts); extras keys are in
+ * ../premiumDays/happy-teddy-day-premium.ts. Not declared: every media / timing / switch premium field.
+ * Examples are left off the fields whose example leaked verbatim in live runs (see the template notes).
  */
 export const teddyDayPremium: AiFillTemplateSchema = {
   slug: "happy-teddy-day-premium",
   audience: "partner",
   premise:
-    "A cinematic Teddy Day page. The recipient receives a parcel with an unfinished teddy bear. In a cosy toy workshop they stuff it, hold the sender's little fabric heart in their hands, to their cheek and to their ear (where it whispers one line from the sender), kiss it, sew it inside the teddy, and the teddy wakes up and speaks. Then it is bedtime: they read the sender's letter by torchlight in a blanket fort, see photos as moons projected on the ceiling, play hide-and-seek with the teddy (it says a little line every time it is found), and tuck it in while it whispers goodnight. The teddy is a stand-in for the sender: a piece of them that stays. Soft, cosy, playful, tender." + VW_LANGUAGE + LANGUAGE_BY_WORDS,
+    "A cinematic Teddy Day page styled as a teddy bear's adoption papers. The recipient first sees a parcel tag, then meets a real teddy bear the sender has named, wearing a woven tag with both their names; squeezed, he says his first words. Then his file: the couple's own photos clipped in as his new family, satin care labels that flip over to reveal love notes written as care instructions, the sender's letter, the sender's voice. Finally a beautifully typeset Certificate of Adoption that the recipient signs with a finger, and a gold seal and an ADOPTED stamp make it official. The teddy is a soft stand-in for the sender: a hug they can keep. Do not assume the couple lives apart unless the story says so. Warm, playful, tender, with the gentle humour of official paperwork. Every line stays true to the story: when the story is short, write simpler lines about what it does say rather than adding trips, habits or events of your own." +
+    VW_LANGUAGE +
+    LANGUAGE_BY_WORDS,
   fields: [
     ...valentineCommon({
       dayName: "Teddy Day",
-      letterWhere: "They read it by torchlight under a blanket fort, late at night, with the teddy holding the torch — so it can be a little more hushed and intimate than daytime talk.",
+      letterWhere: "It is folded in three and tucked into the teddy's adoption file; it unfolds just before they sign the certificate, so it can introduce the teddy (by his name) as a little piece of the sender they get to keep, using only what the story says about the two of them.",
       letterMax: 3000,
-      signaturePrinted: "The page prints the sender's name under it.",
-      endLineWhere: "after the teddy is tucked in, on the last screen.",
-      photosWhere: "each photo glows like a small moon projected onto the bedroom ceiling by a star lamp.",
+      signaturePrinted: "The page prints the sign-off field under it.",
+      endLineWhere: "the very last line, set large above the signed adoption certificate.",
+      photosWhere: "each photo is clipped into the teddy's file as 'Exhibit A, B, C…' of his new family, with the caption printed under it. When the story names fewer moments than there are photos, the remaining captions simply describe the two of them as the story does and add no new event, place or object.",
+      photoCount: 4,
       notes: false,
-    }),
+    }).map((f) => (f.path === "endLine" ? { ...f, guide: END_LINE } : f)),
     {
       path: "extras.teddyName",
       label: "Teddy's name",
@@ -47,59 +50,63 @@ export const teddyDayPremium: AiFillTemplateSchema = {
     },
     {
       path: "extras.parcelNote",
-      label: "Tag on the unfinished teddy",
+      label: "The parcel tag",
       kind: "text",
-      max: 80,
-      guide: "The tag pinned to the teddy before it is stuffed and has no heart yet: a sweet line from the sender saying it isn't finished and needs them to finish it. One sentence, under 75 characters." + VW_TONE,
-      example: "Half done, like me before you. Finish him?",
-    },
-    {
-      path: "extras.heartWhisper",
-      label: "What the heart whispers",
-      kind: "text",
-      max: 90,
-      required: true,
-      guide: "The softest line on the page: what the sender's little fabric heart whispers when the recipient holds it to their ear, before it is sewn inside the teddy. First person from the sender to them, quiet and sincere, something about being with them when apart. Under 85 characters." + VW_TONE,
-      example: "Every time you squeeze him, that's me squeezing back.",
+      max: 60,
+      guide: "The one line handwritten on the parcel tag they see first, before anything opens. The tag already has a red FRAGILE stamp, so do not use the word 'fragile'. A playful shipping-label line from the sender about what's inside (a hug, a stand-in for the sender, something to hold at night), shaped by the story. One sentence, under 55 characters, ends with a full stop." + VW_TONE,
     },
     {
       path: "extras.firstWords",
-      label: "Teddy's first words",
+      label: "His first words",
       kind: "text",
       max: 50,
-      guide: "The first thing the teddy says when it wakes up in their hands, in a speech bubble: the teddy speaking (first person as the teddy), cheerful, naming who sent it (the sender's first name). Under 45 characters." + VW_TONE,
+      guide: "The first thing the teddy says, in a speech bubble, the first time they squeeze him: the teddy speaking in first person, cheerful, greeting the recipient by name and saying who sent him (the sender's first name). Under 45 characters." + VW_TONE,
     },
     {
-      path: "extras.squeezeLines",
-      label: "What the teddy says",
+      path: "extras.birthPlace",
+      label: "Place of birth",
+      kind: "text",
+      max: 40,
+      guide: "A field on the adoption certificate, 'Place of birth': a cute, specific place from the story where the teddy was 'born', as if it were official (the sender's hoodie pocket in their city, the café where they met). A short noun phrase, no full stop, under 36 characters. Use only places or things the story mentions; with none, write a hoodie pocket, adding whose it is only when the story gives the sender's first name. Same language as the story.",
+    },
+    {
+      path: "extras.temperament",
+      label: "Temperament",
+      kind: "text",
+      max: 40,
+      guide: "A field on the adoption certificate, 'Temperament': two very short deadpan phrases describing the teddy's personality, each starting with a capital letter and ending with a full stop, which secretly describe how the sender loves them, drawn from the story. Same language as the story. Under 36 characters.",
+    },
+    {
+      path: "extras.careLines",
+      label: "Care instructions",
       kind: "list",
       max: 5,
       itemMax: 70,
-      guide: "Exactly 5 short lines the teddy says (as the teddy, first person) each time they find it in hide-and-seek or squish it at bedtime. A mix of cheeky and sweet: reminders in the sender's spirit, little teases from the story, promises to guard their sleep. Each mentions a different detail; under 65 characters each." + VW_TONE,
-      example: "Found me! Now go find the one who sent me.",
+      guide: "Exactly 5 care instructions for the teddy, each printed on its own satin care label: love notes from the sender disguised as laundry-label style instructions in the imperative ('Hug daily.', 'Responds to …', 'Not to be left alone on …'). Each uses a different real detail or habit from the story (long-distance nights, a pet name, a ritual, a fear, a food); when the story is thin, keep them about hugs, sleep and missing each other rather than inventing facts. All five in the same language as the story (Hinglish stories get Hinglish labels). Under 60 characters each, each ends with a full stop." + VW_TONE,
     },
     {
-      path: "extras.bedtimeLine",
-      label: "The goodnight whisper",
+      path: "extras.signOff",
+      label: "Sign-off",
       kind: "text",
-      max: 70,
-      guide: "What the teddy whispers as it is tucked in: goodnight to them by name, and that the sender is close (just a dream away, right here in this teddy). Under 65 characters." + VW_TONE,
+      max: 40,
+      guide: "How the sender signs the letter: a two-to-four-word sign-off phrase, a comma, then the sender's first name. Printed in italic under the letter. Same language as the story; match the sender's gender in Hindi. Under 34 characters.",
+      example: "Always yours, Aryan",
     },
+    // ── Premium-only text leaves (the `premium` sub-document) ───────────────
+    // Never declared: premium.voiceNote (media), songDropAt, unlockAt, unlockTz, allowReply, voicePeaks.
     {
       path: "premium.voiceCaption",
-      label: "Caption under your voice note",
+      label: "The line with your voice note",
       kind: "text",
       max: 90,
-      guide: "A one-line note from the sender shown with their voice message, which plays when the recipient presses the teddy's paw (or, without a recording, as a little note sewn into the paw). First person, addressed to them, one small detail from the story. Under 85 characters, no hashtags." + VW_TONE,
-      example: "Headphones on. Yes, that's me laughing at the end.",
+      guide: "One line shown with the sender's voice note just before the certificate (or on its own, large, as the sender's spoken words when there is no recording). First person, addressed to them, as if said out loud while they hold the teddy; one small detail from the story. Under 85 characters, same language as the story, no hashtags." + VW_TONE,
     },
     {
       path: "premium.psLetter",
       label: "The sealed P.S.",
       kind: "longtext",
       max: 600,
-      guide: "A sealed P.S. pinned under the teddy's pillow at the very end. Begin with an 'open only if…' condition as its own first line, specific to these two (open only on a night you can't sleep / open only if you miss me), then a blank line, then two to four short sentences to them in first person — quieter than the letter, built on one specific detail from the story the letter did not use; when the story has no detail left, make it a small promise or a feeling instead, never an invented memory. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
-      example: "Open only on a night you can't sleep.\n\nSqueeze him twice. The second one is from me.",
+      guide: "A sealed P.S. behind a wax seal at the very end, after the certificate is signed. Begin with a condition as its own first line, 'Open only' followed by a moment or feeling taken from this couple's story, then a blank line, then two to four short sentences to them in first person about the teddy and the sender — quieter than the letter, built on one detail the letter did not use; when no detail is left, make it a small promise instead, never an invented memory. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
     },
   ],
   forbiddenOutput: VW_FORBIDDEN,
