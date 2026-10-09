@@ -76,7 +76,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-hug-day-premium": ["openingLine", "distanceKm", "meetLine", "holdSeconds", "heartbeatBpm", "hugLines", "hugFeels", "coupons", "replyLine"],
   "happy-kiss-day-premium": ["kissStyle", "lipShade", "stripTone", "openingLine", "kissFrame", "kissNotes", "sinceDate", "kissBackText"],
   "happy-valentines-day-premium": ["ticketLine", "balloonLine", "meterLine", "weekLines", "togetherSince", "songNote", "question", "noLines", "datePlan"],
-  "happy-halloween-premium": ["tone", "houseName", "nightTitle", "wallNotes", "spiritWord", "spiritLine", "tarot", "costumeDuo", "question", "yesLine"],
+  "happy-halloween-premium": ["tone", "houseName", "treats", "ingredients", "potionSpell", "perks", "costumeDuo", "question", "yesLine"],
 };
 
 const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
@@ -88,7 +88,7 @@ const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
   "happy-hug-day-premium": ["ph3-held", "ph6-back"],
   "happy-kiss-day-premium": ["pb1-booth", "pb2-kiss"],
   "happy-valentines-day-premium": ["vc1-ticket", "vc2-balloons", "vc3-meter", "vc4-letter", "vc5-please", "vc6-yes"],
-  "happy-halloween-premium": ["h1-hall", "h6-yes"],
+  "happy-halloween-premium": ["hb1-hello", "hb2-treats", "hb3-pumpkin", "hb4-booth", "hb5-potion", "hb6-yes"],
 };
 
 describe("Valentine's week day configs", () => {

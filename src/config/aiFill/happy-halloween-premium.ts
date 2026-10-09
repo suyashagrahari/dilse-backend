@@ -2,46 +2,44 @@ import type { AiFillTemplateSchema } from "./types";
 import { VW_FORBIDDEN, VW_TONE, valentineCommon } from "./valentineShared";
 
 /**
- * happy-halloween-premium — "A Night at the Manor", the ULTRA-PREMIUM twin of
+ * happy-halloween-premium — "Boo-tiful Night", the ULTRA-PREMIUM twin of
  * happy-halloween. Paths resolve against `ValentineDayData`
  * (client/app/(templates)/_valentine/types.ts); the extras keys are defined in
  * ../premiumDays/happy-halloween-premium.ts (client mirror:
  * client/app/(templates)/_valentine/days/happy-halloween-premium.ts).
  *
- * The demo seeds 4 photos, 3 wall notes and 3 tarot cards, so those indices
- * always exist while the sender builds. `tone` is declared as an enum on
- * purpose: who the page is for is something a story decides.
+ * The demo seeds 4 photos, 5 treats, 3 ingredients and 3 perks, so those
+ * indices always exist while the sender builds. `tone` is declared as an enum
+ * on purpose: who the page is for is something a story decides.
+ *
+ * Language: the platform rule (the sender's own language and script) wins;
+ * the template's own copy is English. Forcing English here fought the fill
+ * prompt's top rule and produced mixed scripts on a Hinglish story (tested).
  *
  * Never declared: extras.costumeDuo (an optional, playful field the sender
- * types; a story rarely names a costume, and an invented one is a fabricated
- * fact), music, GIFs, photos' URLs, premium.voiceNote / songDropAt / unlockAt /
- * allowReply (media and switches — nothing a story says).
- *
- * forbiddenOutput: brand names (VW_FORBIDDEN) plus the one word the board must
- * never be called (it is a "talking board" / "spirit board" on the page).
- * Words the page prints itself ("Happy Halloween", "boo") are NOT forbidden —
- * the end line is supposed to wish them a happy Halloween.
+ * types; an invented costume is a fabricated fact), music, GIFs, photos' URLs,
+ * premium.voiceNote / songDropAt / unlockAt / allowReply.
  */
 const LANGUAGE =
-  " Write in the language and script of the sender's story — an English story gets English, a Hinglish story gets Hinglish in Latin letters — and keep every field in that one choice. Cute-spooky and romantic, never scary or gory: no blood, no death, no real curses or demons, no religious imagery. Ghosts are cute and the manor is beautiful. When the story names a product brand, write what the thing is instead.";
+  " Write in the language and script of the sender's story — an English story gets English, a Hinglish story gets Hinglish in Latin letters — and keep every field in that one choice. Never invent a memory, a past Halloween, a costume, a trip or a 'first time' the story does not mention: when the story is short, write about who they are and what they love right now, or a plan for tonight, instead of a past event. A pet's name (a cat, a dog) is never a nickname for the recipient. Cute-spooky and romantic, never scary or gory: no blood, no death, no skulls, no real curses or demons, no religious imagery. Ghosts are cute and blush. When the story names a product brand, write what the thing is instead.";
 
 export const halloweenPremium: AiFillTemplateSchema = {
   slug: "happy-halloween-premium",
   audience: "partner",
   premise:
-    "A premium Happy Halloween page, 'A Night at the Manor'. The recipient is asked 'Trick or treat?' at the door of a dark manor (both answers are a treat), then drags a torch beam through a dark Hall of Portraits to find photos of the two of them hung in gilt frames and short notes scrawled on the walls; rests a finger on a talking board whose planchette spells their name and then one secret word; turns over three tarot cards (their past, present and future) that each carry a personal fortune; hears the sender's voice from a crystal ball; lights a candle to read the sender's letter on old parchment, with a sealed P.S.; and finally finds the last portrait in the dark — the two of them — which winks as their song drops, before one question. It ends on a costume-duo movie poster of the two of them. Usually for a partner or crush, but it can be for a best friend, family, or a child — follow the story." +
+    "A premium Happy Halloween page, 'Boo-tiful Night': a bright, cute, candy-coloured Halloween night with blushing ghosts, never scary. A ghost pops out of a haunted mailbox with a letter; the recipient taps a trick-or-treat bag and catches candies that each open to one line (a sweet 'Treat:' or a cute 'Trick:' dare); carves a pumpkin; shoos away ghosts hiding their photos in a ghost photo booth; pours three little bottles of ingredients into a cauldron to brew a love potion that casts one spell; a cute bat delivers the sender's letter as a scroll (with a sealed P.S.); a spirit radio plays the sender's voice; then 'Will you be my boo?' as their song drops, and a Boo License keepsake with perks printed on it. Usually for a partner or crush, but it can be for a best friend, family, or a child — follow the story." +
     LANGUAGE,
   fields: [
     ...valentineCommon({
       dayName: "Halloween",
       letterWhere:
-        "They light a candle and it appears on old parchment near the end of the night, just before the last portrait, so it should feel like a secret told by candlelight: intimate and warm, with a light Halloween wink (a costume, a scary movie, candy, the dark, a ghost story) only where the story gives you one — never horror. If the page is for a child or family, keep it gentle and sweet.",
+        "A cute little bat flies in carrying it and it unrolls like a scroll in the middle of the night, so it should feel warm and close, with a light Halloween wink (a costume, a scary movie they hid from, candy, a ghost joke) only where the story gives you one — never horror. If the page is for a child or family, keep it gentle and sweet. Only recall a moment the story actually tells; when the story tells none, tease them about what it does say and look forward to tonight instead of remembering anything.",
       letterMax: 3000,
-      endLineWhere: "the big closing line of the night, printed over the costume-duo poster of the two of them.",
+      endLineWhere: "printed big over their Boo License, the keepsake they save at the end.",
       photosWhere:
-        "the photos hang as gilt-framed portraits in a dark hall that the recipient lights up with a torch; the caption is engraved on each frame's small brass plaque, so keep it a short title for the moment (a place, an occasion), not a sentence.",
+        "each photo hides behind a cute ghost in a photo booth until they shoo the ghost away; the caption is handwritten under the polaroid, so keep it a short label for the moment (a place, an occasion), not a sentence.",
       captionMax: 30,
-      notes: false,
+      notes: true,
       greetingPrinted: "The page already prints a 'Dear <their name>,' salutation above it.",
       signaturePrinted: "The page already signs it with the sender's name underneath.",
     }),
@@ -55,76 +53,69 @@ export const halloweenPremium: AiFillTemplateSchema = {
     },
     {
       path: "extras.houseName",
-      label: "Name of the manor",
+      label: "Name of the haunted house",
       kind: "text",
       max: 40,
       guide:
-        "The name of the haunted manor, shown at the door and on the poster. A short, affectionate pun built from ONE detail of the story — their street, a running joke, a place they love, a pet's name — in the style of 'Villa Boo-tiful'. Two to four words, under 30 characters, no emoji.",
+        "The name of their cute haunted house, painted on the mailbox and printed on the Boo License. A short, affectionate Halloween pun built from ONE detail of the story — their street, a running joke, a place they love, a pet's name — in the style of 'Villa Boo-tiful'. Two to four words, under 30 characters, no emoji.",
       example: "Casa de Boo",
     },
-    {
-      path: "extras.nightTitle",
-      label: "Name of the night",
-      kind: "text",
-      max: 40,
+    ...[0, 1, 2, 3, 4].map((i) => ({
+      path: `extras.treats[${i}]`,
+      label: `Candy ${i + 1}`,
+      kind: "text" as const,
+      max: 70,
       guide:
-        "The title of tonight's story, shown over the last portrait at the big reveal and on the poster like the title of a gothic love film about these two. Build it from ONE concrete noun in the story — a nickname, a food, a place, an object they fight over — inside a gothic frame: 'The Haunting of <it>', 'The Curse of <it>', 'A Midnight <it> Affair', '<it> After Dark'. Two to six words, title case, under 34 characters, no quotation marks, no emoji. For family or a child keep it sweet ('The Pumpkin Patch Mystery' style).",
-    },
-    {
-      path: "extras.wallNotes",
-      label: "Notes on the walls",
-      kind: "list",
-      max: 3,
-      itemMax: 48,
-      guide:
-        "Three short notes the sender scrawled on the walls of the dark hall, found one by one with a torch. Each is ONE small, true, specific moment or habit from the story, written the way you'd scribble it — a fragment, lowercase is fine, addressed to them ('you snorted at the food court', 'Lonavala, no umbrella'). Three DIFFERENT details. Under 40 characters each, no full stop, no emoji. Every note must come from something the story actually says — never a first time, an outing or an event it does not mention. When the story runs out of moments, turn a plain fact it gives into a tiny present-tense truth about them instead (a story that only says she loves the rain → 'you, opening every window for a storm'), and write two notes, or one, rather than invent. Count the concrete details the story gives first: a story of one or two sentences gets one note per detail it names, never more.",
-    },
-    {
-      path: "extras.spiritWord",
-      label: "What the talking board spells",
-      kind: "text",
-      max: 10,
-      guide:
-        "After spelling their name by itself, the talking board spells ONE more word only these two would understand — a nickname, an inside-joke word, or a word like MINE or ALWAYS. Capital letters A–Z only: one word, 3 to 8 letters, no spaces, no digits, no emoji, no punctuation.",
-      example: "MINE",
-    },
-    {
-      path: "extras.spiritLine",
-      label: "The board's last whisper",
-      kind: "text",
-      max: 80,
-      guide:
-        "The sender's whispered line that appears once the board has spelled the word: one short sentence in the sender's voice that lands the word with a wink or a truth ('The spirits agree. So do I.'), using one detail from the story where it fits. Under 60 characters." +
+        `Candy ${i + 1} of five in the trick-or-treat bag: when they catch it, it opens to this one line. ` +
+        (i % 2 === 0
+          ? "Start with 'Treat: ' and give them something sweet the sender will really do or give, built on one detail from the story (their food, a habit, a thing they share)."
+          : "Start with 'Trick: ' and give them a cute, harmless dare or IOU they owe the sender (hugs, a dance, sharing their fries), built on one detail from the story.") +
+        " One short sentence after the label, under 60 characters in all, no emoji. Five candies, five different details." +
         VW_TONE,
-    },
-    ...[
-      ["their PAST", "a moment from how they met or their early days, as the story tells it; when the story tells nothing about their past, an old, still-true fact about them that the story does give, told as if the cards always knew it — never a first date, trip or event the story does not mention"],
-      ["their PRESENT", "what they are to the sender right now, as short and plain as a verdict — two to six words beat a sentence here — built on the story's own detail, not a stock compliment"],
-      ["their FUTURE", "a plan, wish or running joke the story mentions, told as a playful prophecy; when the story mentions no plan, an ordinary night of the thing they already love doing together"],
-    ].flatMap(([pos, what], i) => [
+    })),
+    ...[0, 1, 2].flatMap((i) => [
       {
-        path: `extras.tarot[${i}].card`,
-        label: `Tarot card ${i + 1}`,
+        path: `extras.ingredients[${i}].name`,
+        label: `Potion bottle ${i + 1}`,
         kind: "text" as const,
-        max: 24,
-        guide: `The name of the tarot card drawn for ${pos}: a real Major Arcana card whose meaning suits the fortune you write for it (The Lovers, The Moon, The Sun, The Star, The Magician, The Wheel of Fortune, The Empress, Strength, The Hermit, The World, The Chariot, The Fool…), written with 'The' where the real card has it. Three different cards across the three. Never a card whose name sounds frightening.`,
+        max: 30,
+        guide:
+          "The label on a little bottle they pour into the love potion: a measure plus one thing about them or the two of them, like a recipe — 'A pinch of …', 'A drop of …', 'A sprinkle of …', 'A spoonful of …' (use a different measure on each of the three). Two to six words, under 28 characters, no emoji.",
       },
       {
-        path: `extras.tarot[${i}].line`,
-        label: `Tarot fortune ${i + 1}`,
+        path: `extras.ingredients[${i}].line`,
+        label: `What bottle ${i + 1} really is`,
         kind: "text" as const,
-        max: 90,
-        guide: `The fortune printed on the ${pos} card, in the sender's voice to them: ${what}. One or two short sentences, under 80 characters, specific to the story, with a wink.` + VW_TONE,
+        max: 70,
+        guide:
+          "What that bottle really is, shown as it pours: a lowercase fragment that starts with 'your' or 'the way you' and names one thing about them the story says (a habit, a quality, what they love, something they did in the story), matching the bottle's label. When the story tells real moments, name them here (the moment itself, not a general quality). Under 60 characters, no full stop, no emoji. Three bottles, three different details.",
       },
     ]),
+    {
+      path: "extras.potionSpell",
+      label: "What the potion does",
+      kind: "text",
+      max: 90,
+      guide:
+        "The spell the finished love potion casts, shown when the cauldron puffs out a heart: one or two short sentences from the sender, a sweet promise or plan with a wink, built on the story ('One sip and you're stuck with me…' style, in your own words). Under 85 characters." +
+        VW_TONE,
+    },
+    ...[0, 1, 2].map((i) => ({
+      path: `extras.perks[${i}]`,
+      label: `License perk ${i + 1}`,
+      kind: "text" as const,
+      max: 40,
+      guide:
+        "One perk printed on their official Boo License: a short, funny-sweet privilege they now hold, from the story ('Unlimited hoodie access', 'First pick of the momos'). Title-case-free, two to six words, under 34 characters, no full stop, no emoji. Three different perks.",
+    })),
     {
       path: "extras.question",
       label: "The question",
       kind: "text",
       max: 60,
       guide:
-        "The question asked under the last portrait after the big reveal. It must match the 'Who it's for' field you chose: romantic → a 'Will you be my boo…?' question; friends → a 'Will you be my boo-st friend forever?' question; family → a 'Will you be my favourite little pumpkin?' question; kids → a 'Ready for a spooky-sweet adventure?' question. The adventure wording is ONLY for a child. You may work in one detail from the story. Under 55 characters, ends with a question mark, no emoji.",
-      example: "Will you be my boo, tonight and every Halloween after?",
+        "The big question, asked in the moonlight next to their photo. It must match the 'Who it's for' field you chose: romantic → a 'Will you be my boo…?' question; friends → a 'Will you be my boo-st friend forever?' question; family → a 'Will you be my favourite little pumpkin?' question; kids → a 'Ready for a spooky-sweet adventure?' question. The adventure wording is ONLY for a child. You may work in one detail from the story. Under 55 characters, ends with a question mark, no emoji.",
+      example: "Will you be my boo, this Halloween and every one after?",
     },
     {
       path: "extras.yesLine",
@@ -132,18 +123,17 @@ export const halloweenPremium: AiFillTemplateSchema = {
       kind: "text",
       max: 80,
       guide:
-        "What appears under the portrait the moment they say yes: the sender's reply in first person, joyful, one short sentence with a playful callback to the story. Under 70 characters." +
+        "What appears the moment they say yes, while bats make a heart around their photo: the sender's reply in first person, joyful, one short sentence with a playful callback to the story. Under 70 characters." +
         VW_TONE,
-      example: "Booked. Booed. Yours. Every October after.",
     },
     // ── Premium-only text leaves (the `premium` sub-document) ───────────────
     {
       path: "premium.voiceCaption",
-      label: "The voice from the crystal ball",
+      label: "On the spirit radio",
       kind: "text",
       max: 90,
       guide:
-        "The line that surfaces in a crystal ball as 'a voice from beyond': it captions the sender's recorded voice note or, if there is none, it IS the message. First person, as if the sender is speaking to them through the glass right now: playful-spooky, and built on one small detail from the story (a habit of theirs, a place, the thing they'd be doing right now). Start it your own way. Under 85 characters, same language as the story, no hashtags.",
+        "The line that comes through a cute spirit radio once they tune it: it captions the sender's recorded voice note or, if there is none, it IS the message. First person, as if the sender is talking to them on the radio right now: sweet with a little Halloween wink, built on one small detail from the story. Start it your own way. Under 85 characters, same language as the story, no hashtags.",
     },
     {
       path: "premium.psLetter",
@@ -151,9 +141,9 @@ export const halloweenPremium: AiFillTemplateSchema = {
       kind: "longtext",
       max: 600,
       guide:
-        "A P.S. under the letter, sealed with oxblood wax and labelled with its first line, 'Open only if…'. Begin with that condition as its own first line, specific to these two (for a partner or friend: 'Open only if you're scared.' or 'Open only if you can't sleep tonight.'; for a child or family: 'Open only at bedtime.'), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 520 characters." +
+        "A P.S. under the letter, sealed with a little pumpkin wax seal they tap open. Begin with 'P.S. ', then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail the story states that the letter did not use; when the story has no second detail, make it a small promise for tonight instead of a memory. No salutation, no sign-off, no sender's name. Under 420 characters." +
         VW_TONE,
     },
   ],
-  forbiddenOutput: [...VW_FORBIDDEN, ["Oui", "ja"].join("")],
+  forbiddenOutput: [...VW_FORBIDDEN],
 };
