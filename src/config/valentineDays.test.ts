@@ -69,7 +69,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "bloomLine", "sinceDate", "signOff", "shayari"],
-  "happy-propose-day-premium": ["filmTitle", "tagline", "actOne", "actTwo", "comingSoon", "question", "noLines", "afterYes", "credits", "location"],
+  "happy-propose-day-premium": ["teaser", "moments", "rehearsal", "decoys", "stoneColor", "question", "noLines", "afterYes", "terms"],
   "happy-chocolate-day-premium": ["houseName", "openingLine", "boxLine", "flavours", "heartLine", "sinceDate", "signOff", "boxColor"],
   "happy-teddy-day-premium": ["teddyName", "parcelNote", "firstWords", "birthPlace", "temperament", "careLines", "signOff"],
   "happy-promise-day-premium": ["envelopeLine", "whereas", "promises", "bigPromise", "sinceDate", "witnessLine", "monogram", "waxColour", "replyLine"],
@@ -81,7 +81,7 @@ const PINNED_KEYS: Record<string, string[]> = {
 
 const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
   "happy-rose-day-premium": ["pr3-petals", "pr6-forever"],
-  "happy-propose-day-premium": ["pp4-please", "pp5-yes"],
+  "happy-propose-day-premium": ["pp-door", "pp-story", "pp-peek", "pp-ask", "pp-please", "pp-yes"],
   "happy-chocolate-day-premium": ["pc3-yum", "pc6-box"],
   "happy-teddy-day-premium": ["pt3-alive", "pt6-sleep"],
   "happy-promise-day-premium": ["ps1-desk", "ps2-sealed"],
