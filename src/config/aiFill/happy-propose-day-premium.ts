@@ -2,96 +2,108 @@ import type { AiFillTemplateSchema } from "./types";
 import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentineShared";
 
 /**
- * happy-propose-day-premium — "The Premiere", the premium twin of happy-propose-day: the couple's story screened as
- * a film for an audience of one. A ticket, a projector countdown, "Based on a true story", the opening title, three
- * acts cut from the sender's photos with subtitles (Act I how it started, Act II the moment I knew, Act III a
- * "coming soon" trailer of their future), the director's commentary, the last page of the script (the letter),
- * then the question as the final title card. On yes the letterbox opens, the song drops and the end credits roll.
+ * happy-propose-day-premium — "The Little Proposal", the premium twin of happy-propose-day: a tiny, cute love story
+ * with a ring at the end. A little door they knock on (a shy panda opens it with the sender's nervous hello), swipeable
+ * polaroid story cards of how it started, a 4-panel comic of the sender rehearsing the proposal and failing, a shell
+ * game of three gift boxes (a chocolate, a teddy, then the ring), the sender's letter in a heart-sealed envelope, the
+ * voice note, and the question with a runaway No. On yes the ring box opens on the song's chorus, the ring lands on a
+ * heart-shaped photo, a wall of celebrating stickers pops in, and they sign an "Officially Taken" certificate.
  *
  * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts); extras keys are in
- * ../premiumDays/happy-propose-day-premium.ts. The demo seeds 3 trailer cards, 4 No lines and 3 credits.
- * Not declared: every media/music/drop/unlock field.
+ * ../premiumDays/happy-propose-day-premium.ts. Not declared: every media/music/drop/unlock field and stoneColor (a
+ * visual choice).
  */
 export const proposeDayPremium: AiFillTemplateSchema = {
   slug: "happy-propose-day-premium",
   audience: "partner",
   premise:
-    "A Propose Day page that screens the couple's own story as a film made for one person. It opens on a cinema ticket with the film's title, a projector countdown and 'Based on a true story', then the opening title card. Three acts follow, each one of the sender's photos with a single subtitle line: Act I is how they met, Act II is the exact moment the sender knew, Act III is a 'coming soon' trailer of their future together in short punchy cards. Then the director's commentary (a voice note from the sender), the last page of the script (the sender's letter), and the proposal question set enormous as the final title card, with a No button that dodges. On yes the screen opens up, the song hits its chorus and end credits roll with inside-joke credits. Cinematic, romantic and funny; every line must come from this couple's real story." +
+    "A cute, bright Propose Day page that tells the couple's own little love story and ends with a ring. The recipient knocks on a tiny cartoon door and a shy panda opens it with the sender's nervous hello. They swipe through three polaroid story cards of how they started (each a photo, a tiny label and one line), taps through a four-panel comic of the sender rehearsing the proposal and getting it wrong, then open three gift boxes: the first holds a chocolate, the second a teddy, the third the ring. Then the sender's letter arrives in a heart-sealed envelope, the sender's voice note plays, and the question appears above a ring box with a No button that runs away. On yes the ring flies onto a heart-shaped photo of them, celebration stickers pop in, and they sign an 'Officially Taken' certificate with three playful terms. The voice is a real person's texts: short, nervous-cute, funny about themselves, tender about the recipient, built only from this couple's real story." +
     VW_LANGUAGE +
     " Indian place names, foods and song titles inside an English story keep it an English story: write the whole page in English then, quoting those names as they are.",
   fields: [
     ...valentineCommon({
       dayName: "Propose Day",
       letterWhere:
-        "It is typed on the last page of the film's script, the sender speaking to them right BEFORE the question is asked, so it can build towards asking without asking it: the question itself appears on the next screen, so the letter contains no question to them and never says yes for them.",
+        "It arrives in a heart-sealed envelope and types itself out just BEFORE the question, so it builds towards asking without asking: the question itself appears two screens later, so the letter contains no question to them and never says yes for them. Short paragraphs that read well on a phone.",
       letterMax: 3000,
-      endLineWhere: "shown as the last line of the end credits, after they have said yes.",
-      photosWhere: "each photo is a still from their film, and this caption is its scene name in the end credits.",
-      signaturePrinted: "The page prints the sender's name above it as the speaker.",
+      endLineWhere: "printed at the bottom of the 'Officially Taken' certificate they sign after saying yes.",
+      photosWhere: "the first three photos are polaroid story cards of how they started and the last sits in a heart-shaped frame where the ring lands; the caption is the tiny handwritten line on the polaroid.",
+      signaturePrinted: "The page prints the sender's name under the letter.",
     }),
     {
-      path: "extras.filmTitle",
-      label: "Your film's title",
-      kind: "text",
-      max: 40,
-      guide:
-        "The title of the film of their love story, printed on the ticket, the opening title card and the poster. Two to five words, named after one specific, slightly funny detail of THIS story (a thing, a place, a habit), the way real romcom titles are. Title Case, no quotation marks, no emoji, no names of real films.",
-      example: "Two Chais, One Table",
-    },
-    {
-      path: "extras.tagline",
-      label: "The poster's tagline",
+      path: "extras.teaser",
+      label: "Your nervous hello at the door",
       kind: "text",
       max: 70,
       guide:
-        "The tagline under the title on the film poster: a short, witty movie-poster line built on one detail from the story, often three short beats ('One X. Two people. No Y.'). Under 60 characters, ends with a full stop, no emoji.",
-    },
-    {
-      path: "extras.actOne",
-      label: "Act I · How it started",
-      kind: "text",
-      max: 90,
-      guide:
-        "The subtitle on the first still, Act I, 'How it started': one sentence from the sender to them ('you') about how they met or the very first moment, with the real detail from the story and a small twist or tease at the end. When the story doesn't say how they met, make it about the first thing the sender noticed about them, without inventing a place or an event. Under 80 characters, no emoji." +
+        "What the sender says the moment the little door opens and they see the sender (a shy panda holding a rose stands in for the sender): one or two very short, nervous-cute lines to them, a little funny about the sender's own nerves, hinting the sender has something to ask without asking it. Under 55 characters, may end with one emoji." +
         VW_TONE,
-      example: "You laughed at my worst joke. I decided right there.",
+      example: "Okay okay, I'm nervous. Don't laugh 🙈",
     },
+    ...[0, 1, 2].flatMap((i) => [
+      {
+        path: `extras.moments[${i}].when`,
+        label: `Story card ${i + 1} — label`,
+        kind: "text" as const,
+        max: 20,
+        guide: [
+          "The tiny label on the first story card, the very beginning of them: how they met or first spoke (like 'first chat', 'the canteen queue', 'Riya's party'). 1–3 lowercase words from the story, no date unless the story gives one, no emoji.",
+          "The tiny label on the second story card, an early memory that came next (a first date, a first trip, a first fight): 1–3 lowercase words from the story, no emoji.",
+          "The tiny label on the third story card, the moment the sender knew it was them: 1–4 lowercase words ('the day I knew' works when the story does not name the moment), no emoji.",
+        ][i],
+      },
+      {
+        path: `extras.moments[${i}].what`,
+        label: `Story card ${i + 1} — one line`,
+        kind: "text" as const,
+        max: 70,
+        guide:
+          [
+            "One line on the first story card, the sender to them ('you') about how it started, with the real detail from the story and a small funny twist.",
+            "One line on the second story card, the sender to them about the next memory from the story (a different one from card 1), playful.",
+            "One line on the third story card: the exact moment the sender knew, tender rather than jokey, a different memory from cards 1 and 2.",
+          ][i] +
+          " When the story has no memory left for this card, the line is only the sender's feeling at that stage (nervous, hooked, sure), with no food, place, habit or event in it, so every card still gets a line without inventing anything. Under 60 characters, one sentence, no emoji." +
+          VW_TONE,
+      },
+    ]),
     {
-      path: "extras.actTwo",
-      label: "Act II · The moment I knew",
-      kind: "text",
-      max: 90,
-      guide:
-        "The subtitle on the second still, Act II, 'The moment I knew': one sentence from the sender to them about the exact moment the sender knew this was the person (a different memory from Act I, from the story). Tender rather than jokey. Under 80 characters, no emoji." +
-        VW_TONE,
-    },
-    {
-      path: "extras.comingSoon",
-      label: "Act III · Coming soon",
+      path: "extras.rehearsal",
+      label: "The rehearsal comic",
       kind: "list",
-      max: 3,
+      max: 4,
+      itemMax: 60,
+      guide:
+        "Exactly 4 captions for a four-panel comic of the sender rehearsing this proposal and getting it wrong, first person, past tense, each a different small disaster: practising on something silly, a clumsy kneel, losing or dropping the ring, and the last panel deciding the sender is ready (with a wink that they aren't). Use one real detail from the story (the sender's room, friend or habit) in at least one panel when the story has one; a short story still gets all 4 panels about the universal ways a nervous proposal rehearsal goes wrong. Under 45 characters each, short sentences, no emoji." +
+        VW_TONE,
+    },
+    {
+      path: "extras.decoys",
+      label: "The two boxes without the ring",
+      kind: "list",
+      max: 2,
       itemMax: 48,
       guide:
-        "Exactly 3 trailer cards for 'Act III: Coming soon', the couple's future, shown one at a time in huge letters like a movie trailer. Each is a short punchy fragment about something they will do together, grounded in plans, places or habits from the story (a trip they keep talking about, a home, a ritual they already have). The first opens with a time word, the way trailers do (a season, 'next year', 'soon'; never a calendar year), and the last is the funniest. Each card is written in the story's own language and script, exactly like every other field: a Hinglish story gets Hinglish cards such as 'Agle saal: ek ghar, do chaabiyan.' Under 40 characters each, ends with a full stop, no emoji, no question.",
+        "Exactly 2 notes, one inside each gift box that is NOT the ring box. The first box holds a chocolate, the second a teddy bear; each note names that gift and adds a sweet or teasing reason tied to them (from the story where possible). Start each with 'A chocolate' and 'A teddy' (or the same words in the story's language); the gift is exactly that, a plain chocolate and a plain teddy, so keep any food from the story out of the gift's name. A short story still gets both notes, sweet rather than specific. Under 45 characters each, ends with a full stop, no emoji.",
     },
     {
       path: "extras.question",
-      label: "The question (the final title card)",
+      label: "The question",
       kind: "text",
       max: 60,
       required: true,
       guide:
-        "The proposal, set enormous as the film's final title card. Match the relationship in the story: a new couple → 'Will you be mine, forever?' style; long-term → 'Will you marry me?' only if the story clearly points there; married → 'Will you choose me again, every day?' style. Under 40 characters, ends with a question mark, no emoji, may end with their name. Same language AND script as the story (Latin letters for a Hinglish story), and the right gender for the recipient.",
+        "The proposal, printed big above the ring box. Match the relationship in the story: a new couple → 'Will you be mine?' style; long-term → 'Will you marry me?' only if the story clearly points there; married → 'Will you choose me again, every day?' style. Under 40 characters, ends with a question mark, no emoji, may end with their name. Same language AND script as the story (Latin letters for a Hinglish story).",
       example: "Will you be mine, forever?",
     },
     {
       path: "extras.noLines",
-      label: "What “No” says as it dodges",
+      label: "What “No” says as it runs away",
       kind: "list",
-      max: 4,
+      max: 5,
       itemMax: 28,
       guide:
-        "Exactly 4 short lines the No button says as it dodges their finger, in film-set language, escalating: a director calling for another take, a mock-serious objection, a bribe taken from the story (their favourite food, the thing they always steal), and a final plea. Kind and silly, the joke is always on the button. Two to four words each, under 22 characters so it fits the button. Written in the story's own language and script, like every other field.",
+        "Exactly 4 short labels the No button shows as it runs from their finger, escalating from thinking it over, to mock disbelief, to a bribe taken from the story (their favourite food or the thing they always steal), to a final cute plea. Kind and silly, the joke is always on the button, never pushy. A short story still gets all 4 (the bribe can be any snack). Two to four words each, under 22 characters so they fit the button; one may end with an emoji. Written in the story's own language and script, like every other field.",
     },
     {
       path: "extras.afterYes",
@@ -99,54 +111,38 @@ export const proposeDayPremium: AiFillTemplateSchema = {
       kind: "text",
       max: 120,
       guide:
-        "The sender's subtitle on the big reveal the moment they say yes: overwhelmed, first person, one or two short sentences with one playful callback to the story. Under 100 characters." +
+        "The sender's line that types out right after they say yes and the ring lands: overwhelmed and happy, first person, one or two short sentences with one playful callback to the story (or, for a short story, to the nervous rehearsal). Under 90 characters, may end with one emoji." +
         VW_TONE,
     },
-    ...[0, 1, 2].flatMap((i) => [
-      {
-        path: `extras.credits[${i}].role`,
-        label: `Credit ${i + 1} — role`,
-        kind: "text" as const,
-        max: 32,
-        guide: `The role in end credit ${i + 1}, written like a real film credit for a thing rather than a person ('Best Supporting Role', 'Catering', 'Soundtrack', 'Location Scout', 'Stunts', 'Continuity', 'Special Effects'). Each of the three credits uses a different role. 1–4 words, Title Case, no emoji.`,
-      },
-      {
-        path: `extras.credits[${i}].name`,
-        label: `Credit ${i + 1} — credited to`,
-        kind: "text" as const,
-        max: 40,
-        guide: `Who or what gets end credit ${i + 1}: a real object, place, food, friend or habit from the story that played a part in their love story, said with affection ('the blue umbrella from the café', 'every 2 am chai'). When the story runs out of such details, credit an everyday thing every couple shares (the late-night calls, the 'reached home?' texts) instead of inventing a place, a pet or an event. Never one of the two of them, never a brand. 2–7 words, no emoji. Same language as the story.`,
-      },
-    ]),
     {
-      path: "extras.location",
-      label: "Filmed on location in",
-      kind: "text",
-      max: 60,
+      path: "extras.terms",
+      label: "The certificate's terms",
+      kind: "list",
+      max: 3,
+      itemMax: 48,
       guide:
-        "The places their story happened, as the 'Filmed on location in …' credit: the cities or places named in the story, joined with commas and 'and', ending with one small funny real place from the story (a balcony, a canteen, a bus stop). Copy the place names exactly as the story writes them, so every word of this credit can be found in the story; a story that names no place gets null. Under 55 characters, no emoji, without the words 'filmed on location'.",
+        "Exactly 3 'terms and conditions' printed on the 'Officially Taken' certificate they sign: promises from the sender written as short contract terms, sweet or silly, at least one tied to a habit, food or place from the story (the window seat, their playlist, the last bite) when the story has one; a short story still gets all 3, sweet everyday promises. Under 40 characters each, start with a capital, end with a full stop, no emoji, no numbering." +
+        VW_TONE,
     },
     // ── Premium-only text leaves (the `premium` sub-document) ───────────────
     // Never declared: premium.voiceNote (media), songDropAt, unlockAt,
     // unlockTz, allowReply, voicePeaks — none of them is something a story says.
     {
       path: "premium.voiceCaption",
-      label: "The director's commentary",
+      label: "The line with your voice note",
       kind: "text",
       max: 90,
       guide:
-        "One line of 'director's commentary' from the sender, shown with their voice message (or alone as a subtitle when there is no recording), just before the last page of the script: first person, a little nervous, one small behind-the-scenes detail from the story. Under 85 characters, same language as the story, no hashtags.",
-      example: "I rewrote this scene forty times. Every draft ended with you.",
+        "One short line from the sender shown with the voice message (or alone when there is no recording), right before the question: first person, a little nervous and funny about recording it, one small detail from the story. Under 85 characters, same language as the story, no hashtags.",
     },
     {
       path: "premium.psLetter",
-      label: "The post-credits scene (sealed P.S.)",
+      label: "The sealed P.S.",
       kind: "longtext",
       max: 600,
       guide:
-        "The post-credits scene: a sealed P.S. revealed after the credits, labelled 'open only if…'. Begin with that condition as its own first line, specific to these two (open only if you said yes / open only if you can't sleep tonight), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the main letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 550 characters." +
+        "A sealed P.S. revealed at the very end, after the certificate, labelled 'open only if…'. Begin with that condition as its own first line, specific to these two (open only if you said yes / open only if you're smiling), then a blank line, then two to four short sentences to them in first person — quieter and more intimate than the letter, built on one specific detail from the story the letter did not use (for a short story, simply how sure the sender is). No salutation, no sign-off, no sender's name. Under 550 characters." +
         VW_TONE,
-      example: "Open only if you can't sleep.\n\nI still have the ticket from that first film. You talked through the whole thing and I've never loved a movie more.",
     },
   ],
   forbiddenOutput: VW_FORBIDDEN,

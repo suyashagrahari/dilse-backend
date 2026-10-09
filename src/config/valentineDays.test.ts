@@ -68,27 +68,27 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
-  "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "bloomLine", "sinceDate", "signOff", "shayari"],
-  "happy-propose-day-premium": ["filmTitle", "tagline", "actOne", "actTwo", "comingSoon", "question", "noLines", "afterYes", "credits", "location"],
-  "happy-chocolate-day-premium": ["houseName", "openingLine", "boxLine", "flavours", "heartLine", "sinceDate", "signOff", "boxColor"],
-  "happy-teddy-day-premium": ["teddyName", "parcelNote", "firstWords", "birthPlace", "temperament", "careLines", "signOff"],
-  "happy-promise-day-premium": ["envelopeLine", "whereas", "promises", "bigPromise", "sinceDate", "witnessLine", "monogram", "waxColour", "replyLine"],
-  "happy-hug-day-premium": ["openingLine", "distanceKm", "meetLine", "holdSeconds", "heartbeatBpm", "hugLines", "hugFeels", "coupons", "replyLine"],
-  "happy-kiss-day-premium": ["kissStyle", "lipShade", "stripTone", "openingLine", "kissFrame", "kissNotes", "sinceDate", "kissBackText"],
-  "happy-valentines-day-premium": ["togetherSince", "songNote", "topPhrase", "topPlace", "stats", "topTrait", "reasons", "question", "noLines", "datePlan"],
-  "happy-halloween-premium": ["tone", "houseName", "nightTitle", "wallNotes", "spiritWord", "spiritLine", "tarot", "costumeDuo", "question", "yesLine"],
+  "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
+  "happy-propose-day-premium": ["teaser", "moments", "rehearsal", "decoys", "stoneColor", "question", "noLines", "afterYes", "terms"],
+  "happy-chocolate-day-premium": ["houseName", "openingLine", "flavours", "boxLine", "catchPrize", "heartLine", "lastPiece", "sinceDate", "signOff", "coupon"],
+  "happy-teddy-day-premium": ["teddyName", "parcelNote", "firstWords", "outfit", "careLines", "birthPlace", "temperament", "signOff", "question", "yesLine"],
+  "happy-promise-day-premium": ["envelopeLine", "pinkyPrompt", "welcomeLine", "promises", "bigPromise", "clubRules", "beadWord", "stickyPromises", "askBack", "lockEngraving", "sinceDate"],
+  "happy-hug-day-premium": ["openingLine", "characters", "hugLines", "distanceKm", "meetLine", "coupons", "replyLine", "question", "yesLine", "hugTitle"],
+  "happy-kiss-day-premium": ["kissStyle", "lipShade", "openingLine", "kissFrame", "foreheadLine", "cheekLine", "noseLine", "handLine", "kissNotes", "question", "sinceDate", "kissBackText"],
+  "happy-valentines-day-premium": ["ticketLine", "balloonLine", "meterLine", "weekLines", "togetherSince", "songNote", "question", "noLines", "datePlan"],
+  "happy-halloween-premium": ["tone", "houseName", "treats", "ingredients", "potionSpell", "perks", "costumeDuo", "question", "yesLine"],
 };
 
 const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
-  "happy-rose-day-premium": ["pr3-petals", "pr6-forever"],
-  "happy-propose-day-premium": ["pp4-please", "pp5-yes"],
-  "happy-chocolate-day-premium": ["pc3-yum", "pc6-box"],
-  "happy-teddy-day-premium": ["pt3-alive", "pt6-sleep"],
-  "happy-promise-day-premium": ["ps1-desk", "ps2-sealed"],
-  "happy-hug-day-premium": ["ph3-held", "ph6-back"],
-  "happy-kiss-day-premium": ["pb1-booth", "pb2-kiss"],
-  "happy-valentines-day-premium": ["pv4-please", "pv5-yes"],
-  "happy-halloween-premium": ["h1-hall", "h6-yes"],
+  "happy-rose-day-premium": ["rg1-peek", "rg2-water", "rg3-blush", "rg4-lovesme", "rg5-note", "rg6-yes"],
+  "happy-propose-day-premium": ["pp-door", "pp-story", "pp-peek", "pp-ask", "pp-please", "pp-yes"],
+  "happy-chocolate-day-premium": ["sf1-ticket", "sf2-box", "sf3-catch", "sf4-melt", "sf5-share", "sf6-yay"],
+  "happy-teddy-day-premium": ["td1-hello", "td2-heart", "td3-dress", "td4-squeeze", "td5-sleep", "td6-yes"],
+  "happy-promise-day-premium": ["pk-pinky", "pk-jar", "pk-stamp", "pk-bracelet", "pk-lock", "pk-yes"],
+  "happy-hug-day-premium": ["hp1-run", "hp2-bear", "hp3-back", "hp4-far", "hp5-coupon", "hp6-yes"],
+  "happy-kiss-day-premium": ["km1-gate", "km2-mwah", "km3-booth", "km4-catch", "km5-letter", "km6-yes"],
+  "happy-valentines-day-premium": ["vc1-ticket", "vc2-balloons", "vc3-meter", "vc4-letter", "vc5-please", "vc6-yes"],
+  "happy-halloween-premium": ["hb1-hello", "hb2-treats", "hb3-pumpkin", "hb4-booth", "hb5-potion", "hb6-yes"],
 };
 
 describe("Valentine's week day configs", () => {
