@@ -5,100 +5,106 @@ import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentine
 const LANGUAGE_BY_WORDS = " Judge the language by the sender's own sentences, not by the names in them: 'Her name is Neha. I love her.' is an English story.";
 
 /**
- * happy-promise-day-premium — "The Red Thread", the ULTRA-PREMIUM twin of
- * happy-promise-day (Valentine's week, 11 Feb). Owned by that template's builder.
+ * happy-promise-day-premium — "Signed, Sealed, Promised", the ULTRA-PREMIUM
+ * twin of happy-promise-day (Valentine's week, 11 Feb). Owned by that
+ * template's builder.
  *
- * The page: the red thread of fate. The recipient pulls a red thread tied to
- * their little finger through the sender's photos until the other end arrives,
- * tied to the sender's finger; the knot cinches, the thread turns gold and
- * writes "I promise" with the big promise beneath. They thread gold rings (one
- * promise each), read the vow (stitched in, sealed with their thumbprint), seal
- * a promise for later in a vial, and are asked "Do you promise too?".
+ * The page: a promise drawn up as a deed, on ivory paper under a desk lamp.
+ * A wax-sealed envelope opens; the deed unfolds on two "Whereas…" lines (the
+ * couple's story in legal-romantic prose); each promise is typed in by a
+ * vintage typewriter, one clause at a time, beside one of their photos; the
+ * letter is "Schedule A" which the recipient initials; the voice note is the
+ * sender's sworn statement; "And above all…" sits over two signature lines
+ * (the sender's already in ink, the recipient signs with a finger); then the
+ * deed is sealed in its envelope with wax pressed with their initials,
+ * stamped SIGNED · SEALED · PROMISED, and "witnessed by" a private line.
  *
  * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts);
  * extras keys are in server/src/config/premiumDays/happy-promise-day-premium.ts.
- * Not declared: futureDate (a date the sender picks), distanceKm (a number only
- * they know), threadColor (visual), and every media / timing / switch premium field.
+ * Not declared: sinceDate (a date the model would invent more often than
+ * find), monogram (initials the page derives), waxColour (visual), and every
+ * media / timing / switch premium field.
  */
 export const promiseDayPremium: AiFillTemplateSchema = {
   slug: "happy-promise-day-premium",
   audience: "partner",
   premise:
-    "A cinematic Promise Day page built on the legend of the red thread of fate: an invisible red thread ties two people's little fingers together; it can stretch or tangle but never breaks. The recipient pulls the thread through the sender's photos until the other end arrives, tied to the sender's finger; the knot tightens, the thread turns gold and writes 'I promise', with the sender's biggest promise beneath. Then they thread gold rings that each hold one small promise, read the sender's vow, seal a promise for later in a glass vial that opens on a future date, and are asked 'Do you promise too?'. Quiet, tender, cinematic, with small concrete promises rather than grand clichés." + VW_LANGUAGE + LANGUAGE_BY_WORDS,
+    "A cinematic Promise Day page styled as a notarised promise: a deed on warm ivory paper, opened from a wax-sealed envelope. It opens on two 'Whereas…' lines that tell the couple's story in playful legal-romantic prose; then each of the sender's promises is typed in by a vintage typewriter, one numbered clause at a time; the sender's letter is attached as a schedule the recipient initials; both people sign; and the deed is sealed with wax and 'witnessed by' a private joke. The legal framing is the wink — every line underneath it is warm, specific and sincere: small concrete promises rather than grand clichés." + VW_LANGUAGE + LANGUAGE_BY_WORDS,
   fields: [
     ...valentineCommon({
       dayName: "Promise Day",
-      letterWhere: "It is the vow: stitched into the page one paragraph at a time with red thread, then sealed with the recipient's thumbprint. Make it a vow — what the sender promises them and why they are sure — warm and specific, not a list.",
+      letterWhere: "It is attached to the deed as 'Schedule A — in my own words', set on ivory paper, and the recipient initials it at the bottom. Make it the reasons behind the promises: why these promises, why them, and why the sender is sure — warm and specific, in short paragraphs (two to four sentences each, separated by blank lines), not a list.",
       letterMax: 3000,
-      signaturePrinted: "The page prints the sender's name as a signature under it.",
-      endLineWhere: "on the last screen and the keepsake poster.",
-      photosWhere: "each photo hangs from the red thread on a little wooden peg, and the caption is written under it.",
+      greetingPrinted: "The page already prints a 'Dear <their name>,' line above it.",
+      signaturePrinted: "The page prints 'Yours, under oath,' and the sender's name under it.",
+      endLineWhere: "under the sealed envelope on the last screen and on the keepsake image of the deed.",
+      photosWhere: "the first photo is clipped to the deed as 'Exhibit A' and the next ones are clipped beside each typed promise; the caption is written on the print's white border, so a few words read best.",
       notes: false,
     }),
     {
-      path: "extras.gateLine",
-      label: "Opening line",
+      path: "extras.envelopeLine",
+      label: "On the envelope",
       kind: "text",
-      max: 70,
-      guide: "The first line they read, under their name, on a dark screen with one red thread swaying down to their little finger. An invitation to follow this thread to whoever holds the other end, quiet and intriguing, one sentence that mentions the thread, under 65 characters." + VW_TONE,
-      example: "Pull gently. Someone's been holding the other end.",
+      max: 60,
+      guide: "A short line typed on the sealed envelope, under their name, on the very first screen, the way a private letter carries a note on its back — who may open it, when to read it, or how to hold it. Build it on one detail from the story when there is one (a habit of theirs, a place, a time of night). One sentence in the sender's voice, in the same language and script as the letter, starting with a capital letter, quiet and a little playful, under 55 characters." + VW_TONE,
     },
     {
-      path: "extras.sharedSince",
-      label: "Together since",
-      kind: "text",
-      max: 24,
-      guide: "The moment they got together, written as just that moment — a month and year ('March 2022'), a season, an occasion ('that Diwali', 'college') — because the page prints its own lead-in before it. When the story gives only how long they have been together, or nothing, leave it empty.",
+      path: "extras.whereas",
+      label: "Whereas… (two lines)",
+      kind: "list",
+      max: 2,
+      itemMax: 90,
+      required: true,
+      guide: "Exactly two lines that open the deed, in the style of a contract's recitals, addressed to them as 'you'. Line one starts with 'Whereas' and states one real, specific moment from the story when it began — keep the story's own detail and its date or place when the story gives one; when the story names no such moment, state one true thing about them that the story does say, and invent no event, date or place. Line two starts with 'and whereas' and says what the sender has felt or known ever since, briefly. Each line ends with a comma, under 80 characters, playful-legal on top and sincere underneath, in the same language and script as the letter (only the words 'Whereas' and 'and whereas' stay in English)." + VW_TONE,
+      example: "Whereas you stole my umbrella outside the library in June 2021,",
     },
     {
       path: "extras.promises",
-      label: "Promises (one per ring)",
+      label: "The promises (one per clause)",
       kind: "list",
       max: 5,
       itemMax: 90,
       required: true,
-      guide: "Exactly 5 small, concrete, keepable promises from the sender to them, each unfurling from a gold ring as a ribbon. Each one a first-person promise written wholly in the story's language and script, grounded in a real detail or habit from the story (their coffee order, the 2 a.m. calls, how fights end). No two about the same thing; no grand vague clichés. Under 80 characters each." + VW_TONE,
+      guide: "Exactly 5 small, concrete, keepable promises from the sender to them, each typed as one clause of the deed. Each one a first-person promise ('I'll…') grounded in a real detail or habit from the story (their order at the cafe, the late-night calls, how fights end). No two about the same thing, no grand vague clichés, no legal words inside the promise itself. Under 80 characters each." + VW_TONE,
       example: "I'll text you the second my flight lands. Every time.",
     },
     {
       path: "extras.bigPromise",
-      label: "The promise under “I promise”",
+      label: "Above all",
       kind: "longtext",
-      max: 160,
+      max: 140,
       required: true,
-      guide: "The one promise that matters most, shown beneath a gold 'I promise' at the climax, after the thread knots. One or two sentences, plain and sincere, in first person to them; it may use the image of the thread (staying on the other end of it), once. Under 150 characters." + VW_TONE,
-      example: "Wherever life pulls us, I'll be on the other end of this thread.",
+      guide: "The one promise that matters most, printed in large italic right above both signatures, after the words 'And above all,' (which the page prints). The page prints 'And above all,' on the line above it, so begin directly with the promise itself. One sentence, plain and sincere, first person to them, in the same language and script as the letter. Under 120 characters." + VW_TONE,
+      example: "I'll keep choosing you, on the easy days and the hard ones.",
     },
     {
-      path: "extras.futurePromise",
-      label: "A promise for later",
-      kind: "longtext",
-      max: 200,
-      guide: "A promise sealed in a glass vial that opens on a future date the sender picks (a year or two away). Written as if read on that day, starting straight with 'By the time you read this,' (or the story language's equivalent): something the two of them will have done together by then, taken from plans or dreams in the story (a trip, a home, a ritual), ending with a small wink like 'I promised. Check.'. First person. Under 180 characters. Leave it empty when the story has no plan or dream to build it on." + VW_TONE,
+      path: "extras.witnessLine",
+      label: "Witnessed by",
+      kind: "text",
+      max: 90,
+      guide: "Completes the line 'Witnessed by …' on the last screen: a funny, tender witness only these two would understand, taken from something the story actually mentions — a place, a song, a pet, a person, an object, a ritual — written as that thing (a noun phrase, never a sentence about an event). Lowercase start, no 'Witnessed by' at the front (the page prints it), ends with a full stop, under 70 characters, in the same language and script as the letter. When the story mentions nothing to use, pick an ordinary thing every couple has nearby (a phone at 1% battery, a kettle), never a past event." + VW_TONE,
     },
     {
       path: "extras.replyLine",
       label: "Their WhatsApp reply",
       kind: "text",
       max: 80,
-      guide: "The message the RECIPIENT sends back to the sender from the last screen, in the recipient's voice: promising back, short and warm, with a nod to the thread. Under 70 characters, may end with one or two emoji.",
-      example: "I promise too. Both ends tied 🤞",
+      guide: "The message the RECIPIENT sends back to the sender from the last screen, in the recipient's voice, in the same language and script as the letter, after signing: it must promise something back to the sender, short and warm, with a small nod to one detail from the story or to having signed. Under 70 characters, may end with one or two emoji.",
     },
     {
       path: "premium.voiceCaption",
-      label: "Caption under your voice note",
+      label: "Line by your voice note",
       kind: "text",
       max: 90,
-      guide: "A one-line note from the sender shown with their voice message just before the vow (or, without a recording, as a short handwritten line on its own). First person, addressed to them, one small detail from the story. Under 85 characters, no hashtags." + VW_TONE,
-      example: "Headphones on. I practised this four times and still laughed.",
+      guide: "The sender's 'sworn statement', shown with their voice message (or, without a recording, typed out big on its own as the statement itself). First person, addressed to them, one small detail from the story, sincere with a light smile. Under 85 characters, no hashtags." + VW_TONE,
+      example: "I practised this four times and still laughed in the middle.",
     },
     {
       path: "premium.psLetter",
-      label: "The sealed P.S.",
+      label: "The codicil (P.S.)",
       kind: "longtext",
       max: 600,
-      guide: "A sealed P.S. tied to the end of the thread on the last screen. Begin with an 'open only if…' condition as its own first line, specific to these two (open only if you're ever unsure / open only if the distance gets loud), then a blank line, then two to four short sentences to them in first person — quieter than the vow, built on one specific detail from the story the vow did not use; when the story has no detail left, make it a small promise or a feeling instead, never an invented memory. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
-      example: "Open only if you're ever unsure.\n\nI meant every one of them. Even the one about the last slice.",
+      guide: "A sealed P.S. attached to the deed as a codicil, opened on the last screen. Begin with an 'Open only if…' condition as its own first line (in the same language and script as the letter, capitalised), about something specific to these two (the distance, a long shift, the next fight), then a blank line, then two to four short sentences to them in first person — quieter than the letter, built on one specific detail from the story the letter did not use; when the story has no detail left — or is only a sentence or two — use no memory at all: make it a small promise or a feeling instead. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
     },
   ],
   forbiddenOutput: [...VW_FORBIDDEN, "soulmate", "soulmates"],
