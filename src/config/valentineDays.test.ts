@@ -75,7 +75,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-promise-day-premium": ["gateLine", "sharedSince", "promises", "bigPromise", "futurePromise", "futureDate", "distanceKm", "threadColor", "replyLine"],
   "happy-hug-day-premium": ["frostLine", "distanceKm", "holdSeconds", "heartbeatBpm", "hugLines", "weatherHugs", "coupons", "hoodieTag", "replyLine"],
   "happy-kiss-day-premium": ["kissStyle", "lipShade", "stripTone", "openingLine", "kissFrame", "kissNotes", "sinceDate", "kissBackText"],
-  "happy-valentines-day-premium": ["filmTitle", "tagline", "weekLines", "metPlace", "metDate", "togetherSince", "chapterTitles", "stats", "question", "noTakes", "datePlan", "dateOn"],
+  "happy-valentines-day-premium": ["togetherSince", "songNote", "topPhrase", "topPlace", "stats", "topTrait", "reasons", "question", "noLines", "datePlan"],
   "happy-halloween-premium": ["tone", "houseName", "nightTitle", "candleMemories", "spiritWord", "spiritQA", "ingredients", "prophecy", "question", "yesLine", "specialGuest"],
 };
 
@@ -87,7 +87,7 @@ const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
   "happy-promise-day-premium": ["pp1-gate", "pp2-pull", "pp3-knot", "pp4-rings", "pp5-vial", "pp6-promised"],
   "happy-hug-day-premium": ["ph1-window", "ph2-walk", "ph3-held", "ph4-mitten", "ph5-fort", "ph6-back"],
   "happy-kiss-day-premium": ["pb1-booth", "pb2-kiss"],
-  "happy-valentines-day-premium": ["pv1-ticket", "pv2-starring", "pv3-stars", "pv4-please", "pv5-yes", "pv6-credits"],
+  "happy-valentines-day-premium": ["pv4-please", "pv5-yes"],
   "happy-halloween-premium": ["p1-invite", "p2-candle", "p3-portrait", "p4-seance", "p5-cauldron", "p6-yes"],
 };
 

@@ -1,51 +1,50 @@
 import type { ValentineDayConfig } from "../valentineDays";
 
 /**
- * happy-valentines-day-premium — "Our Film", the premium twin of happy-valentines-day (flagship of the tier).
+ * happy-valentines-day-premium — "Us, Wrapped", the premium twin of happy-valentines-day (flagship of the tier).
  *
- * Their love story screened as a film: opening titles + a "Previously on…" week recap, a constellation, a
- * photo montage cut on the chorus, a three-chapter book, "By the numbers", the question in black-and-white
- * takes, and end credits with a post-credits date plan.
+ * Their year in love as a Wrapped-style story: top song, top 3 memories, stats only they kept, the recipient's
+ * top trait (scratch card), fast-cut reasons over their photos, a voice note, the letter, then the days-together
+ * counter that slams to its number on the song's drop and cuts to their best photo, where the question waits.
+ * Ends on a shareable "Us, Wrapped" card.
  *
  * The client mirror is client/app/(templates)/_valentine/days/happy-valentines-day-premium.ts (same keys and
  * limits); PINNED_KEYS in ../valentineDays.test.ts pins the order. Keys shared with the $2 day keep its key
- * (weekLines, togetherSince, stats, metPlace, question, datePlan) so an upgrade carries them over. The chorus
- * second is the shared premium.songDropAt, not an extra.
+ * (togetherSince, stats, question, noLines, datePlan) so an upgrade carries them over. The chorus second is the
+ * shared premium.songDropAt, not an extra.
  */
 const config: ValentineDayConfig = {
-  title: "Our Film",
+  title: "Us, Wrapped",
   premium: true,
   maxPhotos: 12,
   letterMax: 3000,
   asksQuestion: true,
-  gifSlots: ["pv1-ticket", "pv2-starring", "pv3-stars", "pv4-please", "pv5-yes", "pv6-credits"],
+  gifSlots: ["pv4-please", "pv5-yes"],
   extras: [
-    { key: "filmTitle", kind: "text", max: 40 },
-    { key: "tagline", kind: "text", max: 70 },
-    /** Seven lines, in order Rose → Kiss (index 0 = Rose Day); blanks are skipped. */
-    { key: "weekLines", kind: "list", maxItems: 7, itemMax: 60 },
-    { key: "metPlace", kind: "text", max: 40 },
-    /** YYYY-MM-DD or "". */
-    { key: "metDate", kind: "text", max: 10 },
-    /** YYYY-MM-DD or "" (the computed numbers hide). */
+    /** YYYY-MM-DD or "" (the big number shows "∞"). */
     { key: "togetherSince", kind: "text", max: 10 },
-    /** The letter's three chapter titles. */
-    { key: "chapterTitles", kind: "list", maxItems: 3, itemMax: 24 },
+    /** The line under their top song. */
+    { key: "songNote", kind: "text", max: 60 },
+    { key: "topPhrase", kind: "text", max: 40 },
+    { key: "topPlace", kind: "text", max: 40 },
     {
       key: "stats",
       kind: "objlist",
-      maxItems: 3,
+      maxItems: 2,
       item: [
         { key: "label", kind: "text", max: 30 },
         { key: "value", kind: "text", max: 24 },
       ],
     },
+    /** Scratched off a foil card. */
+    { key: "topTrait", kind: "text", max: 28 },
+    /** Fast cuts over their photos. */
+    { key: "reasons", kind: "list", maxItems: 5, itemMax: 70 },
     { key: "question", kind: "text", max: 60 },
-    /** One director's line per "No" take. */
-    { key: "noTakes", kind: "list", maxItems: 6, itemMax: 50 },
+    /** What the runaway "No" says, one per dodge; after the last, No becomes a second Yes. */
+    { key: "noLines", kind: "list", maxItems: 4, itemMax: 40 },
+    /** "Coming soon" on the Wrapped card. Optional. */
     { key: "datePlan", kind: "text", max: 80 },
-    /** YYYY-MM-DD or "" — the post-credits date (adds "Add to calendar"). */
-    { key: "dateOn", kind: "text", max: 10 },
   ],
 };
 

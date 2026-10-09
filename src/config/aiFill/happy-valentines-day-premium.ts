@@ -2,150 +2,152 @@ import type { AiFillField, AiFillTemplateSchema } from "./types";
 import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentineShared";
 
 /**
- * happy-valentines-day-premium — "Our Film", the flagship premium page: the couple's love story screened as a
- * film the sender directed and the recipient stars in.
+ * happy-valentines-day-premium — "Us, Wrapped", the flagship premium page: the couple's year in love told like a
+ * music app's year-end "Wrapped" story, made by the sender for the recipient.
  *
  * Paths resolve against `ValentineDayData` (client/app/(templates)/_valentine/types.ts); the extras keys are in
- * ./../premiumDays/happy-valentines-day-premium.ts. Not declared: metDate / togetherSince / dateOn (dates the
- * sender picks), datePlan (logistics), every media/music/drop/unlock field, and the photo notes (this page
- * shows captions only, as lower-thirds).
- *
- * The letter is the one field built here instead of in valentineCommon: the page binds it as a three-part book
- * split at lines of "---", so the model has to write three parts, not "three or four paragraphs".
+ * ./../premiumDays/happy-valentines-day-premium.ts. Not declared: togetherSince (a date the sender picks),
+ * datePlan (logistics), every media/music/drop/unlock field, and the photo notes (this page shows captions only).
+ * Photo 1 is the big reveal, photos 2–4 are "top 3 memories", so four captions are declared.
  */
 
-const FILM_FORBIDDEN = [
-  ["Net", "flix"].join(""),
-  ["Bolly", "wood"].join(""),
+// Brand names the page must not print (the format is generic "Wrapped"; no app is named on the page).
+const WRAPPED_FORBIDDEN = [
+  ["Spot", "ify"].join(""),
   ["soul", "mate"].join(""),
   ["soul", "mates"].join(""),
 ];
 
 const common = valentineCommon({
   dayName: "Valentine's Day",
-  letterWhere: "",
+  letterWhere:
+    "It unfolds near the end of their year-in-love story, after the stats and reasons and right before the number of days they have been together slams onto the screen, so it reads as the quiet, honest part of the year.",
   letterMax: 3000,
-  endLineWhere: "printed at the bottom of the movie poster of the two of them that ends the page, like a release line.",
-  photosWhere: "each photo is a shot in a short film of them set to their song, and the caption is its lower-third title, like a scene name in a trailer.",
+  endLineWhere: "printed under their shareable year-in-love summary card, the last thing on the page.",
+  photosWhere: "photo 1 is the big reveal and the cover of their summary card; photos 2, 3 and 4 are ranked as their top three memories of the year (#1, #2, #3), so the caption names that memory.",
+  photoCount: 4,
   notes: false,
-}).filter((f) => f.path !== "letter");
+  signaturePrinted: "The page signs the letter itself with the sender's name.",
+});
 
-const letter: AiFillField = {
-  path: "letter",
-  label: "Your letter, in three parts",
-  kind: "longtext",
-  max: 1200,
-  required: true,
-  guide:
-    "THE MAIN LETTER, from the sender to them, in first person. The page binds it as a small book of three pages they turn one at a time, one paragraph per page, so write EXACTLY three paragraphs separated by blank lines. Paragraph one, 'then': the beginning, told through one or two concrete details from the story (where, what was said, what they noticed first). Paragraph two, 'now': what this person is in the sender's everyday life today, with one tease about a real habit from the story and one plainly sincere line. Paragraph three, 'always': what the sender wants for every chapter after this one, quieter and more vulnerable, ending on the feeling that one more thing is coming on the next screen — no question to them anywhere in the letter, because the big question is asked on a later screen. " +
-    "Open with their name (or pet name) alone on the first line, then a blank line, then paragraph one. Use only memories the story actually gives; when it gives few, write about what it does say (how long it has been, how they make the sender feel, what the sender hopes for) instead of inventing scenes. The page signs the letter itself with the sender's name, so the last line is the last real sentence of paragraph three — no closing phrase, no 'yours', no name after it. Each paragraph two to four sentences; 700–1100 characters in total." +
-    VW_TONE,
-};
+/** The long, intimate fields drifted into Hinglish on English stories full of Indian places: pin the choice. */
+const SAME_LANGUAGE =
+  " Same language as every other field on this page: when the sender's own sentences are English, this is English too, however many Indian names, places, foods and songs the story mentions.";
+
+const extras: AiFillField[] = [
+  {
+    path: "extras.songNote",
+    label: "A line about your song",
+    kind: "text",
+    max: 60,
+    guide: "One short line shown under the couple's song after the recipient taps a heart on it: when it became theirs or what it is tied to, taken from the story (a drive, a call, a wedding, a night). When the story names no moment for a song, write about when the sender thinks of them instead (still my favourite, because of you). Under 55 characters, sentence case, ends with a full stop.",
+    example: "On repeat since the drive back from Goa.",
+  },
+  {
+    path: "extras.topPhrase",
+    label: "Most-said phrase",
+    kind: "text",
+    max: 40,
+    guide: "The phrase one of them says all the time, as a quote in curly quotation marks, shown huge on a flip tile labelled as the most-said phrase. Take it from the story (a question they always ask, a catchphrase, a pet line). Only a phrase the story quotes or clearly describes; when it gives none, return null (the page hides the tile). Under 30 characters.",
+    example: "“Did you eat?”",
+  },
+  {
+    path: "extras.topPlace",
+    label: "Your top place",
+    kind: "text",
+    max: 40,
+    guide: "Their place: the spot from the story they go back to most (a café, a stall, a park, a sea face, a station), with the area or city when the story gives one, on a flip tile labelled as their top place. Only a place the story itself names; with no named place, return null (a made-up café is worse than an empty tile). Most short stories name no place, so null is the usual answer here. Under 36 characters.",
+    example: "The chai stall, Bandra",
+  },
+  ...[0, 1].flatMap((i): AiFillField[] => [
+    {
+      path: `extras.stats[${i}].label`,
+      label: `Stat ${i + 1}: what it counts`,
+      kind: "text",
+      max: 30,
+      guide: `The label of flip tile ${i + 1} among the stats only the sender kept, next to the most-said phrase and the top place: a small habit, joke or ritual from the story worded like a stat category (things stolen, late-night calls, fights over the last samosa). Each tile a different habit, and a different one from the phrase and the place. Count only a habit the story itself describes; when it describes none left for this tile, return null for both its label and value (most short stories leave both tiles empty, and the page simply hides them). Under 26 characters.`,
+    },
+    {
+      path: `extras.stats[${i}].value`,
+      label: `Stat ${i + 1}: the number`,
+      kind: "text",
+      max: 24,
+      guide: `The big value on flip tile ${i + 1}: digits only when the story itself states a number above one; for something that happened once write 'once' or 'the first one', otherwise a short phrase that plays as a count (too many, every single time, all of them). Under 18 characters.`,
+    },
+  ]),
+  {
+    path: "extras.topTrait",
+    label: "Their top trait, according to you",
+    kind: "text",
+    max: 28,
+    required: true,
+    guide: "Two or three words the recipient scratches off a foil card: their top personality trait this year according to the sender, affectionate with a little tease, drawn from how the story describes them (stubborn, the planner, steals blankets); when the story describes them only through the sender's love, pick a warm trait that love implies (impossible to forget, the calm one). Title-free, no full stop, no names. Under 24 characters.",
+    example: "Annoyingly kind",
+  },
+  {
+    path: "extras.reasons",
+    label: "Reasons I love you (fast cuts)",
+    kind: "list",
+    max: 5,
+    itemMax: 70,
+    required: true,
+    guide: "Exactly 5 reasons the sender loves them, each flashed in big type over one of their photos, one per tap. Each is one short sentence addressed to them ('You…'), concrete and specific to the story (a habit, a kindness, a joke, how they show up), never a generic compliment, and no two about the same thing. When the story is short, build them from what it does say (how long they have been together, how the sender feels around them, what they look forward to) so there are still five. Mix one or two playful ones with sincere ones and end on the warmest. Each under 60 characters, ending with a full stop." + VW_TONE,
+    example: "You remember exactly how I take my chai.",
+  },
+  {
+    path: "extras.question",
+    label: "The big question",
+    kind: "text",
+    max: 60,
+    required: true,
+    guide: "The question asked over their best photo right after the number of days they have been together lands: asking them to be the sender's Valentine for another year (or forever), fitting the relationship in the story, with the right gender for the recipient. Do not start with their name. Under 50 characters, ends with a question mark.",
+    example: "Another year of us. Be my Valentine?",
+  },
+  {
+    path: "extras.noLines",
+    label: "What “No” says as it runs",
+    kind: "list",
+    max: 4,
+    itemMax: 40,
+    guide: "Exactly 4 short lines that appear one by one each time they try to tap No and it slides away, escalating playfully, the joke always on the button or the sender and never on them; the fourth line gives up and announces that No is a Yes now. Each under 34 characters. These are always written, however short the story.",
+    example: "Wrong button, clearly.",
+  },
+  // ── Premium-only text leaves (the `premium` sub-document) ───────────────
+  {
+    path: "premium.voiceCaption",
+    label: "Your note (caption for your voice note)",
+    kind: "text",
+    max: 90,
+    guide: "One line in the sender's voice (always written, however short the story) shown with their voice note, or, when there is none, on its own as a quote from them: first person, to them, one small detail or inside joke from the story, a little self-mocking. Under 85 characters, no hashtags." + SAME_LANGUAGE,
+    example: "I practised this eleven times. You still make me forget my lines.",
+  },
+  {
+    path: "premium.psLetter",
+    label: "The sealed P.S.",
+    kind: "longtext",
+    max: 600,
+    guide: "A sealed P.S. they open from the summary card at the very end. Its first line is the condition on its own line, starting 'Open only if' and specific to these two; then a blank line; then two to four short sentences to them in first person, quieter and more intimate than the letter, built on one specific detail from the story the letter did not use, or, when the story is short, on the plain fact of how they feel. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE + SAME_LANGUAGE,
+    example: "Open only if you can't sleep tonight.\n\nI still have the bill from that first chai. You paid, and I've been trying to pay you back ever since.",
+  },
+];
+
+const ALWAYS = new Set(["extras.question", "extras.reasons", "extras.topTrait", "extras.noLines", "premium.voiceCaption", "premium.psLetter", "extras.songNote"]);
+const pickExtras = (paths: string[]) => paths.map((p) => extras.find((f) => f.path === p)!).filter(Boolean);
 
 export const valentinesDayPremium: AiFillTemplateSchema = {
   slug: "happy-valentines-day-premium",
   audience: "partner",
   premise:
-    "A cinematic Valentine's Day page that presents the couple's love story as a film directed by the sender and starring the recipient. It opens with a cinema ticket and opening titles (the film's title, a poster tagline, a 'Previously on…' recap of the seven days of Valentine's week), then the night they met as a constellation, a montage of their photos cut to their song, a director's commentary, a letter bound as a three-part book, their relationship 'by the numbers', and finally the big question shot in black and white, where every 'No' is a playful retake called by the director, before colour, fireworks and end credits. Grand but warm, specific, with wit in the director's lines." +
+    "A cinematic Valentine's Day page that tells the couple's year in love like a music app's year-end 'Wrapped' story, made by the sender for the recipient: bold colour slides with huge type that they tap through. Their song, their top three memories as photos, stats only the sender kept (a most-said phrase, their place, small habits counted), the recipient's top personality trait according to the sender, five fast-cut reasons, a voice note, a letter, then the number of days they have been together slamming onto the screen on the song's chorus and cutting to their best photo, where the big question waits; it ends on a shareable summary card. Playful, specific and warm, never cheesy." +
     VW_LANGUAGE +
     " Indian place names, foods, trains and song titles inside an English story keep it an English story: write the whole page in English then, quoting those names as they are.",
+  // Order matters on thin stories: the always-written fields come before the "leave it empty when the story has
+  // none" ones (place, phrase, stats, captions), or the model carries the empties on into the question and reasons.
   fields: [
-    ...common.slice(0, 3), // recipientName, senderName, petName
-    letter,
-    ...common.slice(3), // endLine, photo captions
-    {
-      path: "extras.filmTitle",
-      label: "Your film's title",
-      kind: "text",
-      max: 40,
-      required: true,
-      guide: "The title of their love story as a film, shown on the title card, the end credits and the movie poster. Built from one specific thing in the story (the place they met, an inside joke, the first thing said), the way a real romantic film is titled. Title case, no quotation marks, no names of real films. Under 36 characters.",
-      example: "Two Seats, One Story",
-    },
-    {
-      path: "extras.tagline",
-      label: "Poster tagline",
-      kind: "text",
-      max: 70,
-      guide: "The one-line tagline printed under the title on their movie poster, in the clipped rhythm of a real film poster (short fragments with full stops are good), grounded in the story's real setting. Under 64 characters.",
-      example: "Two strangers. One train. Every day since.",
-    },
-    {
-      path: "extras.weekLines",
-      label: "\"Previously on…\" — one line per day of the week",
-      kind: "list",
-      max: 7,
-      itemMax: 60,
-      guide: "Exactly 7 short lines for a 'Previously on…' recap that flicks past in the opening titles, one frame per day of Valentine's week, in this order: 1 a rose, 2 the moment they said yes (told as a memory, never asked again), 3 something sweet to eat, 4 a teddy or something soft, 5 a promise, 6 a hug, 7 a kiss (family-safe). The page prints each day's name above its line, so the line itself never names the day. Each line is about them and that day's object, with a story detail where one fits; where the story gives none, make it a warm line about the object and them rather than a made-up event. None is a question. Each under 55 characters." + VW_TONE,
-      example: "You kept every single petal.",
-    },
-    {
-      path: "extras.metPlace",
-      label: "Where you met",
-      kind: "text",
-      max: 40,
-      guide: "Where they first met, from the story, as a place and a city. It appears under the constellation of the night they met and as 'Filmed on location in…' in the end credits. Under 38 characters. Leave it empty if the story does not say where they met.",
-      example: "College canteen, Pune",
-    },
-    {
-      path: "extras.chapterTitles",
-      label: "The letter's three part titles",
-      kind: "list",
-      max: 3,
-      itemMax: 24,
-      guide: "Exactly 3 short titles, one for each part of the letter above (the beginning, now, always), each one to three words, like chapter titles in a book. They can be plain ('Then', 'Now', 'Always') or carry a detail from the story. Under 22 characters each.",
-    },
-    ...[0, 1, 2].flatMap((i): AiFillField[] => [
-      {
-        path: `extras.stats[${i}].label`,
-        label: `Your number ${i + 1} — what it counts`,
-        kind: "text",
-        max: 30,
-        guide: `The label of stat card ${i + 1} in the couple's 'by the numbers' screen, after cards the page works out itself (days together, heartbeats, sunsets): something only these two would count, taken from a habit, joke or ritual the story mentions, worded like a stat category (things stolen, most-said line, song on repeat). Each card a different habit. When the story has no habit left for this card, leave both its label and value empty. Under 28 characters.`,
-      },
-      {
-        path: `extras.stats[${i}].value`,
-        label: `Your number ${i + 1} — the value`,
-        kind: "text",
-        max: 24,
-        guide: `The big value on stat card ${i + 1}, taken from the story: a phrase, a place, a time, a food. Write digits only when the story itself states that number; otherwise a word or short phrase ('countless', 'every single time', 'one, unforgettable'). Under 22 characters.`,
-      },
-    ]),
-    {
-      path: "extras.question",
-      label: "The big question",
-      kind: "text",
-      max: 60,
-      required: true,
-      guide: "The final question, asked in black and white under one spotlight after the whole film. A Valentine-forever question that fits the relationship in the story (it may nod to films: sequels, every scene), with the right gender for the recipient. The page prints their name on the line above, so do not start with their name. Under 55 characters, ends with a question mark.",
-      example: "Will you be my Valentine… for every sequel?",
-    },
-    {
-      path: "extras.noTakes",
-      label: "The director's line for each \"No\" take",
-      kind: "list",
-      max: 4,
-      itemMax: 50,
-      guide: "Exactly 4 lines a film director calls out each time they tap 'No', escalating in comedy: line 1 starts with 'CUT! Take 2.', line 2 starts with 'Take 3.', line 3 with 'Take 4.', line 4 with 'Take 5.'; after each, a short director's remark (more feeling, endless patience, the crew is hungry, a bribe taken from something they love in the story). The joke is always on the director and the retakes, never on them. Each under 46 characters.",
-      example: "CUT! Take 2. With feeling this time.",
-    },
-    // ── Premium-only text leaves (the `premium` sub-document) ───────────────
-    {
-      path: "premium.voiceCaption",
-      label: "Your director's note (caption for your voice note)",
-      kind: "text",
-      max: 90,
-      guide: "One line in the sender's voice for the 'Director's commentary' screen: printed with the voice note, or, when there is none, shown on its own as the sender's spoken line in a screenplay. First person, to them, one small detail or inside joke from the story, a little self-mocking about directing this film. Under 85 characters, no hashtags.",
-      example: "I rewrote this scene forty times. It's still just “I love you.”",
-    },
-    {
-      path: "premium.psLetter",
-      label: "The deleted scene (sealed P.S.)",
-      kind: "longtext",
-      max: 600,
-      guide: "A sealed 'deleted scene' they open after the end credits. Its first line is the condition on its own line, starting 'Open only if' and specific to these two (open only if you ever doubt this, open only if you can't sleep tonight); then a blank line; then two to four short sentences to them in first person, quieter and more intimate than the letter, built on one specific detail from the story the letter did not use. No salutation, no sign-off, no sender's name. Under 550 characters." + VW_TONE,
-      example: "Open only if you can't sleep.\n\nI still have the ticket from that first film. You talked through the whole thing and I've never loved a movie more.",
-    },
+    ...common.filter((f) => !f.path.startsWith("photos[")).map((f) => (f.path === "letter" ? { ...f, guide: f.guide + SAME_LANGUAGE } : f)),
+    ...pickExtras(["extras.question", "extras.reasons", "extras.topTrait", "extras.noLines", "premium.voiceCaption", "premium.psLetter", "extras.songNote"]),
+    ...extras.filter((f) => !ALWAYS.has(f.path)),
+    ...common.filter((f) => f.path.startsWith("photos[")),
   ],
-  forbiddenOutput: [...VW_FORBIDDEN, ...FILM_FORBIDDEN],
+  forbiddenOutput: [...VW_FORBIDDEN, ...WRAPPED_FORBIDDEN],
 };
