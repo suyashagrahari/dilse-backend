@@ -1,36 +1,35 @@
 import type { ValentineDayConfig } from "../valentineDays";
 
 /**
- * happy-teddy-day-premium — "Made With a Heart", the premium twin of happy-teddy-day.
+ * happy-teddy-day-premium — "Adoption Papers", the premium twin of happy-teddy-day.
  *
- * Owned by this template's builder: edit only this file (and
- * config/aiFill/happy-teddy-day-premium.ts). Extras mirror the client's
- * _valentine/days/happy-teddy-day-premium.ts (same keys + limits) and the
- * PINNED_KEYS entry in valentineDays.test.ts.
+ * A parcel tag, a real teddy with a woven name tag, his file (the couple's photos as exhibits, satin care labels
+ * that flip to love notes, the sender's letter, the voice note), then a typeset Certificate of Adoption the
+ * recipient signs with a finger; the gold seal presses and ADOPTED is stamped on the song's drop.
  *
- * Shared premium fields (voice note, scheduled unlock, reply, P.S. letter…)
- * are NOT extras — they live in the top-level `premium` sub-document
- * (see PremiumFields in ../valentineDays.ts).
+ * The client mirror is client/app/(templates)/_valentine/days/happy-teddy-day-premium.ts (same keys and limits);
+ * PINNED_KEYS in ../valentineDays.test.ts pins the order. Keys kept from v1 keep their key (teddyName,
+ * parcelNote, firstWords). The chorus second is the shared premium.songDropAt, not an extra.
  */
 const config: ValentineDayConfig = {
-  title: "Made With a Heart",
+  title: "Adoption Papers",
   premium: true,
   maxPhotos: 12,
   letterMax: 3000,
   asksQuestion: false,
-  gifSlots: ["pt1-parcel", "pt2-heart", "pt3-alive", "pt4-letter", "pt5-found", "pt6-sleep"],
+  gifSlots: ["pt3-alive", "pt6-sleep"],
   extras: [
     { key: "teddyName", kind: "text", max: 20 },
-    { key: "furColor", kind: "enum", options: ["honey", "cocoa", "pink", "white", "lilac", "mint"], default: "honey" },
-    { key: "eyeStyle", kind: "enum", options: ["button", "sparkle", "sleepy", "heart"], default: "sparkle" },
-    { key: "pawInitial", kind: "text", max: 2 },
-    { key: "accessory", kind: "enum", options: ["none", "bow", "scarf", "bowtie", "flower", "sweater", "glasses"], default: "scarf" },
-    { key: "parcelNote", kind: "text", max: 80 },
-    { key: "heartWhisper", kind: "text", max: 90, min: 6 },
+    /** The manila parcel tag on the gate. */
+    { key: "parcelNote", kind: "text", max: 60 },
+    /** What the teddy says the first time he is squeezed. */
     { key: "firstWords", kind: "text", max: 50 },
-    { key: "squeezeLines", kind: "list", maxItems: 5, minItems: 3, itemMax: 70 },
-    { key: "bedtimeLine", kind: "text", max: 70 },
-    { key: "sleepOver", kind: "enum", options: ["rain", "snow", "stars"], default: "rain" },
+    /** Certificate fields. */
+    { key: "birthPlace", kind: "text", max: 40 },
+    { key: "temperament", kind: "text", max: 40 },
+    /** The satin care labels (love notes as instructions). */
+    { key: "careLines", kind: "list", maxItems: 5, minItems: 3, itemMax: 70 },
+    { key: "signOff", kind: "text", max: 40 },
   ],
 };
 
