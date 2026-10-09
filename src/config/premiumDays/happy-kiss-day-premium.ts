@@ -1,12 +1,13 @@
 import type { ValentineDayConfig } from "../valentineDays";
 
 /**
- * happy-kiss-day-premium — "Photo Booth", the premium twin of happy-kiss-day.
+ * happy-kiss-day-premium — "Mwah Booth", the premium twin of happy-kiss-day.
  *
- * A vintage photo booth: four flashes print a four-frame strip of their
- * photos on the song's drop, captions on the back of each frame, the letter
- * on a booth receipt they tear off, then they kiss the screen and the kiss
- * lands on the strip. Client mirror:
+ * A bright kissing booth: a lipstick twists up to open it, they kiss the
+ * sender's photo three times, pick a kiss off a menu (forehead, cheek, nose,
+ * hand), decorate a kiss-cam photo strip, catch flying kisses, open a letter
+ * sealed with a kiss, hear a whispered voice note and answer "Kiss me?"
+ * (Later runs away) — the yes lands on the song's chorus. Client mirror:
  * client/app/(templates)/_valentine/days/happy-kiss-day-premium.ts (same keys
  * + limits; PINNED_KEYS in valentineDays.test.ts). kissStyle, lipShade,
  * openingLine, kissNotes and kissBackText keep the $2 keys so an upgrade
@@ -17,25 +18,30 @@ import type { ValentineDayConfig } from "../valentineDays";
  * (see PremiumFields in ../valentineDays.ts).
  */
 const config: ValentineDayConfig = {
-  title: "Photo Booth",
+  title: "Mwah Booth",
   premium: true,
   maxPhotos: 12,
   letterMax: 3000,
   asksQuestion: false,
-  gifSlots: ["pb1-booth", "pb2-kiss"],
+  gifSlots: ["km1-gate", "km2-mwah", "km3-booth", "km4-catch", "km5-letter", "km6-yes"],
   extras: [
-    /** lipstick = a lip-print; cute = a heart stamp. Both family-safe. */
+    /** lipstick = a lip print; cute = a heart stamp. Both family-safe. */
     { key: "kissStyle", kind: "enum", options: ["lipstick", "cute"], default: "lipstick" },
     { key: "lipShade", kind: "enum", options: ["ruby", "gulabi", "berry", "nude"], default: "ruby" },
-    /** mono = the classic black-and-white strip. */
-    { key: "stripTone", kind: "enum", options: ["mono", "colour"], default: "mono" },
-    /** The line under their name on the booth curtain. */
+    /** The line under their name on the lipstick (gate) screen. */
     { key: "openingLine", kind: "text", max: 60 },
-    /** 1-based index into photos: the one printed last, as "the kiss". */
-    { key: "kissFrame", kind: "number", min: 1, max: 12, default: 4 },
-    /** "Kisses owed" line items on the receipt. */
+    /** 1-based index into photos: the photo they kiss three times. */
+    { key: "kissFrame", kind: "number", min: 1, max: 12, default: 1 },
+    /** The kiss menu: one line per kind of kiss. */
+    { key: "foreheadLine", kind: "text", max: 90 },
+    { key: "cheekLine", kind: "text", max: 90 },
+    { key: "noseLine", kind: "text", max: 90 },
+    { key: "handLine", kind: "text", max: 90 },
+    /** "Kisses I owe you", unlocked after the flying-kiss game. */
     { key: "kissNotes", kind: "list", maxItems: 6, minItems: 3, itemMax: 70 },
-    /** YYYY-MM-DD; the receipt counts the days since. */
+    /** The yes / later question before the finale. */
+    { key: "question", kind: "text", max: 60 },
+    /** YYYY-MM-DD; the keepsake strip counts the days since. */
     { key: "sinceDate", kind: "text", max: 10 },
     { key: "kissBackText", kind: "text", max: 80 },
   ],

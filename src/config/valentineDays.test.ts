@@ -74,7 +74,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-teddy-day-premium": ["teddyName", "parcelNote", "firstWords", "birthPlace", "temperament", "careLines", "signOff"],
   "happy-promise-day-premium": ["envelopeLine", "whereas", "promises", "bigPromise", "sinceDate", "witnessLine", "monogram", "waxColour", "replyLine"],
   "happy-hug-day-premium": ["openingLine", "distanceKm", "meetLine", "holdSeconds", "heartbeatBpm", "hugLines", "hugFeels", "coupons", "replyLine"],
-  "happy-kiss-day-premium": ["kissStyle", "lipShade", "stripTone", "openingLine", "kissFrame", "kissNotes", "sinceDate", "kissBackText"],
+  "happy-kiss-day-premium": ["kissStyle", "lipShade", "openingLine", "kissFrame", "foreheadLine", "cheekLine", "noseLine", "handLine", "kissNotes", "question", "sinceDate", "kissBackText"],
   "happy-valentines-day-premium": ["ticketLine", "balloonLine", "meterLine", "weekLines", "togetherSince", "songNote", "question", "noLines", "datePlan"],
   "happy-halloween-premium": ["tone", "houseName", "treats", "ingredients", "potionSpell", "perks", "costumeDuo", "question", "yesLine"],
 };
@@ -86,7 +86,7 @@ const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
   "happy-teddy-day-premium": ["pt3-alive", "pt6-sleep"],
   "happy-promise-day-premium": ["ps1-desk", "ps2-sealed"],
   "happy-hug-day-premium": ["ph3-held", "ph6-back"],
-  "happy-kiss-day-premium": ["pb1-booth", "pb2-kiss"],
+  "happy-kiss-day-premium": ["km1-gate", "km2-mwah", "km3-booth", "km4-catch", "km5-letter", "km6-yes"],
   "happy-valentines-day-premium": ["vc1-ticket", "vc2-balloons", "vc3-meter", "vc4-letter", "vc5-please", "vc6-yes"],
   "happy-halloween-premium": ["hb1-hello", "hb2-treats", "hb3-pumpkin", "hb4-booth", "hb5-potion", "hb6-yes"],
 };
