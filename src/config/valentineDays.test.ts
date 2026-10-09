@@ -70,7 +70,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "bloomLine", "sinceDate", "signOff", "shayari"],
   "happy-propose-day-premium": ["filmTitle", "tagline", "actOne", "actTwo", "comingSoon", "question", "noLines", "afterYes", "credits", "location"],
-  "happy-chocolate-day-premium": ["welcomeNote", "reasons", "embossNames", "crackLine", "ticketPromise", "letterTitle", "drizzleWord", "insideNote", "boxColor", "signOff"],
+  "happy-chocolate-day-premium": ["houseName", "openingLine", "boxLine", "flavours", "heartLine", "sinceDate", "signOff", "boxColor"],
   "happy-teddy-day-premium": ["teddyName", "furColor", "eyeStyle", "pawInitial", "accessory", "parcelNote", "heartWhisper", "firstWords", "squeezeLines", "bedtimeLine", "sleepOver"],
   "happy-promise-day-premium": ["gateLine", "sharedSince", "promises", "bigPromise", "futurePromise", "futureDate", "distanceKm", "threadColor", "replyLine"],
   "happy-hug-day-premium": ["frostLine", "distanceKm", "holdSeconds", "heartbeatBpm", "hugLines", "weatherHugs", "coupons", "hoodieTag", "replyLine"],
@@ -82,7 +82,7 @@ const PINNED_KEYS: Record<string, string[]> = {
 const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
   "happy-rose-day-premium": ["pr3-petals", "pr6-forever"],
   "happy-propose-day-premium": ["pp4-please", "pp5-yes"],
-  "happy-chocolate-day-premium": ["pc1-open", "pc2-smash", "pc3-yum", "pc4-ticket", "pc5-photos", "pc6-box"],
+  "happy-chocolate-day-premium": ["pc3-yum", "pc6-box"],
   "happy-teddy-day-premium": ["pt1-parcel", "pt2-heart", "pt3-alive", "pt4-letter", "pt5-found", "pt6-sleep"],
   "happy-promise-day-premium": ["pp1-gate", "pp2-pull", "pp3-knot", "pp4-rings", "pp5-vial", "pp6-promised"],
   "happy-hug-day-premium": ["ph1-window", "ph2-walk", "ph3-held", "ph4-mitten", "ph5-fort", "ph6-back"],

@@ -1,44 +1,37 @@
 import type { ValentineDayConfig } from "../valentineDays";
 
 /**
- * happy-chocolate-day-premium — "The Midnight Chocolatier", the premium twin of happy-chocolate-day.
+ * happy-chocolate-day-premium — "La Boîte", the premium twin of happy-chocolate-day.
  *
- * Owned by this template's builder: edit only this file (and
- * config/aiFill/happy-chocolate-day-premium.ts). Extras mirror the client's
- * _valentine/days/happy-chocolate-day-premium.ts (same keys + limits) and the
- * PINNED_KEYS entry in valentineDays.test.ts.
+ * A chocolatier's box made for one person: a foil-stamped lid and a satin ribbon; under it, bonbons topped with the
+ * couple's photos (each turns over to its flavour and memory), a cocoa-dusted heart kept for last, the letter on the
+ * menu card, the voice note and a keepsake card.
  *
- * Shared premium fields (voice note, scheduled unlock, reply, P.S. letter…)
- * are NOT extras — they live in the top-level `premium` sub-document
- * (see PremiumFields in ../valentineDays.ts).
+ * The client mirror is client/app/(templates)/_valentine/days/happy-chocolate-day-premium.ts (same keys and limits);
+ * PINNED_KEYS in ../valentineDays.test.ts pins the order. The chorus second is the shared premium.songDropAt.
  */
 const config: ValentineDayConfig = {
-  title: "The Midnight Chocolatier",
+  title: "La Boîte",
   premium: true,
   maxPhotos: 12,
   letterMax: 3000,
   asksQuestion: false,
-  gifSlots: ["pc1-open", "pc2-smash", "pc3-yum", "pc4-ticket", "pc5-photos", "pc6-box"],
+  gifSlots: ["pc3-yum", "pc6-box"],
   extras: [
-    { key: "welcomeNote", kind: "text", max: 80 },
-    {
-      key: "reasons",
-      kind: "objlist",
-      maxItems: 6,
-      minItems: 3,
-      item: [
-        { key: "flavour", kind: "enum", options: ["hazelnut", "sea-salt", "raspberry", "gold-leaf", "pistachio", "rose", "heart"], default: "hazelnut" },
-        { key: "reason", kind: "text", max: 90 },
-      ],
-    },
-    { key: "embossNames", kind: "bool", default: true },
-    { key: "crackLine", kind: "text", max: 50 },
-    { key: "ticketPromise", kind: "text", max: 70, min: 6 },
-    { key: "letterTitle", kind: "text", max: 24 },
-    { key: "drizzleWord", kind: "text", max: 6 },
-    { key: "insideNote", kind: "text", max: 60 },
-    { key: "boxColor", kind: "enum", options: ["raspberry", "midnight", "ivory", "blush"], default: "raspberry" },
+    /** Foil-stamped on the lid and the menu card ("Maison Aryan"). */
+    { key: "houseName", kind: "text", max: 28 },
+    /** Over the closed box, before the lid comes off. */
+    { key: "openingLine", kind: "text", max: 60 },
+    /** Over the open box of photo bonbons. */
+    { key: "boxLine", kind: "text", max: 60 },
+    /** Bonbon i's flavour (bonbon i sits on photo i); blank = the page's house flavour. */
+    { key: "flavours", kind: "objlist", maxItems: 9, item: [{ key: "name", kind: "text", max: 28 }] },
+    /** On the cocoa-dusted heart, the last piece. */
+    { key: "heartLine", kind: "text", max: 60 },
+    /** Free text ("2022", "our first monsoon"), printed as "Est. …". */
+    { key: "sinceDate", kind: "text", max: 24 },
     { key: "signOff", kind: "text", max: 40 },
+    { key: "boxColor", kind: "enum", options: ["cacao", "raspberry", "midnight", "ivory"], default: "cacao" },
   ],
 };
 
