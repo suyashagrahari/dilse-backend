@@ -6,6 +6,7 @@ import generateRoutes from "./generate.routes";
 import favoriteRoutes from "./favorite.routes";
 import wishlistRoutes from "./wishlist.routes";
 import { getActivePromo } from "../controllers/promo.controller";
+import { getPublicSeason } from "../controllers/season.controller";
 import userContentRoutes from "./userContent.routes";
 import birthdayPageRoutes from "./birthdayPage.routes";
 import valentinePageRoutes from "./valentinePage.routes";
@@ -108,6 +109,8 @@ router.use("/favorites", protect, favoriteRoutes);
 router.use("/wishlist", wishlistRoutes);
 // The wishlist sale countdown the blog and template banners render. Anonymous, cached.
 router.get("/promo/active", getActivePromo);
+// Which seasonal campaign the site shows and its sale. Anonymous, cached 15 s.
+router.get("/season", getPublicSeason);
 router.use("/content", protect, userContentRoutes);
 router.use("/birthday-pages", birthdayPageRoutes);
 router.use("/valentine-pages", valentinePageRoutes);

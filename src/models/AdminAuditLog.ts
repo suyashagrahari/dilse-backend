@@ -56,6 +56,8 @@ export type AuditAction =
   | "influencer.settings"
   // International pricing switch and the INR-per-USD rate.
   | "payment.settings"
+  // Season campaign (Valentine / Halloween / off) and its real-price sale.
+  | "season.settings"
   // A reply to a Contact-page message, sent as support@.
   | "contact.reply_sent"
   | "influencer.update"
