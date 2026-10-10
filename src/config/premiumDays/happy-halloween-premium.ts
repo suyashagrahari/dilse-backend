@@ -23,6 +23,8 @@ const config: ValentineDayConfig = {
   maxPhotos: 12,
   letterMax: 3000,
   asksQuestion: true,
+  /** The haunted piano loop — the default background music. */
+  musicTrack: true,
   gifSlots: ["hb1-hello", "hb2-treats", "hb3-pumpkin", "hb4-booth", "hb5-potion", "hb6-yes"],
   extras: [
     /** Who it's for — the default question, and gentle (family/kids) mode. */

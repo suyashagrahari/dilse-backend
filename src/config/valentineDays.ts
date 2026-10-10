@@ -113,6 +113,12 @@ export interface ValentineDayConfig {
   asksQuestion: boolean;
   /** The ultra-premium tier: stores the `premium` sub-document and takes replies. */
   premium?: boolean;
+  /**
+   * The template ships its own looping background track (client
+   * DayConfig.music.track): musicMode "track" is accepted, and is the default
+   * for a new page. On any other slug "track" falls back to the melody.
+   */
+  musicTrack?: boolean;
 }
 
 /** Shared caps for the common (non-extras) fields. Server caps are the hard ones. */
@@ -328,6 +334,8 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
     maxPhotos: 6,
     letterMax: 1500,
     asksQuestion: true,
+    /** The haunted piano loop — the default background music. */
+    musicTrack: true,
     gifSlots: ["h1-doorstep", "h2-treat", "h3-portrait", "h4-potion", "h5-boo"],
     extras: [
       /** Who it's for — changes the default question, the license and kids-safe mode. */
@@ -466,8 +474,10 @@ export function sanitizeGifSlots(slug: ValentineDaySlug, raw: unknown): Record<s
 // clients and is always `musicMode !== "off"`. Only an 11-char YouTube video
 // id is ever stored — never a URL — and a "youtube" choice without a valid id
 // falls back to the built-in melody so the page is never silent by accident.
+// "track" (the template's own looping MP3; its URL lives in the client config,
+// never in the page) is only kept on a slug with `musicTrack`.
 
-export const MUSIC_MODES = ["off", "melody", "youtube"] as const;
+export const MUSIC_MODES = ["off", "melody", "youtube", "track"] as const;
 export type MusicMode = (typeof MUSIC_MODES)[number];
 export const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 export const MUSIC_START_MAX = 600;
@@ -480,18 +490,25 @@ export interface MusicFields {
 }
 
 export const MUSIC_DEFAULTS: MusicFields = { music: true, musicMode: "melody", musicYoutubeId: "", musicStart: 0 };
+/** A new page on a slug with its own track. */
+export const TRACK_MUSIC_DEFAULTS: MusicFields = { ...MUSIC_DEFAULTS, musicMode: "track" };
 
 const asBool = (v: unknown): boolean | undefined => (v === true || v === "true" ? true : v === false || v === "false" ? false : undefined);
 
 /**
  * Body → the four stored music fields. `prev` is the stored page on update, so
  * a partial body (an old client that only sends `music`) keeps what it does
- * not mention.
+ * not mention. `opts.track`: the slug ships its own track (`musicTrack`), so
+ * "track" is valid and is the fallback instead of the melody.
  */
 export function sanitizeMusic(
   raw: { music?: unknown; musicMode?: unknown; musicYoutubeId?: unknown; musicStart?: unknown },
-  prev: MusicFields = MUSIC_DEFAULTS
+  prevIn?: MusicFields,
+  opts: { track?: boolean } = {}
 ): MusicFields {
+  const track = !!opts.track;
+  const fallback: MusicMode = track ? "track" : "melody";
+  const prev = prevIn ?? (track ? TRACK_MUSIC_DEFAULTS : MUSIC_DEFAULTS);
   const id = typeof raw.musicYoutubeId === "string" ? raw.musicYoutubeId.trim() : undefined;
   const youtubeId = id === undefined ? prev.musicYoutubeId : YOUTUBE_ID_RE.test(id) ? id : "";
 
@@ -500,9 +517,10 @@ export function sanitizeMusic(
     mode = raw.musicMode as MusicMode;
   } else {
     const on = asBool(raw.music);
-    mode = on === undefined ? prev.musicMode : on ? (prev.musicMode === "off" ? "melody" : prev.musicMode) : "off";
+    mode = on === undefined ? prev.musicMode : on ? (prev.musicMode === "off" ? fallback : prev.musicMode) : "off";
   }
-  if (mode === "youtube" && !youtubeId) mode = "melody";
+  if (mode === "youtube" && !youtubeId) mode = fallback;
+  if (mode === "track" && !track) mode = "melody";
 
   const n = typeof raw.musicStart === "number" ? raw.musicStart : typeof raw.musicStart === "string" && raw.musicStart.trim() ? Number(raw.musicStart) : NaN;
   const start = raw.musicStart === undefined ? prev.musicStart : Number.isFinite(n) ? Math.min(MUSIC_START_MAX, Math.max(0, Math.round(n))) : 0;

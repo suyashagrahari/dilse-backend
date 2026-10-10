@@ -199,7 +199,7 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
     letter: str(b.letter, day.letterMax),
     photos: await photosFrom(b.photos, userId),
     gifs: sanitizeGifSlots(slug, b.gifs),
-    ...sanitizeMusic(b),
+    ...sanitizeMusic(b, undefined, { track: !!day.musicTrack }),
     endLine: line(b.endLine, VW_LIMITS.endLine),
     extras: sanitizeExtras(slug, b.extras),
     // Never written for a $2 slug — its documents carry no `premium` key at all.
@@ -286,7 +286,7 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
           musicMode: page.music === false ? "off" : page.musicMode ?? "melody",
           musicYoutubeId: page.musicYoutubeId ?? "",
           musicStart: page.musicStart ?? 0,
-        });
+        }, { track: !!day.musicTrack });
         page.music = m.music;
         page.musicMode = m.musicMode;
         page.musicYoutubeId = m.musicYoutubeId;

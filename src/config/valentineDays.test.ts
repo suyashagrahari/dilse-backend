@@ -51,6 +51,42 @@ describe("sanitizeMusic", () => {
   });
 });
 
+describe("sanitizeMusic — the template's own track", () => {
+  it("keeps \"track\" only on a slug that ships one; elsewhere it falls back to the melody", () => {
+    assert.deepEqual(sanitizeMusic({ musicMode: "track" }, undefined, { track: true }), {
+      music: true, musicMode: "track", musicYoutubeId: "", musicStart: 0,
+    });
+    assert.equal(sanitizeMusic({ musicMode: "track" }).musicMode, "melody");
+    assert.equal(sanitizeMusic({ musicMode: "track" }, undefined, { track: false }).musicMode, "melody");
+  });
+  it("a new page on a track slug defaults to the track", () => {
+    assert.equal(sanitizeMusic({}, undefined, { track: true }).musicMode, "track");
+    assert.equal(sanitizeMusic({ music: true }, undefined, { track: true }).musicMode, "track");
+    assert.equal(sanitizeMusic({}).musicMode, "melody");
+  });
+  it("youtube without a valid id falls back to the track on a track slug", () => {
+    assert.equal(sanitizeMusic({ musicMode: "youtube", musicYoutubeId: "nope" }, undefined, { track: true }).musicMode, "track");
+  });
+  it("still lets the sender pick youtube, melody or off on a track slug", () => {
+    const o = { track: true };
+    assert.equal(sanitizeMusic({ musicMode: "youtube", musicYoutubeId: "2Vv-BfVoq4g" }, undefined, o).musicMode, "youtube");
+    assert.equal(sanitizeMusic({ musicMode: "melody" }, undefined, o).musicMode, "melody");
+    assert.equal(sanitizeMusic({ musicMode: "off" }, undefined, o).music, false);
+  });
+  it("updates: music:true after off returns to the track; a stored track survives a partial body", () => {
+    const off = { music: false, musicMode: "off" as const, musicYoutubeId: "", musicStart: 0 };
+    assert.equal(sanitizeMusic({ music: true }, off, { track: true }).musicMode, "track");
+    const tr = { music: true, musicMode: "track" as const, musicYoutubeId: "", musicStart: 0 };
+    assert.equal(sanitizeMusic({ musicStart: 5 }, tr, { track: true }).musicMode, "track");
+    // A stored "track" on a slug that lost its track degrades to the melody.
+    assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
+  });
+  it("only the two Halloween slugs ship a track", () => {
+    const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
+    assert.deepEqual(withTrack, ["happy-halloween", "happy-halloween-premium"]);
+  });
+});
+
 /**
  * The client mirror (client/app/(templates)/_valentine/days/<slug>.ts) is kept
  * in step by hand. These keys are the contract: change one here and the client

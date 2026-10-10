@@ -258,4 +258,17 @@ describe("premium getShared + create", () => {
     assert.equal("premium" in plain, false);
     assert.equal((plain.letter as string).length, 1500);
   });
+
+  it("create keeps musicMode \"track\" only on the Halloween slugs (and defaults them to it)", async () => {
+    for (const slug of ["happy-halloween", "happy-halloween-premium"] as const) {
+      const t = setup(slug);
+      await call(t.c.create, { letter: "boo", musicMode: "track" }, "u9");
+      assert.equal(t.model.created[0].musicMode, "track", slug);
+      await call(t.c.create, { letter: "boo" }, "u9");
+      assert.equal(t.model.created[1].musicMode, "track", `${slug} default`);
+    }
+    const other = setup("happy-hug-day-premium");
+    await call(other.c.create, { letter: "hug", musicMode: "track" }, "u9");
+    assert.equal(other.model.created[0].musicMode, "melody");
+  });
 });
