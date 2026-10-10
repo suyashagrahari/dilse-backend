@@ -15,19 +15,19 @@ test("the default season is Halloween at 49% off the two Halloween slugs", () =>
   assert.deepEqual(d.saleSlugs, ["happy-halloween", "happy-halloween-premium"]);
 });
 
-test("₹199 at 49% off charges ₹101.49 and strikes ₹199 through", () => {
+test("₹199 at 49% off charges ₹101 (whole rupees) and strikes ₹199 through", () => {
   const p = applySeasonSale(priced("happy-halloween", 19900), season());
-  assert.equal(p.finalPricePaise, 10149); // round(19900 × 51 / 100)
-  assert.equal(p.finalPrice, 101.49);
+  assert.equal(p.finalPricePaise, 10100); // round(19900 × 51 / 100) = 10149 → whole rupees
+  assert.equal(p.finalPrice, 101);
   assert.equal(p.mrpPaise, 19900);
-  assert.equal(p.savingsPaise, 9751);
+  assert.equal(p.savingsPaise, 9800);
   assert.equal(p.discountPercent, 49);
   assert.equal(p.pointsCost, 40, "points are not part of the sale");
 });
 
-test("rounding is to the nearest paisa and stays an integer", () => {
+test("rounding is to whole rupees and stays an integer", () => {
   const p = applySeasonSale(priced("happy-halloween-premium", 333), season({ salePercent: 33 }));
-  assert.equal(p.finalPricePaise, 223); // 333 × 0.67 = 223.11
+  assert.equal(p.finalPricePaise, 200); // 333 × 0.67 = 223.11 → whole rupees
   assert.ok(Number.isInteger(p.finalPricePaise));
   assert.equal(p.savingsPaise, p.mrpPaise - p.finalPricePaise);
 });

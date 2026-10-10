@@ -63,10 +63,10 @@ beforeEach(() => {
 
 test("no season row: the default 49% applies to the Halloween slugs only", async () => {
   const map = await allPricing();
-  assert.equal(map["happy-halloween"].finalPricePaise, 10149);
+  assert.equal(map["happy-halloween"].finalPricePaise, 10100);
   assert.equal(map["happy-halloween"].discountPercent, 49);
   assert.equal(map["happy-halloween"].mrpPaise, 19900);
-  assert.equal(map["happy-halloween-premium"].finalPricePaise, 25449);
+  assert.equal(map["happy-halloween-premium"].finalPricePaise, 25400);
   assert.equal(map["happy-halloween-premium"].usdPriceCents, 305);
   assert.equal(map.holi.finalPricePaise, 9900);
   assert.equal(map.holi.discountPercent, 50);
@@ -93,7 +93,7 @@ for (const country of ["IN", "US"]) {
     }
     const hq = await quoteFor(req(country), "happy-halloween", { fresh: true });
     assert.equal(hq.pricing.discountPercent, 49);
-    assert.equal(hq.pricing.finalAmount, country === "IN" ? 10149 : 199);
+    assert.equal(hq.pricing.finalAmount, country === "IN" ? 10100 : 199);
   });
 }
 

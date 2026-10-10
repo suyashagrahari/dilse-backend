@@ -64,7 +64,9 @@ export function applySeasonSale(pricing: ResolvedPricing, season: SeasonView | n
   if (pct === 0) return pricing;
 
   const regular = pricing.finalPricePaise;
-  const finalPricePaise = Math.min(regular, discounted(regular, pct, MIN_SALE_PAISE));
+  // Whole rupees: a sale price of ₹101.49 reads like a bug on the paywall.
+  const wholeRupees = Math.max(MIN_SALE_PAISE, Math.round(discounted(regular, pct, MIN_SALE_PAISE) / 100) * 100);
+  const finalPricePaise = Math.min(regular, wholeRupees);
   const mrpPaise = Math.max(regular, finalPricePaise);
   const savingsPaise = mrpPaise - finalPricePaise;
   const usd = pricing.usdPriceCents;
