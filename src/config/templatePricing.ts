@@ -46,7 +46,19 @@ import {
   type ResolvedPricing,
 } from "./pricingMath";
 
+import { applySeasonSale } from "./seasonSale";
+import { getSeasonSettings } from "../services/seasonSettings.service";
+
 export type { PricingRow, ResolvedPricing } from "./pricingMath";
+
+// ── THE SEASON SALE ─────────────────────────────────────────────────────────
+//
+// Every read below passes its result through `applySeasonSale` (see
+// config/seasonSale.ts) — the cached reads with the cached season, the fresh
+// read with a fresh one. The cache holds the stored rows only, never a
+// discounted price, so switching the sale off cannot leave a stale discount
+// behind. `allPricing({ raw: true })` is the one exception: the admin pricing
+// panel shows what was stored, not what a visitor is charged today.
 
 const TTL_MS = 30_000;
 
@@ -127,9 +139,9 @@ async function rows(): Promise<Map<string, PricingRow>> {
 export async function getPricingBySlug(slug: string): Promise<ResolvedPricing> {
   const key = String(slug || "").trim().toLowerCase();
   if (!key) return freePricing(key);
-  const map = await rows();
+  const [map, season] = await Promise.all([rows(), getSeasonSettings()]);
   const row = map.get(key);
-  return row ? derivePricing(row) : freePricing(key);
+  return row ? applySeasonSale(derivePricing(row), season) : freePricing(key);
 }
 
 /**
@@ -160,14 +172,20 @@ export async function getPricingFresh(templateType: string): Promise<ResolvedPri
   const slug = slugForTemplateType(templateType);
   if (!slug) return freePricing(slug);
 
-  const doc = await TemplatePricing.findOne({ slug }).select(SELECT).lean();
-  return doc ? derivePricing(toRow(doc as never)) : freePricing(slug);
+  const [doc, season] = await Promise.all([
+    TemplatePricing.findOne({ slug }).select(SELECT).lean(),
+    getSeasonSettings(true),
+  ]);
+  return doc ? applySeasonSale(derivePricing(toRow(doc as never)), season) : freePricing(slug);
 }
 
-/** Every priced template, keyed by slug — for the public pricing endpoint. */
-export async function allPricing(): Promise<Record<string, ResolvedPricing>> {
-  const map = await rows();
+/**
+ * Every priced template, keyed by slug — for the public pricing endpoint, with
+ * the season sale applied. `raw` skips the sale (the admin pricing panel).
+ */
+export async function allPricing({ raw = false }: { raw?: boolean } = {}): Promise<Record<string, ResolvedPricing>> {
+  const [map, season] = await Promise.all([rows(), raw ? null : getSeasonSettings()]);
   const out: Record<string, ResolvedPricing> = {};
-  for (const [slug, row] of map) out[slug] = derivePricing(row);
+  for (const [slug, row] of map) out[slug] = raw ? derivePricing(row) : applySeasonSale(derivePricing(row), season);
   return out;
 }

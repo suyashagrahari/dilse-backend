@@ -25,6 +25,7 @@ import {
   adminUpdatePaymentSettings,
   adminGeoCheck,
 } from "../controllers/paymentSettings.controller";
+import { adminGetSeason, adminUpdateSeason } from "../controllers/season.controller";
 
 /**
  * Mounted at /api/admin/super behind `protect` + `requireSuperAdmin`.
@@ -46,6 +47,10 @@ router.get("/audit", getAuditLog);
 router.get("/payment-settings", adminGetPaymentSettings);
 router.put("/payment-settings", adminUpdatePaymentSettings);
 router.get("/geo-check", adminGeoCheck);
+
+// Season campaign + sale (Valentine wishlist / Halloween drop / off)
+router.get("/season", adminGetSeason);
+router.put("/season", adminUpdateSeason);
 
 // Influencer programme
 router.get("/influencers", adminListInfluencers);

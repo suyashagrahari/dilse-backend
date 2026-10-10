@@ -58,8 +58,11 @@ export const getAdminTemplatePricing = async (_req: Request, res: Response): Pro
           updatedByEmail:  d.updatedByEmail ? String(d.updatedByEmail) : "",
           updatedAt:       d.updatedAt ?? null,
         })),
-        /** Resolved, so the panel does not recompute the MRP and risk disagreeing. */
-        resolved: await allPricing(),
+        /**
+         * Resolved, so the panel does not recompute the MRP and risk disagreeing.
+         * Raw: the stored price, before any season sale.
+         */
+        resolved: await allPricing({ raw: true }),
       },
     });
   } catch (error) {
