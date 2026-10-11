@@ -25,7 +25,7 @@ import {
   adminUpdatePaymentSettings,
   adminGeoCheck,
 } from "../controllers/paymentSettings.controller";
-import { adminGetSeason, adminUpdateSeason } from "../controllers/season.controller";
+import { adminGetSeason, adminPreviewSeason, adminUpdateSeason } from "../controllers/season.controller";
 import { getMyPays, setMyPays, setFreeAccess } from "../controllers/freeAccess.controller";
 
 /**
@@ -57,6 +57,7 @@ router.put("/users/:userId/free-access", setFreeAccess);
 
 // Season campaign + sale (Valentine wishlist / Halloween drop / off)
 router.get("/season", adminGetSeason);
+router.get("/season/preview", adminPreviewSeason);
 router.put("/season", adminUpdateSeason);
 
 // Influencer programme

@@ -109,7 +109,7 @@ router.use("/favorites", protect, favoriteRoutes);
 router.use("/wishlist", wishlistRoutes);
 // The wishlist sale countdown the blog and template banners render. Anonymous, cached.
 router.get("/promo/active", getActivePromo);
-// Which seasonal campaign the site shows and its sale. Anonymous, cached 15 s.
+// Which seasonal campaign THIS visitor sees (India or abroad) and its sale. Anonymous, privately cached 15 s.
 router.get("/season", getPublicSeason);
 router.use("/content", protect, userContentRoutes);
 router.use("/birthday-pages", birthdayPageRoutes);
@@ -146,6 +146,10 @@ router.use("/happy-kiss-day-pages", makeValentineDayRouter("happy-kiss-day"));
 router.use("/happy-valentines-day-pages", makeValentineDayRouter("happy-valentines-day"));
 // Happy Halloween — the same engine, a ninth entry.
 router.use("/happy-halloween-pages", makeValentineDayRouter("happy-halloween"));
+// Be My Dandiya Partner (Navratri) — the same engine.
+router.use("/dandiya-partner-pages", makeValentineDayRouter("dandiya-partner"));
+// Happy Diwali — the same engine.
+router.use("/happy-diwali-pages", makeValentineDayRouter("happy-diwali"));
 // The ultra-premium tier: a twin of each day on the same engine (+ voice note, unlock, reply).
 router.use("/happy-rose-day-premium-pages", makeValentineDayRouter("happy-rose-day-premium"));
 router.use("/happy-propose-day-premium-pages", makeValentineDayRouter("happy-propose-day-premium"));

@@ -46,7 +46,7 @@ import {
   type ResolvedPricing,
 } from "./pricingMath";
 
-import { applySeasonSale } from "./seasonSale";
+import { applySeasonSale, seasonForAudience, type Audience } from "./seasonSale";
 import { getSeasonSettings } from "../services/seasonSettings.service";
 
 export type { PricingRow, ResolvedPricing } from "./pricingMath";
@@ -59,6 +59,13 @@ export type { PricingRow, ResolvedPricing } from "./pricingMath";
 // discounted price, so switching the sale off cannot leave a stale discount
 // behind. `allPricing({ raw: true })` is the one exception: the admin pricing
 // panel shows what was stored, not what a visitor is charged today.
+//
+// The season can differ for visitors in India and abroad, so every read that
+// applies it takes the visitor's `audience` (pricingQuote.service.ts
+// `audienceFor(req)`) — required, so a new caller cannot silently price one
+// side's visitor at the other side's sale. The quote, the order, the points
+// spend, the publish gate and GET /payment/pricing all resolve it the same way
+// from the same request, so what a visitor is shown is what they are charged.
 
 const TTL_MS = 30_000;
 
@@ -136,12 +143,12 @@ async function rows(): Promise<Map<string, PricingRow>> {
 }
 
 /** The price for a template slug. Unpriced slugs are free. */
-export async function getPricingBySlug(slug: string): Promise<ResolvedPricing> {
+export async function getPricingBySlug(slug: string, audience: Audience): Promise<ResolvedPricing> {
   const key = String(slug || "").trim().toLowerCase();
   if (!key) return freePricing(key);
   const [map, season] = await Promise.all([rows(), getSeasonSettings()]);
   const row = map.get(key);
-  return row ? applySeasonSale(derivePricing(row), season) : freePricing(key);
+  return row ? applySeasonSale(derivePricing(row), seasonForAudience(season, audience)) : freePricing(key);
 }
 
 /**
@@ -150,8 +157,8 @@ export async function getPricingBySlug(slug: string): Promise<ResolvedPricing> {
  * Async, where the old hardcoded version was sync. Every caller already sits in
  * an async function, so this is an `await`, not a restructure.
  */
-export async function getPricing(templateType: string): Promise<ResolvedPricing> {
-  return getPricingBySlug(slugForTemplateType(templateType));
+export async function getPricing(templateType: string, audience: Audience): Promise<ResolvedPricing> {
+  return getPricingBySlug(slugForTemplateType(templateType), audience);
 }
 
 /**
@@ -168,7 +175,7 @@ export async function getPricing(templateType: string): Promise<ResolvedPricing>
  * read, i.e. charging an amount we invented. A checkout that errors and asks the
  * user to try again is the only acceptable failure.
  */
-export async function getPricingFresh(templateType: string): Promise<ResolvedPricing> {
+export async function getPricingFresh(templateType: string, audience: Audience): Promise<ResolvedPricing> {
   const slug = slugForTemplateType(templateType);
   if (!slug) return freePricing(slug);
 
@@ -176,15 +183,20 @@ export async function getPricingFresh(templateType: string): Promise<ResolvedPri
     TemplatePricing.findOne({ slug }).select(SELECT).lean(),
     getSeasonSettings(true),
   ]);
-  return doc ? applySeasonSale(derivePricing(toRow(doc as never)), season) : freePricing(slug);
+  return doc ? applySeasonSale(derivePricing(toRow(doc as never)), seasonForAudience(season, audience)) : freePricing(slug);
 }
 
 /**
  * Every priced template, keyed by slug — for the public pricing endpoint, with
- * the season sale applied. `raw` skips the sale (the admin pricing panel).
+ * the season sale of the visitor's side applied. `raw` skips the sale (the
+ * admin pricing panel) and needs no audience.
  */
-export async function allPricing({ raw = false }: { raw?: boolean } = {}): Promise<Record<string, ResolvedPricing>> {
-  const [map, season] = await Promise.all([rows(), raw ? null : getSeasonSettings()]);
+export async function allPricing(
+  opts: { raw: true } | { raw?: false; audience: Audience }
+): Promise<Record<string, ResolvedPricing>> {
+  const raw = opts.raw === true;
+  const [map, settings] = await Promise.all([rows(), raw ? null : getSeasonSettings()]);
+  const season = settings && !opts.raw ? seasonForAudience(settings, opts.audience) : null;
   const out: Record<string, ResolvedPricing> = {};
   for (const [slug, row] of map) out[slug] = raw ? derivePricing(row) : applySeasonSale(derivePricing(row), season);
   return out;

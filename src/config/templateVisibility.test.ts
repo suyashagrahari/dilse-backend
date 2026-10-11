@@ -1,18 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { reachableFrom } from "./templateVisibility";
-import { dropSlugs, isInDrop, type SeasonView } from "./seasonSale";
+import { defaultSeason, dropSlugs, isInDrop, type SeasonDrop, type SeasonMode, type SeasonView } from "./seasonSale";
 
 // Reachability = live in the gallery OR in the active (Halloween) drop. These
 // cover the pure rule; `isTemplateReachable` only adds the two cached reads.
 
-const season = (over: Partial<SeasonView> = {}): SeasonView => ({
-  mode: "halloween",
-  saleEnabled: true,
-  salePercent: 49,
-  saleSlugs: ["happy-halloween", "happy-halloween-premium"],
-  ...over,
-});
+const season = ({ mode = "halloween", ...drop }: Partial<SeasonDrop & { mode: SeasonMode }> = {}): SeasonView => {
+  const d = defaultSeason();
+  return { ...d, mode, drops: { ...d.drops, halloween: { ...d.drops.halloween, ...drop } } };
+};
 
 test("hidden + in the drop + halloween mode → reachable", () => {
   assert.equal(reachableFrom("happy-halloween", false, season()), true);

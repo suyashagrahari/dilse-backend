@@ -4,7 +4,7 @@ import { getPricing } from "../config/templatePricing";
 import { hasGrant } from "../config/templateAccess";
 import { slugForTemplateType } from "../config/templateSlugs";
 import type { ResolvedPricing } from "../config/pricingMath";
-import { viewerPublishesFree } from "./pricingQuote.service";
+import { audienceFor, viewerPublishesFree } from "./pricingQuote.service";
 import { freeEntitlementFor } from "../config/freeAccess";
 
 /**
@@ -83,7 +83,9 @@ export async function checkPublishAccess(params: {
   pageId: string;
   isAlreadyPublished: boolean;
 }): Promise<GateResult> {
-  const pricing = await getPricing(params.templateType);
+  // The visitor's own side of the season split: the gate's price is the one the
+  // quote showed them and the order would charge (pricingQuote.service).
+  const pricing = await getPricing(params.templateType, await audienceFor(params.req));
 
   // Rule 1: nobody has priced this template.
   if (pricing.isFree) return { allowed: true, reason: "free", pricing };

@@ -51,10 +51,10 @@ function call(handler: (req: Request, res: Response) => Promise<void>, body: unk
 
 const flush = () => new Promise((r) => setTimeout(r, 10));
 
-function setup(slug: "happy-propose-day" | "happy-rose-day") {
+function setup(slug: "happy-propose-day" | "happy-rose-day" | "dandiya-partner", extras: Record<string, unknown> = {}) {
   const doc: Record<string, unknown> = {
     _id: "p1", userId: "owner-1", shareId: "share-1", isPublished: true,
-    recipientName: "Ishita", senderName: "Kabir", extras: { question: "Will you be mine, forever? 💍" }, reactions: {},
+    recipientName: "Ishita", senderName: "Kabir", extras: { question: "Will you be mine, forever? 💍", ...extras }, reactions: {},
   };
   const emails: Record<string, unknown>[] = [];
   const c = makeValentineDayController(slug, {
@@ -104,6 +104,44 @@ describe("valentine react beacon", () => {
     assert.equal(emails.length, 0);
   });
 
+  it("answer no: refused on a yes-only page (the default), nothing written", async () => {
+    const { c, doc, emails } = setup("dandiya-partner");
+    const r = await call(c.react, { event: "answered", answer: "no", noDodges: 4 });
+    assert.equal(r.status, 400);
+    await flush();
+    assert.equal((doc.reactions as Record<string, unknown>).answer, undefined);
+    assert.equal(emails.length, 0);
+    // An explicit yesOnly page refuses it too; a yes still lands.
+    const y = setup("dandiya-partner", { answerMode: "yesOnly" });
+    assert.equal((await call(y.c.react, { event: "answered", answer: "no" })).status, 400);
+    assert.equal((await call(y.c.react, { event: "answered", answer: "yes" })).json.recorded, true);
+  });
+
+  it("answer no on a noAfterTries page: recorded once, gentle email, and a later yes cannot flip it", async () => {
+    const { c, doc, emails } = setup("dandiya-partner", { answerMode: "noAfterTries", noTries: "5" });
+    assert.equal((await call(c.react, { event: "answered", answer: "no", noDodges: 5 })).json.recorded, true);
+    assert.equal((await call(c.react, { event: "answered", answer: "yes" })).json.recorded, false);
+    await flush();
+    const r = doc.reactions as Record<string, unknown>;
+    assert.equal(r.answer, "no");
+    assert.ok(r.answeredAt instanceof Date);
+    assert.equal(r.noDodges, 5);
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0].answer, "no");
+  });
+
+  it("first write wins the other way too: yes, then no changes nothing", async () => {
+    const { c, doc } = setup("dandiya-partner", { answerMode: "noAfterTries" });
+    assert.equal((await call(c.react, { event: "answered" })).json.recorded, true);
+    assert.equal((await call(c.react, { event: "answered", answer: "no" })).json.recorded, false);
+    assert.equal((doc.reactions as Record<string, unknown>).answer, "yes");
+  });
+
+  it("an unknown answer is a 400", async () => {
+    const { c } = setup("dandiya-partner", { answerMode: "noAfterTries" });
+    assert.equal((await call(c.react, { event: "answered", answer: "maybe" })).status, 400);
+  });
+
   it("the owner opening their own link is not a reaction", async () => {
     const { c, doc } = setup("happy-propose-day");
     const r = await call(c.react, { event: "opened" }, "owner-1");
@@ -117,5 +155,16 @@ describe("valentine react beacon", () => {
     assert.equal("reactions" in r.json, false);
     const shared = projectValentineShared({ a: 1, reactions: { answer: "yes" }, password: "h", passwordRaw: "p", userId: "owner-1" });
     assert.deepEqual(shared, { a: 1 });
+    // A stranger signed in as someone else gets the same.
+    assert.deepEqual(projectValentineShared({ a: 1, reactions: { answer: "no" }, userId: "owner-1" }, { viewerId: "someone" }), { a: 1 });
+  });
+
+  it("the signed-in owner gets an ownerView (answer + when), never the rest of the reactions", () => {
+    const at = new Date("2026-10-11T10:00:00Z");
+    const shared = projectValentineShared(
+      { a: 1, reactions: { answer: "no", answeredAt: at, noDodges: 4, reply: { text: "x" }, openedAt: at }, userId: "owner-1" },
+      { viewerId: "owner-1" },
+    );
+    assert.deepEqual(shared, { a: 1, ownerView: { openedAt: at, answer: "no", answeredAt: at, noDodges: 4 } });
   });
 });

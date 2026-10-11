@@ -1,10 +1,30 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { HALLOWEEN_SALE_SLUGS, SEASON_MODES, MIN_SALE_PERCENT, MAX_SALE_PERCENT, type SeasonMode } from "../config/seasonSale";
+import {
+  DROP_DEFAULTS,
+  DROP_IDS,
+  HALLOWEEN_SALE_SLUGS,
+  SEASON_MODES,
+  MIN_SALE_PERCENT,
+  MAX_SALE_PERCENT,
+  type DropId,
+  type SeasonDrop,
+  type SeasonMode,
+} from "../config/seasonSale";
 
 /**
  * The one row of season settings, upserted on `{ key: "global" }`: which
- * seasonal campaign the site shows (Valentine wishlist, Halloween drop, or
- * none) and whether the season's sale discounts real prices.
+ * seasonal campaign the site shows (Valentine wishlist, a drop season such as
+ * Halloween, Navratri Dandiya or Diwali, or none) and, per drop season, its sale.
+ *
+ * `drops.<id>` holds each season's settings. The flat `saleEnabled /
+ * salePercent / saleSlugs` fields predate it: they are the Halloween drop, read
+ * as such when `drops.halloween` is missing (config/seasonSale.ts
+ * `seasonFromRow`) and still mirrored on every write for older builds.
+ *
+ * `split` turns on different seasons for visitors in India and abroad
+ * (`modeIndia` / `modeAbroad`); while it is off `mode` applies to everyone.
+ * Rows from before the split have none of the three and read as split off with
+ * both sides at `mode` (`seasonFromRow`).
  *
  * No row means `defaultSeason()` in config/seasonSale.ts — Halloween with 49%
  * off — so a super admin turns the sale off by writing a row.
@@ -12,6 +32,10 @@ import { HALLOWEEN_SALE_SLUGS, SEASON_MODES, MIN_SALE_PERCENT, MAX_SALE_PERCENT,
 export interface ISeasonSettings extends Document {
   key: "global";
   mode: SeasonMode;
+  split?: boolean;
+  modeIndia?: SeasonMode;
+  modeAbroad?: SeasonMode;
+  drops?: Partial<Record<DropId, SeasonDrop>>;
   saleEnabled: boolean;
   salePercent: number;
   saleSlugs: string[];
@@ -19,10 +43,28 @@ export interface ISeasonSettings extends Document {
   updatedAt: Date;
 }
 
+const dropSchema = (id: DropId) =>
+  new Schema<SeasonDrop>(
+    {
+      saleEnabled: { type: Boolean, default: DROP_DEFAULTS[id].saleEnabled },
+      salePercent: { type: Number, default: DROP_DEFAULTS[id].salePercent, min: MIN_SALE_PERCENT, max: MAX_SALE_PERCENT },
+      saleSlugs: { type: [String], default: () => [...DROP_DEFAULTS[id].saleSlugs] },
+    },
+    { _id: false }
+  );
+
 const seasonSettingsSchema = new Schema<ISeasonSettings>(
   {
     key: { type: String, enum: ["global"], default: "global", unique: true },
     mode: { type: String, enum: SEASON_MODES as unknown as string[], default: "halloween" },
+    split: { type: Boolean, default: false },
+    modeIndia: { type: String, enum: SEASON_MODES as unknown as string[] },
+    modeAbroad: { type: String, enum: SEASON_MODES as unknown as string[] },
+    drops: {
+      type: new Schema(Object.fromEntries(DROP_IDS.map((id) => [id, { type: dropSchema(id) }])), { _id: false }),
+      default: undefined,
+    },
+    // Legacy mirror of drops.halloween — see above.
     saleEnabled: { type: Boolean, default: true },
     salePercent: { type: Number, default: 49, min: MIN_SALE_PERCENT, max: MAX_SALE_PERCENT },
     saleSlugs: { type: [String], default: () => [...HALLOWEEN_SALE_SLUGS] },

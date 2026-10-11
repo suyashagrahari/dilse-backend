@@ -62,7 +62,7 @@ beforeEach(() => {
 });
 
 test("no season row: the default 49% applies to the Halloween slugs only", async () => {
-  const map = await allPricing();
+  const map = await allPricing({ audience: "india" });
   assert.equal(map["happy-halloween"].finalPricePaise, 10100);
   assert.equal(map["happy-halloween"].discountPercent, 49);
   assert.equal(map["happy-halloween"].mrpPaise, 19900);
@@ -82,8 +82,8 @@ for (const country of ["IN", "US"]) {
     for (const slug of ["happy-halloween", "happy-halloween-premium", "holi"]) {
       const shown = await quoteFor(req(country), slug); // GET /payment/quote
       const charged = await quoteFor(req(country), slug, { fresh: true }); // createOrder
-      const gate = await getPricing(slug); // publish gate
-      const publicMap = (await allPricing())[slug]; // GET /payment/pricing
+      const gate = await getPricing(slug, country === "IN" ? "india" : "abroad"); // publish gate
+      const publicMap = (await allPricing({ audience: country === "IN" ? "india" : "abroad" }))[slug]; // GET /payment/pricing
       assert.equal(charged.pricing.finalAmount, shown.pricing.finalAmount, slug);
       assert.equal(charged.pricing.currency, shown.pricing.currency, slug);
       assert.equal(gate.finalPricePaise, charged.base.finalPricePaise, slug);
@@ -104,40 +104,95 @@ test("sale off or mode off: every read returns the stored price", async () => {
   ]) {
     seasonRow = row;
     invalidateSeasonCache();
-    assert.equal((await allPricing())["happy-halloween"].finalPricePaise, 19900);
-    assert.equal((await getPricingFresh("happy-halloween")).finalPricePaise, 19900);
-    assert.equal((await getPricing("happy-halloween-premium")).discountPercent, 0);
+    assert.equal((await allPricing({ audience: "india" }))["happy-halloween"].finalPricePaise, 19900);
+    assert.equal((await getPricingFresh("happy-halloween", "india")).finalPricePaise, 19900);
+    assert.equal((await getPricing("happy-halloween-premium", "india")).discountPercent, 0);
     assert.equal((await quoteFor(req("IN"), "happy-halloween", { fresh: true })).pricing.finalAmount, 19900);
   }
 });
 
-test("GET /season returns the public shape with a 15 s cache header", async () => {
+test("GET /season returns the public shape with a PRIVATE 15 s cache header", async () => {
   seasonRow = { mode: "halloween", saleEnabled: true, salePercent: 30, saleSlugs: ["happy-halloween"] };
   const { r, res } = fakeRes();
-  await getPublicSeason({} as Request, res);
-  assert.equal(r.headers["Cache-Control"], "public, max-age=15");
+  await getPublicSeason(req("IN"), res);
+  assert.equal(r.headers["Cache-Control"], "private, max-age=15");
   assert.deepEqual(r.body, {
     success: true,
-    data: { mode: "halloween", sale: { enabled: true, percent: 30, slugs: ["happy-halloween"] } },
+    data: {
+      mode: "halloween",
+      sale: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
+      audience: "india",
+      split: false,
+      audiences: { india: "halloween", abroad: "halloween" },
+      drops: {
+        halloween: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
+        dandiya: { enabled: true, percent: 30, slugs: ["dandiya-partner"] },
+        diwali: { enabled: true, percent: 30, slugs: ["happy-diwali"] },
+      },
+    },
   });
 });
 
 test("GET /season never errors: a failed read answers with the defaults", async () => {
   seasonThrows = true;
   const { r, res } = fakeRes();
-  await getPublicSeason({} as Request, res);
+  await getPublicSeason(req("US"), res);
   assert.equal(r.statusCode, 200);
-  assert.deepEqual((r.body as { data: unknown }).data, {
-    mode: "halloween",
-    sale: { enabled: true, percent: 49, slugs: ["happy-halloween", "happy-halloween-premium"] },
-  });
+  const data = (r.body as { data: { mode: string; sale: unknown } }).data;
+  assert.equal(data.mode, "halloween");
+  assert.deepEqual(data.sale, { enabled: true, percent: 49, slugs: ["happy-halloween", "happy-halloween-premium"] });
 });
 
 test("PUT /admin/super/season rejects invalid bodies with 400 INVALID_SEASON", async () => {
-  for (const body of [{}, { mode: "xmas" }, { saleEnabled: "no" }, { salePercent: 0 }, { salePercent: 91 }, { saleSlugs: [] }]) {
+  for (const body of [{}, { mode: "xmas" }, { saleEnabled: "no" }, { salePercent: 0 }, { salePercent: 91 }, { saleSlugs: [] }, { drops: { xmas: {} } }, { mode: "festive" }, { drops: { festive: { salePercent: 10 } } }]) {
     const { r, res } = fakeRes();
     await adminUpdateSeason({ body } as Request, res);
     assert.equal(r.statusCode, 400, JSON.stringify(body));
     assert.equal((r.body as { code: string }).code, "INVALID_SEASON");
   }
+});
+
+test("diwali mode: the Diwali drop is discounted on every read, Dandiya and Halloween are not", async () => {
+  ROWS.push({ slug: "happy-diwali", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  ROWS.push({ slug: "dandiya-partner", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  try {
+    seasonRow = { mode: "diwali", saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] };
+    invalidateSeasonCache();
+    const map = await allPricing({ audience: "india" });
+    assert.equal(map["happy-diwali"].finalPricePaise, 13900);
+    assert.equal(map["happy-diwali"].discountPercent, 30);
+    assert.equal(map["dandiya-partner"].finalPricePaise, 19900);
+    assert.equal(map["happy-halloween"].finalPricePaise, 19900);
+    assert.equal((await getPricingFresh("happy-diwali", "india")).finalPricePaise, 13900);
+    assert.equal((await quoteFor(req("IN"), "happy-diwali", { fresh: true })).pricing.finalAmount, 13900);
+  } finally {
+    ROWS.pop();
+    ROWS.pop();
+  }
+});
+
+test("dandiya mode: the Dandiya drop is discounted, Diwali is not", async () => {
+  ROWS.push({ slug: "happy-diwali", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  ROWS.push({ slug: "dandiya-partner", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  try {
+    seasonRow = { mode: "dandiya", drops: { dandiya: { saleEnabled: true, salePercent: 40, saleSlugs: ["dandiya-partner"] } } };
+    invalidateSeasonCache();
+    assert.equal((await getPricingFresh("dandiya-partner", "india")).finalPricePaise, 11900);
+    assert.equal((await getPricingFresh("happy-diwali", "india")).finalPricePaise, 19900);
+    assert.equal((await quoteFor(req("IN"), "dandiya-partner", { fresh: true })).pricing.finalAmount, 11900);
+  } finally {
+    ROWS.pop();
+    ROWS.pop();
+  }
+});
+
+test("a stored round-1 `festive` row is served as diwali", async () => {
+  seasonRow = { mode: "festive", drops: { festive: { saleEnabled: true, salePercent: 25, saleSlugs: ["dandiya-partner", "happy-diwali"] } } };
+  invalidateSeasonCache();
+  const { r, res } = fakeRes();
+  await getPublicSeason(req("IN"), res);
+  const data = (r.body as { data: { mode: string; sale: unknown; drops: Record<string, unknown> } }).data;
+  assert.equal(data.mode, "diwali");
+  assert.deepEqual(data.sale, { enabled: true, percent: 25, slugs: ["happy-diwali"] });
+  assert.equal("festive" in data.drops, false);
 });
