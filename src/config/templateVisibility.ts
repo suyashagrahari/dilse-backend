@@ -42,10 +42,11 @@
 //     reachable(slug) = live(slug) || slug ∈ activeDrop
 //                       may its builder open and may it be created/published?
 //
-// `activeDrop` is the season's `saleSlugs` while the mode is "halloween" (see
+// `activeDrop` is the active mode's drop slugs while the mode has a drop —
+// "halloween" or "festive" (see
 // `dropSlugs` in config/seasonSale.ts). That lets the owner hide a template
 // from the gallery in /admin/templates and still sell it through the drop on
-// /halloween-offer: hidden from listing, open to anyone who follows the drop.
+// /halloween-offer or /festive-offer: hidden from listing, open to anyone who follows the drop.
 // When the mode is "valentine" or "off" there is no drop and reachable == live.
 //
 // Per-user early-access grants sit on top of `reachable`, in
@@ -101,6 +102,10 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-valentines-day",
   // Halloween ships hidden the same way; released in /admin/templates.
   "happy-halloween",
+  // Be My Dandiya Partner (Navratri) ships hidden the same way.
+  "dandiya-partner",
+  // Diwali ships hidden the same way.
+  "happy-diwali",
   // The ultra-premium tier ships hidden too; each twin is released on its own.
   "happy-rose-day-premium",
   "happy-propose-day-premium",

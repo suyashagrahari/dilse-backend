@@ -39,6 +39,10 @@ export const BASE_DAY_SLUGS = [
   "happy-valentines-day",
   // Not a Valentine day: an occasion that runs on the same engine (9th entry).
   "happy-halloween",
+  // Navratri: "Be My Dandiya Partner", a Dandiya-night invitation on the same engine.
+  "dandiya-partner",
+  // Diwali wishes — another occasion on the engine.
+  "happy-diwali",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -363,6 +367,54 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "potionSpell", kind: "text", max: 90 },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
+    ],
+  },
+
+  // ── Navratri ── Be My Dandiya Partner: an embroidered invitation, nine
+  //    diyas, a dhol-beat game, pick your twirl colour, the garba circle of
+  //    photos, a note in the dupatta, the invitation ticket and "Will you be
+  //    my Dandiya partner?" ──────────────────────────────────────────────────
+  "dandiya-partner": {
+    title: "Be My Dandiya Partner",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    gifSlots: ["d1-gate", "d2-beat", "d3-garba", "d4-invite", "d5-yes"],
+    extras: [
+      /** Who it's for — changes the default question, the pass and the reply. */
+      { key: "tone", kind: "enum", options: ["romantic", "crush", "friends"], default: "romantic" },
+      { key: "openingLine", kind: "text", max: 60 },
+      { key: "nightLines", kind: "list", maxItems: 9, itemMax: 70 },
+      { key: "myColor", kind: "enum", options: ["marigold", "kumkum", "peacock", "emerald", "rani", "jamuni"], default: "peacock" },
+      { key: "lookLine", kind: "text", max: 70 },
+      { key: "eventDate", kind: "text", max: 10 },
+      { key: "eventTime", kind: "text", max: 24 },
+      { key: "venue", kind: "text", max: 60 },
+      { key: "dressCode", kind: "text", max: 50 },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+    ],
+  },
+  // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
+  //    diyas, a rangoli, a sparkler, lantern photos, fireworks + the letter,
+  //    a mithai box and a Shubh Deepavali card. No question is asked. ───────
+  "happy-diwali": {
+    title: "A Diya at Your Door",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: false,
+    gifSlots: ["d1-diya", "d2-wishes", "d3-rangoli", "d4-sparkler", "d5-blessing"],
+    extras: [
+      /** Who it's for — changes the default wishes, blessing and reply. */
+      { key: "tone", kind: "enum", options: ["romantic", "family", "friends"], default: "romantic" },
+      { key: "doorNote", kind: "text", max: 60 },
+      /** One line per diya they light (3–5). */
+      { key: "wishes", kind: "list", maxItems: 5, minItems: 3, itemMax: 70 },
+      { key: "initials", kind: "text", max: 6 },
+      { key: "sparkleWord", kind: "text", max: 12 },
+      { key: "mithai", kind: "enum", options: ["laddoo", "kaju-katli", "jalebi", "gulab-jamun", "barfi"], default: "laddoo" },
+      { key: "mithaiNote", kind: "text", max: 80 },
+      { key: "blessing", kind: "text", max: 120 },
     ],
   },
 
