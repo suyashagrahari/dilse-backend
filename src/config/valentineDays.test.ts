@@ -102,6 +102,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-kiss-day": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
   "happy-valentines-day": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
+  "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -130,9 +131,9 @@ const PINNED_PREMIUM_GIFS: Record<PremiumDaySlug, string[]> = {
 describe("Valentine's week day configs", () => {
   it("has exactly the eight days + Halloween + their nine premium twins, each pinned", () => {
     assert.deepEqual([...VALENTINE_DAY_SLUGS].sort(), Object.keys(PINNED_KEYS).sort());
-    assert.equal(VALENTINE_DAY_SLUGS.length, 18);
-    assert.deepEqual([...VALENTINE_DAY_SLUGS.slice(0, 9)], [...BASE_DAY_SLUGS]);
-    assert.deepEqual([...VALENTINE_DAY_SLUGS.slice(9)], [...PREMIUM_DAY_SLUGS]);
+    assert.equal(VALENTINE_DAY_SLUGS.length, BASE_DAY_SLUGS.length + PREMIUM_DAY_SLUGS.length);
+    assert.deepEqual([...VALENTINE_DAY_SLUGS.slice(0, BASE_DAY_SLUGS.length)], [...BASE_DAY_SLUGS]);
+    assert.deepEqual([...VALENTINE_DAY_SLUGS.slice(BASE_DAY_SLUGS.length)], [...PREMIUM_DAY_SLUGS]);
     for (const slug of VALENTINE_DAY_SLUGS) {
       assert.deepEqual(VALENTINE_DAYS[slug].extras.map((f) => f.key), PINNED_KEYS[slug], slug);
     }
@@ -182,6 +183,24 @@ describe("Valentine's week day configs", () => {
     assert.equal((ings[0].line as string).length, 70);
     assert.equal("evil" in ings[0], false);
     assert.equal(sanitizeExtras("happy-halloween", { tone: "kids", costume: "black-cat" }).costume, "black-cat");
+  });
+
+  it("Diwali: tone and mithai fall back to their defaults; wishes are trimmed and capped at five", () => {
+    const out = sanitizeExtras("happy-diwali", {
+      tone: "spooky",
+      mithai: "cake",
+      initials: "  ABCDEFGH ",
+      wishes: ["  one ", "", "x".repeat(200), "four", "five", "six", "seven"],
+    });
+    assert.equal(out.tone, "romantic");
+    assert.equal(out.mithai, "laddoo");
+    assert.equal(out.initials, "ABCDEF");
+    const wishes = out.wishes as string[];
+    assert.equal(wishes.length, 5);
+    assert.equal(wishes[0], "one");
+    assert.equal(wishes[1].length, 70);
+    assert.equal(VALENTINE_DAYS["happy-diwali"].asksQuestion, false);
+    assert.equal(sanitizeExtras("happy-diwali", { mithai: "kaju-katli", tone: "family" }).mithai, "kaju-katli");
   });
 });
 

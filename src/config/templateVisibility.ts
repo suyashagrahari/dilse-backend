@@ -101,6 +101,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-valentines-day",
   // Halloween ships hidden the same way; released in /admin/templates.
   "happy-halloween",
+  // Diwali ships hidden the same way.
+  "happy-diwali",
   // The ultra-premium tier ships hidden too; each twin is released on its own.
   "happy-rose-day-premium",
   "happy-propose-day-premium",
