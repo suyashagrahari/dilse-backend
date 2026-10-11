@@ -148,6 +148,8 @@ router.use("/happy-valentines-day-pages", makeValentineDayRouter("happy-valentin
 router.use("/happy-halloween-pages", makeValentineDayRouter("happy-halloween"));
 // Be My Dandiya Partner (Navratri) — the same engine.
 router.use("/dandiya-partner-pages", makeValentineDayRouter("dandiya-partner"));
+// Happy Diwali — the same engine.
+router.use("/happy-diwali-pages", makeValentineDayRouter("happy-diwali"));
 // The ultra-premium tier: a twin of each day on the same engine (+ voice note, unlock, reply).
 router.use("/happy-rose-day-premium-pages", makeValentineDayRouter("happy-rose-day-premium"));
 router.use("/happy-propose-day-premium-pages", makeValentineDayRouter("happy-propose-day-premium"));

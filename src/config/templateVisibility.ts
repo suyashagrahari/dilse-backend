@@ -104,6 +104,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "happy-halloween",
   // Be My Dandiya Partner (Navratri) ships hidden the same way.
   "dandiya-partner",
+  // Diwali ships hidden the same way.
+  "happy-diwali",
   // The ultra-premium tier ships hidden too; each twin is released on its own.
   "happy-rose-day-premium",
   "happy-propose-day-premium",

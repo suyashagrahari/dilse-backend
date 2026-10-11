@@ -103,6 +103,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-valentines-day": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
   "dandiya-partner": ["tone", "openingLine", "nightLines", "myColor", "lookLine", "eventDate", "eventTime", "venue", "dressCode", "question", "yesLine"],
+  "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -183,6 +184,24 @@ describe("Valentine's week day configs", () => {
     assert.equal((ings[0].line as string).length, 70);
     assert.equal("evil" in ings[0], false);
     assert.equal(sanitizeExtras("happy-halloween", { tone: "kids", costume: "black-cat" }).costume, "black-cat");
+  });
+
+  it("Diwali: tone and mithai fall back to their defaults; wishes are trimmed and capped at five", () => {
+    const out = sanitizeExtras("happy-diwali", {
+      tone: "spooky",
+      mithai: "cake",
+      initials: "  ABCDEFGH ",
+      wishes: ["  one ", "", "x".repeat(200), "four", "five", "six", "seven"],
+    });
+    assert.equal(out.tone, "romantic");
+    assert.equal(out.mithai, "laddoo");
+    assert.equal(out.initials, "ABCDEF");
+    const wishes = out.wishes as string[];
+    assert.equal(wishes.length, 5);
+    assert.equal(wishes[0], "one");
+    assert.equal(wishes[1].length, 70);
+    assert.equal(VALENTINE_DAYS["happy-diwali"].asksQuestion, false);
+    assert.equal(sanitizeExtras("happy-diwali", { mithai: "kaju-katli", tone: "family" }).mithai, "kaju-katli");
   });
 });
 
