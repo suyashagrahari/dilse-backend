@@ -28,6 +28,8 @@ import {
   cleanReplyText,
   isPremiumDaySlug,
   isPremiumLocked,
+  answerAllows,
+  parseAnswer,
   reactionWrite,
   replyWrite,
   sanitizeExtras,
@@ -88,7 +90,7 @@ type DayBody = {
 export type ReactionsView = {
   openedAt: Date | null;
   completedAt: Date | null;
-  answer: "yes" | null;
+  answer: "yes" | "no" | null;
   answeredAt: Date | null;
   noDodges: number | null;
   count: number | null;
@@ -114,10 +116,13 @@ export function projectValentineShared(
   opts: { now?: Date; viewerId?: string | null } = {}
 ): Record<string, unknown> {
   const { reactions, password: _pw, passwordRaw: _pr, userId, ...rest } = data;
-  if (!isPremiumDaySlug(rest.day)) return rest;
+  const isOwner = !!opts.viewerId && userId != null && String(userId) === String(opts.viewerId);
+  // The signed-in sender opening their own link sees how it went (an owner
+  // banner on the page). Never present for anyone else.
+  const owner = isOwner ? { ownerView: ownerViewOf(reactions) } : {};
+  if (!isPremiumDaySlug(rest.day)) return { ...rest, ...owner };
 
   const premium = (rest.premium ?? {}) as Partial<PremiumFields>;
-  const isOwner = !!opts.viewerId && userId != null && String(userId) === String(opts.viewerId);
   if (!isOwner && isPremiumLocked(premium, opts.now ?? new Date())) {
     return {
       _id: rest._id,
@@ -133,7 +138,23 @@ export function projectValentineShared(
     };
   }
   const reply = (reactions as { reply?: unknown } | undefined)?.reply;
-  return { ...rest, locked: false, replySent: !!(reply && typeof reply === "object") };
+  return { ...rest, ...owner, locked: false, replySent: !!(reply && typeof reply === "object") };
+}
+
+/** The owner banner's slice of the reactions: seen / answered (yes or no) and when. */
+export function ownerViewOf(reactions: unknown): {
+  openedAt: Date | null;
+  answer: "yes" | "no" | null;
+  answeredAt: Date | null;
+  noDodges: number | null;
+} {
+  const r = reactions && typeof reactions === "object" ? (reactions as Record<string, unknown>) : {};
+  return {
+    openedAt: (r.openedAt as Date) ?? null,
+    answer: r.answer === "yes" || r.answer === "no" ? r.answer : null,
+    answeredAt: (r.answeredAt as Date) ?? null,
+    noDodges: typeof r.noDodges === "number" ? r.noDodges : null,
+  };
 }
 
 /** Injected in tests; the defaults are the real things. */
@@ -213,7 +234,7 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
     const view: ReactionsView = {
       openedAt: (r.openedAt as Date) ?? null,
       completedAt: (r.completedAt as Date) ?? null,
-      answer: r.answer === "yes" ? "yes" : null,
+      answer: r.answer === "yes" || r.answer === "no" ? r.answer : null,
       answeredAt: (r.answeredAt as Date) ?? null,
       noDodges: typeof r.noDodges === "number" ? r.noDodges : null,
       count: typeof r.count === "number" ? r.count : null,
@@ -394,7 +415,11 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
    * POST /share/:shareId/react — the recipient's beacon. Public, published
    * pages only, rate-limited at the route.
    *
-   * Body: `{ event: "opened" | "completed" | "answered", noDodges?, count? }`.
+   * Body: `{ event: "opened" | "completed" | "answered", noDodges?, count?, answer? }`.
+   * `answer` is "yes" (the default — every older client) or "no"; a "no" is
+   * refused (400) unless the sender chose "Yes or No" (extras.answerMode
+   * "noAfterTries"). Yes and no share ONE first-wins slot: whichever lands
+   * first is the answer.
    * Every event is first-wins (see reactionWrite): the atomic update only
    * matches while that event's field is still unset, so replays, a second tab or
    * a forwarded link change nothing. An "answered" that actually lands emails
@@ -414,6 +439,11 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
         res.status(400).json({ success: false, error: "Unknown event" });
         return;
       }
+      const answer = event === "answered" ? parseAnswer(req.body?.answer) : "yes";
+      if (!answer) {
+        res.status(400).json({ success: false, error: "Unknown answer" });
+        return;
+      }
       const shareId = String(req.params.shareId || "");
       const page = await Model.findOne({ shareId, isPublished: true }).select("userId shareId recipientName senderName extras");
       if (!page) { res.status(404).json({ success: false, error: "Page not found" }); return; }
@@ -422,7 +452,12 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
         return;
       }
 
-      const { guard, set } = reactionWrite(event, req.body ?? {}, new Date());
+      if (event === "answered" && !answerAllows(page.extras, answer)) {
+        res.status(400).json({ success: false, error: "This page only takes a yes" });
+        return;
+      }
+
+      const { guard, set } = reactionWrite(event, { ...(req.body ?? {}), answer }, new Date());
       const result = await Model.updateOne({ _id: page._id, isPublished: true, ...guard }, { $set: set });
       const recorded = (result?.modifiedCount ?? 0) > 0;
 
@@ -440,6 +475,7 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
               dayName: DAY_NAMES[slug],
               slug,
               question: typeof extras.question === "string" ? extras.question : "",
+              answer,
               noDodges: typeof set["reactions.noDodges"] === "number" ? (set["reactions.noDodges"] as number) : 0,
               link: await shareUrlFor(page.shareId, String(page.userId)),
             });

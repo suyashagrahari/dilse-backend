@@ -43,10 +43,10 @@
 //                       may its builder open and may it be created/published?
 //
 // `activeDrop` is the active mode's drop slugs while the mode has a drop —
-// "halloween" or "festive" (see
+// "halloween", "dandiya" or "diwali" (see
 // `dropSlugs` in config/seasonSale.ts). That lets the owner hide a template
 // from the gallery in /admin/templates and still sell it through the drop on
-// /halloween-offer or /festive-offer: hidden from listing, open to anyone who follows the drop.
+// /halloween-offer, /dandiya-offer or /diwali-offer: hidden from listing, open to anyone who follows the drop.
 // When the mode is "valentine" or "off" there is no drop and reachable == live.
 //
 // Per-user early-access grants sit on top of `reachable`, in

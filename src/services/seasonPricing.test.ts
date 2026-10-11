@@ -123,7 +123,8 @@ test("GET /season returns the public shape with a 15 s cache header", async () =
       sale: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
       drops: {
         halloween: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
-        festive: { enabled: true, percent: 30, slugs: ["dandiya-partner", "happy-diwali"] },
+        dandiya: { enabled: true, percent: 30, slugs: ["dandiya-partner"] },
+        diwali: { enabled: true, percent: 30, slugs: ["happy-diwali"] },
       },
     },
   });
@@ -140,7 +141,7 @@ test("GET /season never errors: a failed read answers with the defaults", async 
 });
 
 test("PUT /admin/super/season rejects invalid bodies with 400 INVALID_SEASON", async () => {
-  for (const body of [{}, { mode: "xmas" }, { saleEnabled: "no" }, { salePercent: 0 }, { salePercent: 91 }, { saleSlugs: [] }, { drops: { xmas: {} } }]) {
+  for (const body of [{}, { mode: "xmas" }, { saleEnabled: "no" }, { salePercent: 0 }, { salePercent: 91 }, { saleSlugs: [] }, { drops: { xmas: {} } }, { mode: "festive" }, { drops: { festive: { salePercent: 10 } } }]) {
     const { r, res } = fakeRes();
     await adminUpdateSeason({ body } as Request, res);
     assert.equal(r.statusCode, 400, JSON.stringify(body));
@@ -148,17 +149,47 @@ test("PUT /admin/super/season rejects invalid bodies with 400 INVALID_SEASON", a
   }
 });
 
-test("festive mode: the festive drop is discounted on every read, Halloween is not", async () => {
+test("diwali mode: the Diwali drop is discounted on every read, Dandiya and Halloween are not", async () => {
   ROWS.push({ slug: "happy-diwali", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  ROWS.push({ slug: "dandiya-partner", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
   try {
-    seasonRow = { mode: "festive", saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] };
+    seasonRow = { mode: "diwali", saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] };
+    invalidateSeasonCache();
     const map = await allPricing();
     assert.equal(map["happy-diwali"].finalPricePaise, 13900);
     assert.equal(map["happy-diwali"].discountPercent, 30);
+    assert.equal(map["dandiya-partner"].finalPricePaise, 19900);
     assert.equal(map["happy-halloween"].finalPricePaise, 19900);
     assert.equal((await getPricingFresh("happy-diwali")).finalPricePaise, 13900);
     assert.equal((await quoteFor(req("IN"), "happy-diwali", { fresh: true })).pricing.finalAmount, 13900);
   } finally {
     ROWS.pop();
+    ROWS.pop();
   }
+});
+
+test("dandiya mode: the Dandiya drop is discounted, Diwali is not", async () => {
+  ROWS.push({ slug: "happy-diwali", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  ROWS.push({ slug: "dandiya-partner", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  try {
+    seasonRow = { mode: "dandiya", drops: { dandiya: { saleEnabled: true, salePercent: 40, saleSlugs: ["dandiya-partner"] } } };
+    invalidateSeasonCache();
+    assert.equal((await getPricingFresh("dandiya-partner")).finalPricePaise, 11900);
+    assert.equal((await getPricingFresh("happy-diwali")).finalPricePaise, 19900);
+    assert.equal((await quoteFor(req("IN"), "dandiya-partner", { fresh: true })).pricing.finalAmount, 11900);
+  } finally {
+    ROWS.pop();
+    ROWS.pop();
+  }
+});
+
+test("a stored round-1 `festive` row is served as diwali", async () => {
+  seasonRow = { mode: "festive", drops: { festive: { saleEnabled: true, salePercent: 25, saleSlugs: ["dandiya-partner", "happy-diwali"] } } };
+  invalidateSeasonCache();
+  const { r, res } = fakeRes();
+  await getPublicSeason({} as Request, res);
+  const data = (r.body as { data: { mode: string; sale: unknown; drops: Record<string, unknown> } }).data;
+  assert.equal(data.mode, "diwali");
+  assert.deepEqual(data.sale, { enabled: true, percent: 25, slugs: ["happy-diwali"] });
+  assert.equal("festive" in data.drops, false);
 });

@@ -9,16 +9,17 @@ import { VW_FORBIDDEN, VW_LANGUAGE, VW_TONE, valentineCommon } from "./valentine
  *
  * The demo seeds 4 photos and 9 night lines. `tone` is declared as an enum on
  * purpose (who the invitation is for is something a story DOES say, and it
- * changes the question). Not declared: myColor (a pure visual choice) and
+ * changes the question). Not declared: myColor (a pure visual choice),
  * eventDate (the sender picks a date; a story rarely names one and the model
- * cannot know the year). Venue, time and dress code are declared but must come
+ * cannot know the year), and answerMode / noTries (whether a No is allowed is
+ * the sender's own decision in the form, never something to infer). Venue, time and dress code are declared but must come
  * from the story or stay empty — see their guides.
  */
 export const dandiyaPartner: AiFillTemplateSchema = {
   slug: "dandiya-partner",
   audience: "partner",
   premise:
-    "A Navratri invitation page that asks someone to be the sender's Dandiya partner. The recipient opens an embroidered envelope by clashing a pair of dandiya sticks, lights nine diyas (one line from the sender under each, one per night of Navratri), plays a short dhol-beat game, picks the colour they will dance in and sees the sender's colour beside it, watches their photos dance round a garba circle, reads the sender's note, sees an invitation ticket with the night's details, and finally answers a question while the No button twirls away. It ends on a 'Dandiya Pass'. Usually for a partner or a crush, sometimes a best friend as a garba buddy — follow the story. Festive, cute, romantic, never religiously preachy." +
+    "A Navratri invitation page that asks someone to be the sender's Dandiya partner. The recipient opens an embroidered envelope by clashing a pair of dandiya sticks, lights nine diyas (one line from the sender under each, one per night of Navratri), plays a short dhol-beat game, picks the colour they will dance in and sees the sender's colour beside it, watches their photos dance round a garba circle, reads the sender's note, sees an invitation ticket with the night's details, and finally answers a question while the No button twirls away (the sender decides in the form whether a No can ever be pressed). It ends on a 'Dandiya Pass'. Usually for a partner or a crush, sometimes a best friend as a garba buddy — follow the story. Festive, cute, romantic, never religiously preachy." +
     VW_LANGUAGE,
   fields: [
     ...valentineCommon({

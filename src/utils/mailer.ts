@@ -453,9 +453,11 @@ export async function sendDateRsvpEmail(opts: {
 
 /**
  * A Valentine's-week question was answered (Propose Day, Valentine's Day).
- * Goes to the page owner — modelled on sendDateRsvpEmail. Only ever "yes": the
- * "No" button runs away, so there is no other answer to report. Fired once per
- * page (the react beacon is first-wins), never blocks the recipient.
+ * Goes to the page owner — modelled on sendDateRsvpEmail. Usually "yes" (the
+ * "No" button runs away); a page whose sender chose "Yes or No" can also
+ * record a "no", which gets a gentle, kind note instead. Fired once per page
+ * (the react beacon is first-wins: yes and no share one slot), never blocks
+ * the recipient.
  */
 export async function sendValentineAnswerEmail(opts: {
   to: string;
@@ -469,6 +471,8 @@ export async function sendValentineAnswerEmail(opts: {
   link: string;
   /** The template — Halloween gets its own "boo" wording and night palette. */
   slug?: string;
+  /** Default "yes". */
+  answer?: "yes" | "no";
 }): Promise<void> {
   // The names and question are the page owner's free text and the name lands in
   // the subject line: fold line breaks / control characters to a space.
@@ -490,9 +494,14 @@ export async function sendValentineAnswerEmail(opts: {
     : opts.noDodges > 0
       ? ` After chasing the "No" button ${times(opts.noDodges)} 😄`
       : " First try, no hesitation.";
-  const subject = halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
-  const head = halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
-  const body = `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
+  const no = opts.answer === "no";
+  const subject = no
+    ? `${who} answered your ${opts.dayName} page`
+    : halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
+  const head = no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
+  const body = no
+    ? `${question ? `“${question}” — ` : ""}${who} opened your ${opts.dayName} page, saw everything you made, and chose “no” this time. It takes courage to ask, and your page was still a gift. 🪔`
+    : `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
   const band = halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
   const pageBg = halloween ? "#17122b" : "#1e0f24";
   const cardBg = halloween ? "#251842" : "#2a1240";

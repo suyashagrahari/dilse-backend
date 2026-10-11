@@ -419,7 +419,18 @@ export const CREATION_FIELDS = [
   "createdAt",
   "updatedAt",
   "+passwordRaw",
+  // The question days (Valentine engine): "Said YES 💛" / "Said no 💔" on the
+  // row. Two scalars; every other collection simply has no such path.
+  "reactions.answer",
+  "reactions.answeredAt",
 ].join(" ");
+
+/** A row's answer, only when the page recorded one (absent keys otherwise). */
+export function answerOfRow(obj: Record<string, unknown>): { answer?: "yes" | "no"; answeredAt?: unknown } {
+  const r = obj.reactions && typeof obj.reactions === "object" ? (obj.reactions as Record<string, unknown>) : null;
+  if (!r || (r.answer !== "yes" && r.answer !== "no")) return {};
+  return { answer: r.answer, answeredAt: r.answeredAt ?? null };
+}
 
 export const getMyCreations = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -470,6 +481,7 @@ export const getMyCreations = async (req: Request, res: Response): Promise<void>
           installCount: (obj.installCount as number) || 0,
           updatedAt: obj.updatedAt,
           createdAt: obj.createdAt,
+          ...answerOfRow(obj),
         }));
       })
     );

@@ -9,6 +9,8 @@ import {
   baseDaySlug,
   isPremiumDaySlug,
   reactionWrite,
+  parseAnswer,
+  answerAllows,
   type PremiumDaySlug,
   sanitizeExtras,
   sanitizeGifSlots,
@@ -102,7 +104,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-kiss-day": ["kissStyle", "lipShade", "openingLine", "kissTarget", "kissNotes", "coupons", "kissBackText"],
   "happy-valentines-day": ["ticketLine", "weekLines", "togetherSince", "stats", "metPlace", "question", "noLines", "datePlan", "ps"],
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
-  "dandiya-partner": ["tone", "openingLine", "nightLines", "myColor", "lookLine", "eventDate", "eventTime", "venue", "dressCode", "question", "yesLine"],
+  "dandiya-partner": ["tone", "openingLine", "nightLines", "myColor", "lookLine", "eventDate", "eventTime", "venue", "dressCode", "question", "yesLine", "answerMode", "noTries"],
   "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -326,6 +328,32 @@ describe("reactionWrite", () => {
     });
     assert.equal(reactionWrite("answered", { noDodges: 1e9 }, now).set["reactions.noDodges"], 999);
     assert.equal("reactions.noDodges" in reactionWrite("answered", { noDodges: "x" }, now).set, false);
+  });
+
+  it("answered writes no only when asked to; anything else is yes", () => {
+    assert.equal(reactionWrite("answered", { answer: "no" }, now).set["reactions.answer"], "no");
+    assert.equal(reactionWrite("answered", { answer: "yes" }, now).set["reactions.answer"], "yes");
+    assert.equal(reactionWrite("answered", { answer: "NO!" }, now).set["reactions.answer"], "yes");
+  });
+
+  it("parseAnswer / answerAllows: no needs the sender's noAfterTries", () => {
+    assert.equal(parseAnswer(undefined), "yes");
+    assert.equal(parseAnswer("no"), "no");
+    assert.equal(parseAnswer("maybe"), undefined);
+    assert.equal(answerAllows({}, "no"), false);
+    assert.equal(answerAllows({ answerMode: "yesOnly" }, "no"), false);
+    assert.equal(answerAllows({ answerMode: "noAfterTries" }, "no"), true);
+    assert.equal(answerAllows(null, "yes"), true);
+  });
+
+  it("dandiya answer settings sanitize to the two modes and 4/5 tries", () => {
+    assert.deepEqual(
+      (({ answerMode, noTries }) => ({ answerMode, noTries }))(sanitizeExtras("dandiya-partner", { answerMode: "maybe", noTries: "9" })),
+      { answerMode: "yesOnly", noTries: "4" },
+    );
+    const ok = sanitizeExtras("dandiya-partner", { answerMode: "noAfterTries", noTries: "5" });
+    assert.equal(ok.answerMode, "noAfterTries");
+    assert.equal(ok.noTries, "5");
   });
 
   it("never touches another event's field", () => {

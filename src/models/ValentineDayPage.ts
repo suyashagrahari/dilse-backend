@@ -35,7 +35,7 @@ import {
 export interface IValentineReactions {
   openedAt?: Date | null;
   completedAt?: Date | null;
-  answer?: "yes" | null;
+  answer?: "yes" | "no" | null;
   answeredAt?: Date | null;
   noDodges?: number | null;
   count?: number | null;
@@ -92,7 +92,7 @@ const reactionsSchema = new Schema<IValentineReactions>(
   {
     openedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
-    answer: { type: String, enum: ["yes", null], default: null },
+    answer: { type: String, enum: ["yes", "no", null], default: null },
     answeredAt: { type: Date, default: null },
     noDodges: { type: Number, default: null, min: 0, max: VW_LIMITS.maxNoDodges },
     count: { type: Number, default: null, min: 0, max: VW_LIMITS.maxCount },
