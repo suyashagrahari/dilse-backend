@@ -1,18 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { derivePricing, freePricing, MIN_USD_CENTS } from "./pricingMath";
-import { applySeasonSale, defaultSeason, salePercentFor, validateSeasonPatch, type SeasonView } from "./seasonSale";
+import {
+  applySeasonSale,
+  defaultSeason,
+  salePercentFor,
+  validateSeasonPatch,
+  type SeasonDrop,
+  type SeasonMode,
+  type SeasonView,
+} from "./seasonSale";
 
 const priced = (slug: string, finalPricePaise: number, usdPriceCents: number | null = null, discountPercent = 0) =>
   derivePricing({ slug, isFree: false, finalPricePaise, discountPercent, pointsCost: 40, usdPriceCents });
-const season = (over: Partial<SeasonView> = {}): SeasonView => ({ ...defaultSeason(), ...over });
+const season = ({ mode = "halloween", ...drop }: Partial<SeasonDrop & { mode: SeasonMode }> = {}): SeasonView => {
+  const d = defaultSeason();
+  return { mode, drops: { ...d.drops, halloween: { ...d.drops.halloween, ...drop } } };
+};
 
 test("the default season is Halloween at 49% off the two Halloween slugs", () => {
   const d = defaultSeason();
   assert.equal(d.mode, "halloween");
-  assert.equal(d.saleEnabled, true);
-  assert.equal(d.salePercent, 49);
-  assert.deepEqual(d.saleSlugs, ["happy-halloween", "happy-halloween-premium"]);
+  assert.deepEqual(d.drops.halloween, { saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] });
+  assert.deepEqual(d.drops.festive, { saleEnabled: true, salePercent: 30, saleSlugs: ["dandiya-partner", "happy-diwali"] });
 });
 
 test("₹199 at 49% off charges ₹101 (whole rupees) and strikes ₹199 through", () => {
@@ -81,11 +91,16 @@ test("an out-of-range percent in a hand-edited row discounts nothing", () => {
 
 test("validateSeasonPatch accepts each field alone", () => {
   assert.deepEqual(validateSeasonPatch({ mode: "valentine" }), { ok: true, value: { mode: "valentine" } });
-  assert.deepEqual(validateSeasonPatch({ saleEnabled: false }), { ok: true, value: { saleEnabled: false } });
-  assert.deepEqual(validateSeasonPatch({ salePercent: 90 }), { ok: true, value: { salePercent: 90 } });
+  assert.deepEqual(validateSeasonPatch({ mode: "festive" }), { ok: true, value: { mode: "festive" } });
+  assert.deepEqual(validateSeasonPatch({ saleEnabled: false }), { ok: true, value: { flat: { saleEnabled: false } } });
+  assert.deepEqual(validateSeasonPatch({ salePercent: 90 }), { ok: true, value: { flat: { salePercent: 90 } } });
   assert.deepEqual(validateSeasonPatch({ saleSlugs: ["happy-halloween", "happy-halloween"] }), {
     ok: true,
-    value: { saleSlugs: ["happy-halloween"] },
+    value: { flat: { saleSlugs: ["happy-halloween"] } },
+  });
+  assert.deepEqual(validateSeasonPatch({ drops: { festive: { salePercent: 25, saleSlugs: ["happy-diwali"] } } }), {
+    ok: true,
+    value: { drops: { festive: { salePercent: 25, saleSlugs: ["happy-diwali"] } } },
   });
 });
 
@@ -107,6 +122,15 @@ test("validateSeasonPatch rejects bad input", () => {
     { saleSlugs: "happy-halloween" },
     { saleSlugs: ["Happy-Halloween"] },
     { saleSlugs: [1] },
+    { drops: [] },
+    { drops: "festive" },
+    { drops: { christmas: { salePercent: 10 } } },
+    { drops: { valentine: { salePercent: 10 } } },
+    { drops: { festive: { salePercent: 0 } } },
+    { drops: { festive: { saleEnabled: "yes" } } },
+    { drops: { festive: { saleSlugs: [] } } },
+    { drops: { festive: null } },
+    { drops: { festive: {} } },
   ];
   for (const b of bad) assert.equal(validateSeasonPatch(b).ok, false, `accepted ${JSON.stringify(b)}`);
 });
