@@ -30,9 +30,37 @@
 // staging writes `live: true` there and this list stops mattering for that
 // deployment. That is the intended workflow: ship hidden, switch on per
 // environment when it is ready.
+//
+// ── LIVE IS NOT THE SAME AS REACHABLE ───────────────────────────────────────
+//
+// Two questions, two functions, and they must not be conflated:
+//
+//     live(slug)      = the rule above — is it LISTED in the general gallery
+//                       (/templates, home carousels, search, sitemap, promos)?
+//                       `hiddenSlugs()` is the complement, for those filters.
+//
+//     reachable(slug) = live(slug) || slug ∈ activeDrop
+//                       may its builder open and may it be created/published?
+//
+// `activeDrop` is the season's `saleSlugs` while the mode is "halloween" (see
+// `dropSlugs` in config/seasonSale.ts). That lets the owner hide a template
+// from the gallery in /admin/templates and still sell it through the drop on
+// /halloween-offer: hidden from listing, open to anyone who follows the drop.
+// When the mode is "valentine" or "off" there is no drop and reachable == live.
+//
+// Per-user early-access grants sit on top of `reachable`, in
+// config/templateAccess.ts (`canUseTemplate`) — a private fact, kept out of
+// this public module on purpose.
+//
+// Caching: `live` is cached here (invalidated by the visibility admin writes);
+// the drop half reads `getSeasonSettings()`, whose cache the season PUT clears.
+// Nothing new is cached for reachability itself, so there is no third cache to
+// forget to invalidate.
 
 import TemplateVisibility from "../models/TemplateVisibility";
 import { isApexDeployment } from "./env";
+import { isInDrop, type SeasonView } from "./seasonSale";
+import { getSeasonSettings } from "../services/seasonSettings.service";
 
 /**
  * Templates that stay hidden until an admin turns them on, per deployment.
@@ -140,6 +168,28 @@ export async function isTemplateLive(slug: string): Promise<boolean> {
   const map = await rows();
   const row = map.get(slug.toLowerCase());
   return row === undefined ? defaultLive(slug) : row;
+}
+
+/**
+ * The pure reachability rule — `live || inDrop` — split out so it can be tested
+ * without a database. See the header note.
+ */
+export function reachableFrom(slug: string, live: boolean, season: SeasonView | null | undefined): boolean {
+  if (!slug) return false;
+  return live || isInDrop(slug, season);
+}
+
+/**
+ * May this template's builder open and its pages be created and published,
+ * for everybody? True when it is live in the gallery OR in the active drop.
+ * Use this, never `isTemplateLive`, for access guards; `isTemplateLive` and
+ * `hiddenSlugs` are for LISTING only.
+ */
+export async function isTemplateReachable(slug: string): Promise<boolean> {
+  if (!slug) return false;
+  if (await isTemplateLive(slug)) return true;
+  // Never throws: a failed season read returns the defaults.
+  return reachableFrom(slug, false, await getSeasonSettings());
 }
 
 /**
