@@ -60,6 +60,8 @@ test("every field the profile row renders is included", () => {
     "installCount",
     "createdAt",
     "updatedAt",     // the sort key, and the "last edited" line
+    "reactions.answer",     // "Said YES 💛" / "Said no 💔" on question days
+    "reactions.answeredAt",
   ]) {
     assert.equal(proj[field], 1, `${field} is rendered by the profile and must be projected`);
   }
@@ -81,4 +83,14 @@ test("the heavy content fields are NOT projected", () => {
   for (const heavy of ["senderPhoto", "senderMembers", "homeWishMessage", "congratsMessage"]) {
     assert.ok(!(heavy in proj), `${heavy} is page content and has no place in a list of titles`);
   }
+});
+
+test("answerOfRow: only a recorded yes/no travels with the row", async () => {
+  const { answerOfRow } = await import("./share.controller");
+  const at = new Date("2026-10-11T10:00:00Z");
+  assert.deepEqual(answerOfRow({ reactions: { answer: "no", answeredAt: at } }), { answer: "no", answeredAt: at });
+  assert.deepEqual(answerOfRow({ reactions: { answer: "yes", answeredAt: at } }), { answer: "yes", answeredAt: at });
+  assert.deepEqual(answerOfRow({ reactions: { answer: null } }), {});
+  assert.deepEqual(answerOfRow({ reactions: { answer: "maybe" } }), {});
+  assert.deepEqual(answerOfRow({}), {});
 });

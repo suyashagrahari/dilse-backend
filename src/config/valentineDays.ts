@@ -393,6 +393,13 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "dressCode", kind: "text", max: 50 },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
+      /**
+       * How the recipient may answer (the sender's choice): "yesOnly" — No
+       * dodges forever; "noAfterTries" — No dodges `noTries` times, then can
+       * be pressed and records `reactions.answer: "no"` (see answerAllows).
+       */
+      { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
+      { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
@@ -599,9 +606,29 @@ const clampInt = (v: unknown, max: number): number | undefined => {
  * `openedAt`, overwrite an answer, or trigger a second email. `matched` on the
  * update result is the "this was the first time" signal.
  */
+/** The two answers a recipient can record. "no" needs answerAllows(). */
+export type ReactionAnswer = "yes" | "no";
+
+/** The wire's `answer` → "yes" | "no" | undefined (anything else is invalid). Missing = "yes" (every older client). */
+export function parseAnswer(v: unknown): ReactionAnswer | undefined {
+  if (v === undefined || v === null || v === "") return "yes";
+  return v === "yes" || v === "no" ? v : undefined;
+}
+
+/**
+ * May this page record a "no"? Only when its sender chose "Yes or No"
+ * (extras.answerMode === "noAfterTries"). Every other page — and every day
+ * that does not declare the setting — stays yes-only, exactly as before.
+ */
+export function answerAllows(extras: unknown, answer: ReactionAnswer): boolean {
+  if (answer === "yes") return true;
+  const x = extras && typeof extras === "object" ? (extras as Record<string, unknown>) : {};
+  return x.answerMode === "noAfterTries";
+}
+
 export function reactionWrite(
   event: ReactionEvent,
-  extra: { noDodges?: unknown; count?: unknown },
+  extra: { noDodges?: unknown; count?: unknown; answer?: unknown },
   now: Date
 ): { guard: Record<string, null>; set: Record<string, unknown> } {
   const set: Record<string, unknown> = {};
@@ -616,7 +643,7 @@ export function reactionWrite(
     if (count !== undefined) set["reactions.count"] = count;
     return { guard: { "reactions.completedAt": null }, set };
   }
-  set["reactions.answer"] = "yes";
+  set["reactions.answer"] = extra.answer === "no" ? "no" : "yes";
   set["reactions.answeredAt"] = now;
   if (noDodges !== undefined) set["reactions.noDodges"] = noDodges;
   if (count !== undefined) set["reactions.count"] = count;
