@@ -53,6 +53,31 @@ export function salePercentFor(slug: string, season: SeasonView | null | undefin
   return season.saleSlugs.includes(key) ? pct : 0;
 }
 
+/**
+ * The slugs in the ACTIVE drop: the season's `saleSlugs` while the mode is
+ * "halloween", and nothing otherwise.
+ *
+ * Drop membership is an access fact, separate from the sale: a template the
+ * super admin put in the drop is reachable (its builder opens, it publishes)
+ * even when it is hidden from the general gallery — see `isTemplateReachable`
+ * in config/templateVisibility.ts. `saleEnabled` only switches the DISCOUNT off;
+ * the drop itself still stands while the mode is "halloween". In "valentine" or
+ * "off" there is no drop, so membership grants nothing.
+ *
+ * The client mirrors this rule in `dropSlugsOf` (client/lib/season.ts) from the
+ * same `GET /season` body; keep the two in step.
+ */
+export function dropSlugs(season: SeasonView | null | undefined): string[] {
+  if (!season || season.mode !== "halloween") return [];
+  return season.saleSlugs.map((s) => String(s).trim().toLowerCase()).filter(Boolean);
+}
+
+/** Is this slug in the active drop? See `dropSlugs`. */
+export function isInDrop(slug: string, season: SeasonView | null | undefined): boolean {
+  const key = String(slug || "").trim().toLowerCase();
+  return !!key && dropSlugs(season).includes(key);
+}
+
 /** `amount` minus `percent`, rounded to the nearest minor unit, never below `floor`. */
 export function discounted(amount: number, percent: number, floor: number): number {
   return Math.max(floor, Math.round((amount * (100 - percent)) / 100));

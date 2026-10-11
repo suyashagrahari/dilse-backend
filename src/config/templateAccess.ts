@@ -3,11 +3,12 @@
 // The one place that question is answered, for the builder gate, the write gate
 // and the publish paywall alike.
 //
-//     canUseTemplate(userId, slug) = isTemplateLive(slug) || hasGrant(userId, slug)
+//     canUseTemplate(userId, slug) = isTemplateReachable(slug) || hasGrant(userId, slug)
 //
-// So a template is usable if it is switched on for everybody, OR if this
-// particular person has been given early access to it. Nothing else grants
-// access, and there is no third source to look up.
+// So a template is usable if it is reachable for everybody — live in the
+// gallery, or in the active seasonal drop (see the note at the top of
+// templateVisibility.ts) — OR if this particular person has been given early
+// access to it. Nothing else grants access.
 //
 // ── WHY THIS IS NOT IN templateVisibility.ts ────────────────────────────────
 //
@@ -35,7 +36,7 @@
 
 import mongoose from "mongoose";
 import TemplateGrant from "../models/TemplateGrant";
-import { isTemplateLive } from "./templateVisibility";
+import { isTemplateReachable } from "./templateVisibility";
 
 const TTL_MS = 30_000;
 
@@ -99,7 +100,7 @@ export async function hasGrant(
 /**
  * The whole question: may this person use this template?
  *
- * `isTemplateLive` first, and short-circuited, because it is the answer for
+ * `isTemplateReachable` first, and short-circuited, because it is the answer for
  * every user on all but a couple of templates and it is served from a cache that
  * is already warm. The grant read only happens for a template that is actually
  * held back.
@@ -108,6 +109,6 @@ export async function canUseTemplate(
   userId: string | undefined | null,
   slug: string
 ): Promise<boolean> {
-  if (await isTemplateLive(slug)) return true;
+  if (await isTemplateReachable(slug)) return true;
   return hasGrant(userId, slug);
 }
