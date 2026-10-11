@@ -22,6 +22,7 @@ import { getPaymentSettings } from "./paymentSettings.service";
 import { resolveCountry } from "./geo.service";
 import { isFreeForViewer, type GeoSource } from "../config/whoPays";
 import { freeEntitlementFor, type FreeEntitlement } from "../config/freeAccess";
+import { audienceForCountry, type Audience } from "../config/seasonSale";
 
 /** Why nothing is owed by this viewer on a priced template, or null when they pay. */
 export type ViewerFreeReason = FreeEntitlement | "free_in_india";
@@ -33,6 +34,8 @@ export interface Quote {
   currency: Currency;
   country: string | null;
   geoSource: "cdn" | "ip" | "unknown" | "debug";
+  /** Which side of the India/abroad season split priced this quote. */
+  audience: Audience;
   inrPerUsd: number;
   intlPricingEnabled: boolean;
   /**
@@ -56,6 +59,15 @@ export async function resolveViewerCountry(req: Request): Promise<{ country: str
   if (forced) return { country: forced, source: "debug" };
   const geo = await resolveCountry(req);
   return { country: geo.country, source: geo.source };
+}
+
+/**
+ * Which side of the season's India/abroad split this visitor is on — the one
+ * definition, from the same country lookup the currency uses (unknown → see
+ * UNKNOWN_COUNTRY_AUDIENCE). Every season-priced read for a request takes this.
+ */
+export async function audienceFor(req: Request): Promise<Audience> {
+  return audienceForCountry((await resolveViewerCountry(req)).country);
 }
 
 /**
@@ -89,13 +101,16 @@ export async function viewerFreeReason(req: Request, { fresh = false } = {}): Pr
  * (see getPricingFresh).
  */
 export async function quoteFor(req: Request, templateType: string, { fresh = false } = {}): Promise<Quote> {
+  // One country lookup decides the currency AND which side's season sale
+  // applies, so the quote and the order (both through here) cannot disagree.
+  const geo = await resolveViewerCountry(req);
+  const audience = audienceForCountry(geo.country);
   const [base, settings, entitlement] = await Promise.all([
-    fresh ? getPricingFresh(templateType) : getPricing(templateType),
+    fresh ? getPricingFresh(templateType, audience) : getPricing(templateType, audience),
     getPaymentSettings(fresh),
     freeEntitlementFor(req.userId, { fresh }),
   ]);
 
-  const geo = await resolveViewerCountry(req);
   const currency = currencyForCountry(geo.country, settings.intlPricingEnabled);
   const inIndiaFree = isFreeForViewer({ chargeOnlyAbroad: settings.chargeOnlyAbroad, country: geo.country, source: geo.source });
   const freeReason: ViewerFreeReason | null = base.isFree ? null : entitlement ?? (inIndiaFree ? "free_in_india" : null);
@@ -106,6 +121,7 @@ export async function quoteFor(req: Request, templateType: string, { fresh = fal
     currency,
     country: geo.country,
     geoSource: geo.source,
+    audience,
     inrPerUsd: settings.inrPerUsd,
     intlPricingEnabled: settings.intlPricingEnabled,
     freeForViewer: freeReason !== null,

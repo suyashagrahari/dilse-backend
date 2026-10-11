@@ -72,7 +72,18 @@ export interface SeasonDrop {
 }
 
 export interface SeasonView {
+  /**
+   * The mode everyone sees while `split` is off. While it is on, `modeIndia`
+   * and `modeAbroad` decide instead and this is kept (and shown again the
+   * moment the split is switched off).
+   */
   mode: SeasonMode;
+  /** Different seasons for visitors in India and abroad. False on every row written before the split existed. */
+  split: boolean;
+  /** What visitors in India (and, see UNKNOWN_COUNTRY_AUDIENCE, unknown ones) see while `split` is on. */
+  modeIndia: SeasonMode;
+  /** What visitors outside India see while `split` is on. */
+  modeAbroad: SeasonMode;
   drops: Record<DropId, SeasonDrop>;
   updatedAt?: Date | null;
   updatedBy?: string | null;
@@ -93,14 +104,79 @@ export function defaultDrops(): Record<DropId, SeasonDrop> {
 
 /** What applies when no document exists — or when the read fails. */
 export function defaultSeason(): SeasonView {
-  return { mode: "halloween", drops: defaultDrops() };
+  return { mode: "halloween", split: false, modeIndia: "halloween", modeAbroad: "halloween", drops: defaultDrops() };
 }
 
-/** The drop of the active mode, or null in "valentine" / "off". */
+// ── AUDIENCES: INDIA AND ABROAD ─────────────────────────────────────────────
+//
+// A super admin can show visitors in India one season and visitors abroad
+// another (Diwali here, Halloween there). The visitor's side comes from the
+// server's own country lookup (services/geo.service.ts) — never from anything
+// the client sends — and is re-resolved on every request.
+//
+// Everything that prices or shows a season works on ONE visitor's view of it:
+// `seasonForAudience(settings, audience)` collapses the split into a plain
+// single-mode SeasonView, so `activeDrop`, `salePercentFor` and
+// `applySeasonSale` never have to know the split exists. The one exception is
+// reachability (`dropSlugs`): a hidden drop template opens if it is in the drop
+// of EITHER side's mode, so a link sent from Delhi still opens in London. Only
+// the price follows the visitor's own side.
+
+export type Audience = "india" | "abroad";
+export const AUDIENCES: readonly Audience[] = ["india", "abroad"];
+
+/**
+ * The side a visitor whose country is unknown sees: no geo database, a private
+ * address, an address the database does not know. India, matching the currency
+ * rule (config/currency.ts: unknown → INR). Flip it here and nowhere else.
+ */
+export const UNKNOWN_COUNTRY_AUDIENCE: Audience = "india";
+
+/** Which side a country is on. `country` is an ISO code from normalizeCountry, or null. */
+export function audienceForCountry(country: string | null | undefined): Audience {
+  if (!country) return UNKNOWN_COUNTRY_AUDIENCE;
+  return country === "IN" ? "india" : "abroad";
+}
+
+/** The mode this side sees. With the split off, both sides see `mode`. */
+export function modeFor(season: SeasonView, audience: Audience): SeasonMode {
+  if (!season.split) return season.mode;
+  return audience === "india" ? season.modeIndia : season.modeAbroad;
+}
+
+/** Does the answer depend on the visitor's country right now? (Split on AND the two sides differ.) */
+export function isSplit(season: SeasonView | null | undefined): boolean {
+  return !!season?.split && season.modeIndia !== season.modeAbroad;
+}
+
+/** Every mode some visitor is seeing right now: one with the split off, one or two with it on. */
+export function activeModes(season: SeasonView | null | undefined): SeasonMode[] {
+  if (!season) return [];
+  if (!season.split) return [season.mode];
+  return season.modeIndia === season.modeAbroad ? [season.modeIndia] : [season.modeIndia, season.modeAbroad];
+}
+
+/**
+ * One side's view of the settings: a single-mode SeasonView (split off) whose
+ * `mode` is what that side sees. Every pricing read goes through this.
+ */
+export function seasonForAudience(season: SeasonView, audience: Audience): SeasonView {
+  const mode = modeFor(season, audience);
+  return { ...season, mode, split: false, modeIndia: mode, modeAbroad: mode };
+}
+
+/**
+ * The drop of the active mode, or null in "valentine" / "off".
+ *
+ * Expects ONE visitor's view (`seasonForAudience`). Handed the raw settings
+ * with the split on, it answers for UNKNOWN_COUNTRY_AUDIENCE rather than guess.
+ */
 export function activeDrop(season: SeasonView | null | undefined): (SeasonDrop & { id: DropId }) | null {
-  if (!season || !isDropId(season.mode)) return null;
-  const drop = season.drops?.[season.mode];
-  return drop ? { id: season.mode, ...drop } : null;
+  if (!season) return null;
+  const mode = season.split ? modeFor(season, UNKNOWN_COUNTRY_AUDIENCE) : season.mode;
+  if (!isDropId(mode)) return null;
+  const drop = season.drops?.[mode];
+  return drop ? { id: mode, ...drop } : null;
 }
 
 /** One drop field set read leniently from storage; anything malformed falls back to the default. */
@@ -137,8 +213,16 @@ function migrateFestiveDrop(f: Record<string, unknown>): Record<string, unknown>
 export function seasonFromRow(row: Record<string, unknown> | null | undefined): SeasonView {
   const d = defaultSeason();
   if (!row) return d;
-  const rawMode = typeof row.mode === "string" ? (LEGACY_MODE_ALIASES[row.mode] ?? row.mode) : row.mode;
-  const mode = SEASON_MODES.includes(rawMode as SeasonMode) ? (rawMode as SeasonMode) : d.mode;
+  const readMode = (v: unknown, fallback: SeasonMode): SeasonMode => {
+    const raw = typeof v === "string" ? (LEGACY_MODE_ALIASES[v] ?? v) : v;
+    return SEASON_MODES.includes(raw as SeasonMode) ? (raw as SeasonMode) : fallback;
+  };
+  const mode = readMode(row.mode, d.mode);
+  // Rows from before the India/abroad split: split off, and both sides start
+  // at the single mode, so switching the split on changes nothing until a side is edited.
+  const split = row.split === true;
+  const modeIndia = readMode(row.modeIndia, mode);
+  const modeAbroad = readMode(row.modeAbroad, mode);
   const stored = (row.drops && typeof row.drops === "object" ? row.drops : {}) as Record<string, unknown>;
   const drops = {} as Record<DropId, SeasonDrop>;
   for (const id of DROP_IDS) {
@@ -152,6 +236,9 @@ export function seasonFromRow(row: Record<string, unknown> | null | undefined): 
   }
   return {
     mode,
+    split,
+    modeIndia,
+    modeAbroad,
     drops,
     updatedAt: (row.updatedAt as Date) ?? null,
     updatedBy: (row.updatedBy as string) ?? null,
@@ -170,7 +257,9 @@ export function salePercentFor(slug: string, season: SeasonView | null | undefin
 
 /**
  * The slugs in the ACTIVE drop: the active mode's `saleSlugs` while the mode
- * has a drop (halloween, dandiya, diwali), and nothing otherwise.
+ * has a drop (halloween, dandiya, diwali), and nothing otherwise. With the
+ * India/abroad split on, the union of both sides' active drops — reachability
+ * is the same for every visitor; only the discount is per side.
  *
  * Drop membership is an access fact, separate from the sale: a template the
  * super admin put in the drop is reachable (its builder opens, it publishes)
@@ -184,9 +273,17 @@ export function salePercentFor(slug: string, season: SeasonView | null | undefin
  * same `GET /season` body; keep the two in step.
  */
 export function dropSlugs(season: SeasonView | null | undefined): string[] {
-  const drop = activeDrop(season);
-  if (!drop) return [];
-  return drop.saleSlugs.map((s) => String(s).trim().toLowerCase()).filter(Boolean);
+  if (!season) return [];
+  const out = new Set<string>();
+  // With the split on: the union of both sides' drops (see AUDIENCES above).
+  for (const mode of activeModes(season)) {
+    if (!isDropId(mode)) continue;
+    for (const s of season.drops?.[mode]?.saleSlugs ?? []) {
+      const k = String(s).trim().toLowerCase();
+      if (k) out.add(k);
+    }
+  }
+  return [...out];
 }
 
 /** Is this slug in the active drop? See `dropSlugs`. */
@@ -234,7 +331,11 @@ export function applySeasonSale(pricing: ResolvedPricing, season: SeasonView | n
 
 export type DropPatch = Partial<SeasonDrop>;
 export interface SeasonPatch {
+  /** The single mode (everyone, while `split` is off). */
   mode?: SeasonMode;
+  split?: boolean;
+  modeIndia?: SeasonMode;
+  modeAbroad?: SeasonMode;
   /** Per-drop edits: `{ diwali: { salePercent: 25 } }`. */
   drops?: Partial<Record<DropId, DropPatch>>;
   /**
@@ -274,7 +375,7 @@ function validateDropFields(o: Record<string, unknown>, where: string): { ok: tr
 }
 
 /**
- * Validate a super admin's PUT body: `{ mode?, drops?: { [dropId]: { saleEnabled?,
+ * Validate a super admin's PUT body: `{ mode?, split?, modeIndia?, modeAbroad?, drops?: { [dropId]: { saleEnabled?,
  * salePercent?, saleSlugs? } }, saleEnabled?, salePercent?, saleSlugs? }`.
  * Every field optional, at least one required; unknown fields are ignored, an
  * unknown drop id is an error.
@@ -291,6 +392,17 @@ export function validateSeasonPatch(input: unknown): { ok: true; value: SeasonPa
       return { ok: false, error: `mode must be one of ${SEASON_MODES.join(", ")}` };
     }
     value.mode = o.mode as SeasonMode;
+  }
+  if (o.split !== undefined) {
+    if (typeof o.split !== "boolean") return { ok: false, error: "split must be true or false" };
+    value.split = o.split;
+  }
+  for (const key of ["modeIndia", "modeAbroad"] as const) {
+    if (o[key] === undefined) continue;
+    if (!SEASON_MODES.includes(o[key] as SeasonMode)) {
+      return { ok: false, error: `${key} must be one of ${SEASON_MODES.join(", ")}` };
+    }
+    value[key] = o[key] as SeasonMode;
   }
   const flat = validateDropFields(o, "");
   if (!flat.ok) return flat;
@@ -313,7 +425,7 @@ export function validateSeasonPatch(input: unknown): { ok: true; value: SeasonPa
     if (Object.keys(drops).length) value.drops = drops;
   }
   if (Object.keys(value).length === 0) {
-    return { ok: false, error: "Nothing to update: send mode, drops, saleEnabled, salePercent or saleSlugs" };
+    return { ok: false, error: "Nothing to update: send mode, split, modeIndia, modeAbroad, drops, saleEnabled, salePercent or saleSlugs" };
   }
   return { ok: true, value };
 }
@@ -330,7 +442,15 @@ export function applySeasonPatch(before: SeasonView, patch: SeasonPatch): Season
   for (const [id, p] of Object.entries(patch.drops ?? {}) as [DropId, DropPatch][]) {
     drops[id] = { ...drops[id], ...p };
   }
-  return { mode, drops, updatedAt: before.updatedAt ?? null, updatedBy: before.updatedBy ?? null };
+  return {
+    mode,
+    split: patch.split ?? before.split,
+    modeIndia: patch.modeIndia ?? before.modeIndia,
+    modeAbroad: patch.modeAbroad ?? before.modeAbroad,
+    drops,
+    updatedAt: before.updatedAt ?? null,
+    updatedBy: before.updatedBy ?? null,
+  };
 }
 
 /**
@@ -343,14 +463,24 @@ function saleShown(s: SeasonView) {
 }
 
 /**
- * The public shape of `GET /api/season`: `{ mode, sale, drops }`. `sale` is
- * the ACTIVE mode's drop (what single-season clients read); `drops` carries
- * every season's settings for pages that show a drop by name.
+ * The public shape of `GET /api/season` for ONE visitor: `{ mode, sale, drops,
+ * audience, split, audiences }`. `mode` and `sale` are what THIS visitor's side
+ * sees (`sale` is that mode's drop — what single-season clients read); `drops`
+ * carries every season's settings for pages that show a drop by name.
+ *
+ * `split` says the answer depends on the visitor's country, and `audiences`
+ * names both sides' modes. Neither is a secret — anyone with a VPN sees both —
+ * and a server render (which runs from the server's own address) needs them to
+ * know it must not paint either side, and to reserve space for whichever comes.
  */
-export function publicSeason(s: SeasonView) {
+export function publicSeason(settings: SeasonView, audience: Audience = UNKNOWN_COUNTRY_AUDIENCE) {
+  const s = seasonForAudience(settings, audience);
   return {
     mode: s.mode,
     sale: saleShown(s),
+    audience,
+    split: isSplit(settings),
+    audiences: { india: modeFor(settings, "india"), abroad: modeFor(settings, "abroad") } as Record<Audience, SeasonMode>,
     drops: Object.fromEntries(
       DROP_IDS.map((id) => [id, { enabled: s.drops[id].saleEnabled, percent: s.drops[id].salePercent, slugs: [...s.drops[id].saleSlugs] }])
     ) as Record<DropId, { enabled: boolean; percent: number; slugs: string[] }>,
@@ -359,9 +489,12 @@ export function publicSeason(s: SeasonView) {
 
 /** The super admin's shape: every drop, plus the flat fields of the drop `sale` shows. */
 export function adminSeason(s: SeasonView) {
-  const sale = saleShown(s);
+  const sale = saleShown(seasonForAudience(s, UNKNOWN_COUNTRY_AUDIENCE));
   return {
     mode: s.mode,
+    split: s.split,
+    modeIndia: s.modeIndia,
+    modeAbroad: s.modeAbroad,
     saleEnabled: sale.enabled,
     salePercent: sale.percent,
     saleSlugs: sale.slugs,

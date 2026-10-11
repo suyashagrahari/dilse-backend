@@ -8,7 +8,7 @@ import { defaultSeason, dropSlugs, isInDrop, type SeasonDrop, type SeasonMode, t
 
 const season = ({ mode = "halloween", ...drop }: Partial<SeasonDrop & { mode: SeasonMode }> = {}): SeasonView => {
   const d = defaultSeason();
-  return { mode, drops: { ...d.drops, halloween: { ...d.drops.halloween, ...drop } } };
+  return { ...d, mode, drops: { ...d.drops, halloween: { ...d.drops.halloween, ...drop } } };
 };
 
 test("hidden + in the drop + halloween mode → reachable", () => {

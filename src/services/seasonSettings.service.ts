@@ -2,7 +2,9 @@ import SeasonSettings from "../models/SeasonSettings";
 import { applySeasonPatch, defaultSeason, seasonFromRow, type SeasonPatch, type SeasonView } from "../config/seasonSale";
 
 // Every pricing read and every page that shows a banner asks for this, so it
-// is answered from memory. Fifteen seconds is the most a super admin's switch
+// is answered from memory. What is cached is the stored SETTINGS, the same for
+// every visitor; which side of the India/abroad split a visitor sees is
+// resolved per request on top of it (`seasonForAudience`), never cached here. Fifteen seconds is the most a super admin's switch
 // takes to reach another instance; on the instance that took the write the
 // cache is cleared at once.
 const TTL_MS = 15_000;
@@ -46,6 +48,9 @@ export async function updateSeasonSettings(patch: SeasonPatch, byEmail?: string)
     {
       $set: {
         mode: next.mode,
+        split: next.split,
+        modeIndia: next.modeIndia,
+        modeAbroad: next.modeAbroad,
         drops: next.drops,
         saleEnabled: next.drops.halloween.saleEnabled,
         salePercent: next.drops.halloween.salePercent,
