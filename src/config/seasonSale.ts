@@ -17,6 +17,7 @@
 //                         strikes the regular price through
 //
 // A free template stays free. Points are untouched — the sale is a money sale.
+// A row that carries its own discount is left exactly as the admin set it.
 
 import { MIN_USD_CENTS, type ResolvedPricing } from "./pricingMath";
 
@@ -60,6 +61,10 @@ export function discounted(amount: number, percent: number, floor: number): numb
 /** The pricing with the season sale applied, or the same object when it does not apply. */
 export function applySeasonSale(pricing: ResolvedPricing, season: SeasonView | null | undefined): ResolvedPricing {
   if (pricing.isFree) return pricing;
+  // The super admin already priced this one as a sale in /admin/pricing ("price
+  // charged" + "discount"): that IS the Halloween price. Taking the season's
+  // percent off it again charged ₹25 for a template set to ₹49.
+  if (pricing.discountPercent > 0) return pricing;
   const pct = salePercentFor(pricing.slug, season);
   if (pct === 0) return pricing;
 

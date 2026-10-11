@@ -110,3 +110,13 @@ test("validateSeasonPatch rejects bad input", () => {
   ];
   for (const b of bad) assert.equal(validateSeasonPatch(b).ok, false, `accepted ${JSON.stringify(b)}`);
 });
+
+test("a row the admin already discounted is charged exactly as set — no second sale on top", () => {
+  // /admin/pricing: price charged ₹49, discount 49% → paywall ₹49, strikes ₹96.
+  const row = priced("happy-halloween", 4900, 199, 49);
+  const p = applySeasonSale(row, season());
+  assert.equal(p, row);
+  assert.equal(p.finalPricePaise, 4900);
+  assert.equal(p.discountPercent, 49);
+  assert.equal(p.usdPriceCents, 199);
+});
