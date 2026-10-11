@@ -22,7 +22,8 @@ test("the default season is Halloween at 49% off the two Halloween slugs", () =>
   const d = defaultSeason();
   assert.equal(d.mode, "halloween");
   assert.deepEqual(d.drops.halloween, { saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] });
-  assert.deepEqual(d.drops.festive, { saleEnabled: true, salePercent: 30, saleSlugs: ["dandiya-partner", "happy-diwali"] });
+  assert.deepEqual(d.drops.dandiya, { saleEnabled: true, salePercent: 30, saleSlugs: ["dandiya-partner"] });
+  assert.deepEqual(d.drops.diwali, { saleEnabled: true, salePercent: 30, saleSlugs: ["happy-diwali"] });
 });
 
 test("₹199 at 49% off charges ₹101 (whole rupees) and strikes ₹199 through", () => {
@@ -91,16 +92,16 @@ test("an out-of-range percent in a hand-edited row discounts nothing", () => {
 
 test("validateSeasonPatch accepts each field alone", () => {
   assert.deepEqual(validateSeasonPatch({ mode: "valentine" }), { ok: true, value: { mode: "valentine" } });
-  assert.deepEqual(validateSeasonPatch({ mode: "festive" }), { ok: true, value: { mode: "festive" } });
+  assert.deepEqual(validateSeasonPatch({ mode: "diwali" }), { ok: true, value: { mode: "diwali" } });
   assert.deepEqual(validateSeasonPatch({ saleEnabled: false }), { ok: true, value: { flat: { saleEnabled: false } } });
   assert.deepEqual(validateSeasonPatch({ salePercent: 90 }), { ok: true, value: { flat: { salePercent: 90 } } });
   assert.deepEqual(validateSeasonPatch({ saleSlugs: ["happy-halloween", "happy-halloween"] }), {
     ok: true,
     value: { flat: { saleSlugs: ["happy-halloween"] } },
   });
-  assert.deepEqual(validateSeasonPatch({ drops: { festive: { salePercent: 25, saleSlugs: ["happy-diwali"] } } }), {
+  assert.deepEqual(validateSeasonPatch({ drops: { diwali: { salePercent: 25, saleSlugs: ["happy-diwali"] } } }), {
     ok: true,
-    value: { drops: { festive: { salePercent: 25, saleSlugs: ["happy-diwali"] } } },
+    value: { drops: { diwali: { salePercent: 25, saleSlugs: ["happy-diwali"] } } },
   });
 });
 
@@ -126,11 +127,13 @@ test("validateSeasonPatch rejects bad input", () => {
     { drops: "festive" },
     { drops: { christmas: { salePercent: 10 } } },
     { drops: { valentine: { salePercent: 10 } } },
-    { drops: { festive: { salePercent: 0 } } },
-    { drops: { festive: { saleEnabled: "yes" } } },
-    { drops: { festive: { saleSlugs: [] } } },
-    { drops: { festive: null } },
-    { drops: { festive: {} } },
+    { mode: "festive" },
+    { drops: { festive: { salePercent: 10 } } },
+    { drops: { dandiya: { salePercent: 0 } } },
+    { drops: { diwali: { saleEnabled: "yes" } } },
+    { drops: { dandiya: { saleSlugs: [] } } },
+    { drops: { diwali: null } },
+    { drops: { dandiya: {} } },
   ];
   for (const b of bad) assert.equal(validateSeasonPatch(b).ok, false, `accepted ${JSON.stringify(b)}`);
 });

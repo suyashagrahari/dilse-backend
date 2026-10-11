@@ -8,7 +8,7 @@
 //
 // ── THE RULE ────────────────────────────────────────────────────────────────
 //
-//   drop = drops[mode] (mode is a drop season: halloween, festive)
+//   drop = drops[mode] (mode is a drop season: halloween, dandiya, diwali)
 //   drop.saleEnabled && slug ∈ drop.saleSlugs && template is paid
 //     → finalPricePaise = max(100, round(base × (100 − percent) / 100))
 //       usdPriceCents   = scaled the same way, never below MIN_USD_CENTS
@@ -40,7 +40,8 @@ import { MIN_USD_CENTS, type ResolvedPricing } from "./pricingMath";
 
 export const DROP_DEFAULTS = {
   halloween: { saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] },
-  festive: { saleEnabled: true, salePercent: 30, saleSlugs: ["dandiya-partner", "happy-diwali"] },
+  dandiya: { saleEnabled: true, salePercent: 30, saleSlugs: ["dandiya-partner"] },
+  diwali: { saleEnabled: true, salePercent: 30, saleSlugs: ["happy-diwali"] },
 } as const satisfies Record<string, { saleEnabled: boolean; salePercent: number; saleSlugs: readonly string[] }>;
 
 export type DropId = keyof typeof DROP_DEFAULTS;
@@ -49,7 +50,16 @@ export type SeasonMode = "valentine" | DropId | "off";
 export const SEASON_MODES: readonly SeasonMode[] = ["valentine", ...DROP_IDS, "off"];
 
 export const HALLOWEEN_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.halloween.saleSlugs;
-export const FESTIVE_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.festive.saleSlugs;
+export const DANDIYA_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.dandiya.saleSlugs;
+export const DIWALI_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.diwali.saleSlugs;
+
+/**
+ * Round 1 had ONE merged "festive" season (Navratri + Diwali). It was never on
+ * prod, but a dev/staging row may still say `mode: "festive"` or carry
+ * `drops.festive`: both read as the Diwali season (`seasonFromRow`), and the
+ * next write stores them under the new name.
+ */
+export const LEGACY_MODE_ALIASES: Readonly<Record<string, SeasonMode>> = { festive: "diwali" };
 export const MIN_SALE_PERCENT = 1;
 export const MAX_SALE_PERCENT = 90;
 /** Razorpay's INR floor: ₹1. */
@@ -108,6 +118,18 @@ function dropFromStored(raw: unknown, fallback: SeasonDrop): SeasonDrop {
 }
 
 /**
+ * `drops.festive` as the Diwali drop: same sale switch and percent; its slugs
+ * keep only what is not the Dandiya template (which now has its own season),
+ * falling back to the Diwali default when nothing is left.
+ */
+function migrateFestiveDrop(f: Record<string, unknown>): Record<string, unknown> {
+  const slugs = Array.isArray(f.saleSlugs)
+    ? (f.saleSlugs as unknown[]).map((x) => String(x).trim().toLowerCase()).filter((x) => x && !DANDIYA_SALE_SLUGS.includes(x))
+    : undefined;
+  return { ...f, saleSlugs: slugs };
+}
+
+/**
  * A stored row (any vintage) as a SeasonView. Rows from before per-season
  * drops have only the flat fields: those were the Halloween drop. A row with
  * `drops.halloween` ignores the flat mirror.
@@ -115,11 +137,17 @@ function dropFromStored(raw: unknown, fallback: SeasonDrop): SeasonDrop {
 export function seasonFromRow(row: Record<string, unknown> | null | undefined): SeasonView {
   const d = defaultSeason();
   if (!row) return d;
-  const mode = SEASON_MODES.includes(row.mode as SeasonMode) ? (row.mode as SeasonMode) : d.mode;
+  const rawMode = typeof row.mode === "string" ? (LEGACY_MODE_ALIASES[row.mode] ?? row.mode) : row.mode;
+  const mode = SEASON_MODES.includes(rawMode as SeasonMode) ? (rawMode as SeasonMode) : d.mode;
   const stored = (row.drops && typeof row.drops === "object" ? row.drops : {}) as Record<string, unknown>;
   const drops = {} as Record<DropId, SeasonDrop>;
   for (const id of DROP_IDS) {
-    const legacy = id === "halloween" && stored[id] === undefined ? row : stored[id];
+    let legacy = stored[id];
+    if (legacy === undefined && id === "halloween") legacy = row;
+    // Round 1's merged drop: its percent and on/off carry over to Diwali.
+    if (legacy === undefined && id === "diwali" && stored.festive && typeof stored.festive === "object") {
+      legacy = migrateFestiveDrop(stored.festive as Record<string, unknown>);
+    }
     drops[id] = dropFromStored(legacy, d.drops[id]);
   }
   return {
@@ -142,7 +170,7 @@ export function salePercentFor(slug: string, season: SeasonView | null | undefin
 
 /**
  * The slugs in the ACTIVE drop: the active mode's `saleSlugs` while the mode
- * has a drop (halloween, festive), and nothing otherwise.
+ * has a drop (halloween, dandiya, diwali), and nothing otherwise.
  *
  * Drop membership is an access fact, separate from the sale: a template the
  * super admin put in the drop is reachable (its builder opens, it publishes)
@@ -207,7 +235,7 @@ export function applySeasonSale(pricing: ResolvedPricing, season: SeasonView | n
 export type DropPatch = Partial<SeasonDrop>;
 export interface SeasonPatch {
   mode?: SeasonMode;
-  /** Per-drop edits: `{ festive: { salePercent: 25 } }`. */
+  /** Per-drop edits: `{ diwali: { salePercent: 25 } }`. */
   drops?: Partial<Record<DropId, DropPatch>>;
   /**
    * The legacy flat fields (saleEnabled / salePercent / saleSlugs) of older
