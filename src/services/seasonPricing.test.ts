@@ -118,7 +118,14 @@ test("GET /season returns the public shape with a 15 s cache header", async () =
   assert.equal(r.headers["Cache-Control"], "public, max-age=15");
   assert.deepEqual(r.body, {
     success: true,
-    data: { mode: "halloween", sale: { enabled: true, percent: 30, slugs: ["happy-halloween"] } },
+    data: {
+      mode: "halloween",
+      sale: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
+      drops: {
+        halloween: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
+        festive: { enabled: true, percent: 30, slugs: ["dandiya-partner", "happy-diwali"] },
+      },
+    },
   });
 });
 
@@ -127,17 +134,31 @@ test("GET /season never errors: a failed read answers with the defaults", async 
   const { r, res } = fakeRes();
   await getPublicSeason({} as Request, res);
   assert.equal(r.statusCode, 200);
-  assert.deepEqual((r.body as { data: unknown }).data, {
-    mode: "halloween",
-    sale: { enabled: true, percent: 49, slugs: ["happy-halloween", "happy-halloween-premium"] },
-  });
+  const data = (r.body as { data: { mode: string; sale: unknown } }).data;
+  assert.equal(data.mode, "halloween");
+  assert.deepEqual(data.sale, { enabled: true, percent: 49, slugs: ["happy-halloween", "happy-halloween-premium"] });
 });
 
 test("PUT /admin/super/season rejects invalid bodies with 400 INVALID_SEASON", async () => {
-  for (const body of [{}, { mode: "xmas" }, { saleEnabled: "no" }, { salePercent: 0 }, { salePercent: 91 }, { saleSlugs: [] }]) {
+  for (const body of [{}, { mode: "xmas" }, { saleEnabled: "no" }, { salePercent: 0 }, { salePercent: 91 }, { saleSlugs: [] }, { drops: { xmas: {} } }]) {
     const { r, res } = fakeRes();
     await adminUpdateSeason({ body } as Request, res);
     assert.equal(r.statusCode, 400, JSON.stringify(body));
     assert.equal((r.body as { code: string }).code, "INVALID_SEASON");
+  }
+});
+
+test("festive mode: the festive drop is discounted on every read, Halloween is not", async () => {
+  ROWS.push({ slug: "happy-diwali", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  try {
+    seasonRow = { mode: "festive", saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] };
+    const map = await allPricing();
+    assert.equal(map["happy-diwali"].finalPricePaise, 13900);
+    assert.equal(map["happy-diwali"].discountPercent, 30);
+    assert.equal(map["happy-halloween"].finalPricePaise, 19900);
+    assert.equal((await getPricingFresh("happy-diwali")).finalPricePaise, 13900);
+    assert.equal((await quoteFor(req("IN"), "happy-diwali", { fresh: true })).pricing.finalAmount, 13900);
+  } finally {
+    ROWS.pop();
   }
 });
