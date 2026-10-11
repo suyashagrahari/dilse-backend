@@ -62,7 +62,12 @@ export type AuditAction =
   | "contact.reply_sent"
   | "influencer.update"
   | "influencer.payout_recorded"
-  | "influencer.payout_deleted";
+  | "influencer.payout_deleted"
+  // A super admin's own "Pay like a customer" switch, and "All templates free"
+  // granted to / revoked from an account. See config/freeAccess.ts.
+  | "superadmin.pays_as_customer"
+  | "user.grant_free_access"
+  | "user.revoke_free_access";
 
 export interface IAdminAuditLog extends Document {
   actorId: mongoose.Types.ObjectId;

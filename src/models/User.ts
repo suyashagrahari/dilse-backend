@@ -27,6 +27,19 @@ export interface IInfluencerProfile {
 
 export type AccountStatus = "active" | "suspended" | "banned";
 
+/**
+ * "All templates free", granted by a super admin (influencers, mostly). Kept as
+ * a record rather than a bare boolean so a revoke still shows who granted it and
+ * when. See config/freeAccess.ts for how the gate reads it.
+ */
+export interface IFreeAccess {
+  enabled: boolean;
+  grantedBy?: mongoose.Types.ObjectId;
+  grantedByEmail?: string;
+  grantedAt?: Date;
+  note?: string;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
@@ -81,6 +94,13 @@ export interface IUser extends Document {
   signupCountry?: string | null;
   lastSeenCountry?: string | null;
   lastSeenCountryAt?: Date | null;
+  /**
+   * Super admins only. Off (default) = the super admin publishes every priced
+   * template free; on = they go through the paywall like any customer, to test
+   * a real checkout. Meaningless on any other role.
+   */
+  paysAsCustomer?: boolean;
+  freeAccess?: IFreeAccess;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -211,6 +231,20 @@ const userSchema = new Schema<IUser>(
       default: undefined,
       index: true,
       sparse: true,
+    },
+    paysAsCustomer: { type: Boolean, default: false },
+    freeAccess: {
+      type: new Schema<IFreeAccess>(
+        {
+          enabled: { type: Boolean, default: false },
+          grantedBy: { type: Schema.Types.ObjectId, ref: "User" },
+          grantedByEmail: { type: String },
+          grantedAt: { type: Date },
+          note: { type: String, trim: true, maxlength: 200 },
+        },
+        { _id: false }
+      ),
+      default: undefined,
     },
   },
   {
