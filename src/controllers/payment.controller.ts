@@ -10,7 +10,17 @@ import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 import { recordEarningForOrder } from "../services/influencer.service";
-import { quoteFor, viewerPublishesFree } from "../services/pricingQuote.service";
+import { quoteFor, viewerFreeReason, type ViewerFreeReason } from "../services/pricingQuote.service";
+
+/** What the refusal says when nothing is owed, by reason. */
+function noPaymentMessage(reason: ViewerFreeReason, what: "payment" | "points"): string {
+  const lead = what === "points" ? "No points needed" : "No payment needed";
+  switch (reason) {
+    case "super_admin": return `${lead} — you publish free as a super admin.`;
+    case "free_access": return `${lead} — all templates are free for you.`;
+    default: return `${lead} — this template is free for you in India.`;
+  }
+}
 import { localizePricing, toInrPaise } from "../config/currency";
 
 // ── Page ownership ──────────────────────────────────────────────────────────
@@ -191,9 +201,11 @@ export const getQuote = async (req: Request, res: Response): Promise<void> => {
         country: quote.country,
         // Lets the paywall say "International checkout via PayPal" for USD.
         international: quote.currency !== "INR",
-        // "Only visitors outside India pay" covers this visitor: the paywall
-        // closes and the publish goes through instead of showing a price.
+        // Nothing is owed by this viewer (super admin, "All templates free", or
+        // free in India): the paywall closes and the publish goes through
+        // instead of showing a price. `freeReason` says which, for the copy.
         freeForViewer: quote.freeForViewer,
+        freeReason: quote.freeReason,
       },
     });
   } catch (error) {
@@ -230,14 +242,16 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // "Only visitors outside India pay" and this is India: nothing is owed. A
-    // paywall left open across the switch being turned on lands here, and must
-    // not take money — the client closes it and publishes (gate rule 5).
-    if (quote.freeForViewer) {
+    // Nothing is owed by this viewer: a super admin not paying like a customer,
+    // an "All templates free" grant, or free in India. A paywall left open across
+    // one of those switching on lands here, and must not take money — the client
+    // closes it and publishes (gate rules 4b and 5 agree).
+    if (quote.freeReason) {
       res.status(400).json({
         success: false,
-        error: "No payment needed — this template is free for you in India.",
+        error: noPaymentMessage(quote.freeReason, "payment"),
         code: "NO_PAYMENT_NEEDED",
+        reason: quote.freeReason,
       });
       return;
     }
@@ -500,12 +514,14 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Free in India right now: never take a points balance for it either.
-    if (await viewerPublishesFree(req, { fresh: true })) {
+    // Free for this viewer right now: never take a points balance for it either.
+    const freeReason = await viewerFreeReason(req, { fresh: true });
+    if (freeReason) {
       res.status(400).json({
         success: false,
-        error: "No points needed — this template is free for you in India.",
+        error: noPaymentMessage(freeReason, "points"),
         code: "NO_PAYMENT_NEEDED",
+        reason: freeReason,
       });
       return;
     }

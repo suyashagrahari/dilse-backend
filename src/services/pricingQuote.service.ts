@@ -21,6 +21,10 @@ import {
 import { getPaymentSettings } from "./paymentSettings.service";
 import { resolveCountry } from "./geo.service";
 import { isFreeForViewer, type GeoSource } from "../config/whoPays";
+import { freeEntitlementFor, type FreeEntitlement } from "../config/freeAccess";
+
+/** Why nothing is owed by this viewer on a priced template, or null when they pay. */
+export type ViewerFreeReason = FreeEntitlement | "free_in_india";
 
 export interface Quote {
   /** The INR pricing every gate and the public endpoint already use. */
@@ -31,8 +35,14 @@ export interface Quote {
   geoSource: "cdn" | "ip" | "unknown" | "debug";
   inrPerUsd: number;
   intlPricingEnabled: boolean;
-  /** "Only visitors outside India pay" is on and this visitor is in India: nothing is owed. */
+  /**
+   * Nothing is owed by this viewer on this priced template: a super admin not
+   * paying like a customer, an "All templates free" grant, or "Only visitors
+   * outside India pay" with this visitor in India.
+   */
   freeForViewer: boolean;
+  /** Which of those, or null. Always null on a free template. */
+  freeReason: ViewerFreeReason | null;
 }
 
 function debugCountry(req: Request): string | null {
@@ -61,18 +71,34 @@ export async function viewerPublishesFree(req: Request, { fresh = false } = {}):
 }
 
 /**
+ * Why this viewer owes nothing on any priced template right now, or null.
+ *
+ * The person (super admin / free access, keyed on req.userId — the impersonated
+ * user under impersonation) is checked before the place (India), matching the
+ * gate's rule order so `reason` reads the same everywhere.
+ */
+export async function viewerFreeReason(req: Request, { fresh = false } = {}): Promise<ViewerFreeReason | null> {
+  const entitlement = await freeEntitlementFor(req.userId, { fresh });
+  if (entitlement) return entitlement;
+  return (await viewerPublishesFree(req, { fresh })) ? "free_in_india" : null;
+}
+
+/**
  * `fresh` reads the price and the settings uncached — the order path, where a
  * price we could not read must fail the checkout rather than invent an amount
  * (see getPricingFresh).
  */
 export async function quoteFor(req: Request, templateType: string, { fresh = false } = {}): Promise<Quote> {
-  const [base, settings] = await Promise.all([
+  const [base, settings, entitlement] = await Promise.all([
     fresh ? getPricingFresh(templateType) : getPricing(templateType),
     getPaymentSettings(fresh),
+    freeEntitlementFor(req.userId, { fresh }),
   ]);
 
   const geo = await resolveViewerCountry(req);
   const currency = currencyForCountry(geo.country, settings.intlPricingEnabled);
+  const inIndiaFree = isFreeForViewer({ chargeOnlyAbroad: settings.chargeOnlyAbroad, country: geo.country, source: geo.source });
+  const freeReason: ViewerFreeReason | null = base.isFree ? null : entitlement ?? (inIndiaFree ? "free_in_india" : null);
 
   return {
     base,
@@ -82,6 +108,7 @@ export async function quoteFor(req: Request, templateType: string, { fresh = fal
     geoSource: geo.source,
     inrPerUsd: settings.inrPerUsd,
     intlPricingEnabled: settings.intlPricingEnabled,
-    freeForViewer: !base.isFree && isFreeForViewer({ chargeOnlyAbroad: settings.chargeOnlyAbroad, country: geo.country, source: geo.source }),
+    freeForViewer: freeReason !== null,
+    freeReason,
   };
 }

@@ -5,13 +5,23 @@ import { hasGrant } from "../config/templateAccess";
 import { slugForTemplateType } from "../config/templateSlugs";
 import type { ResolvedPricing } from "../config/pricingMath";
 import { viewerPublishesFree } from "./pricingQuote.service";
+import { freeEntitlementFor } from "../config/freeAccess";
 
 /**
  * Why the gate said yes. Carried so `GET /payment/access` can explain itself and
  * so a support question — "why wasn't this person charged?" — has an answer that
  * does not require re-deriving the rules by hand.
  */
-export type AllowReason = "free" | "already_published" | "already_paid" | "early_access" | "free_in_india";
+export type AllowReason =
+  | "free"
+  | "already_published"
+  | "already_paid"
+  | "early_access"
+  /** A super admin who has not switched on "Pay like a customer". */
+  | "super_admin"
+  /** A super admin granted this account "All templates free". */
+  | "free_access"
+  | "free_in_india";
 
 interface GateAllowed {
   allowed: true;
@@ -37,6 +47,7 @@ type GateResult = GateAllowed | GateDenied;
  *  2. Page is already published → allowed
  *  3. A successful PaymentOrder → allowed
  *  4. An early-access grant     → allowed
+ *  4b. Super admin (not paying like a customer), or "All templates free" → allowed
  *  5. "Only visitors outside India pay" is on and this visitor is in India → allowed
  *  6. Otherwise                 → 402 with the pricing the client renders
  *
@@ -105,6 +116,18 @@ export async function checkPublishAccess(params: {
   if (await hasGrant(params.userId, slugForTemplateType(params.templateType))) {
     return { allowed: true, reason: "early_access", pricing };
   }
+
+  // ── Rule 4b: free for this person ──────────────────────────────────────
+  //
+  // A super admin publishes free unless they switched on "Pay like a customer";
+  // an account a super admin granted "All templates free" publishes free. Both
+  // are facts about `params.userId` — under impersonation that is the
+  // impersonated user, so viewing as somebody never makes them free.
+  //
+  // After rule 3 for the same reason as rule 4: a page somebody actually paid
+  // for keeps reading "already_paid", even if they are granted free access later.
+  const entitlement = await freeEntitlementFor(params.userId);
+  if (entitlement) return { allowed: true, reason: entitlement, pricing };
 
   // ── Rule 5: free in India ───────────────────────────────────────────────
   //

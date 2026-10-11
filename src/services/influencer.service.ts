@@ -394,7 +394,7 @@ export async function buildInfluencerDashboard(
 export async function listInfluencersSummary() {
   const [influencers, settings] = await Promise.all([
     User.find({ influencer: { $exists: true, $ne: null } })
-      .select("name email avatar subdomain influencer createdAt")
+      .select("name email avatar subdomain influencer freeAccess role createdAt")
       .sort({ "influencer.joinedAt": -1 })
       .lean(),
     getInfluencerSettings(),
@@ -430,6 +430,10 @@ export async function listInfluencersSummary() {
         commissionOverride: typeof i.influencer!.commissionPercent === "number" ? i.influencer!.commissionPercent : null,
         commissionPercent: effectiveCommissionPercent(i.influencer!.commissionPercent, settings.defaultCommissionPercent),
         joinedAt: i.influencer!.joinedAt,
+        /** "All templates free" is on for this influencer's account. */
+        freeAccess: !!i.freeAccess?.enabled,
+        /** A super admin already publishes free; the toggle does not apply. */
+        isSuperAdmin: i.role === "superadmin",
         clicks: (C.get(id) as { total?: number } | undefined)?.total || 0,
         signups: (S.get(id) as { n?: number } | undefined)?.n || 0,
         paidPages: (E.get(id) as { paidPages?: number } | undefined)?.paidPages || 0,

@@ -26,6 +26,7 @@ import {
   adminGeoCheck,
 } from "../controllers/paymentSettings.controller";
 import { adminGetSeason, adminUpdateSeason } from "../controllers/season.controller";
+import { getMyPays, setMyPays, setFreeAccess } from "../controllers/freeAccess.controller";
 
 /**
  * Mounted at /api/admin/super behind `protect` + `requireSuperAdmin`.
@@ -47,6 +48,12 @@ router.get("/audit", getAuditLog);
 router.get("/payment-settings", adminGetPaymentSettings);
 router.put("/payment-settings", adminUpdatePaymentSettings);
 router.get("/geo-check", adminGeoCheck);
+
+// Who publishes free: the caller's own "Pay like a customer" switch, and
+// "All templates free" for any account (influencers, mostly).
+router.get("/me/pays", getMyPays);
+router.put("/me/pays", setMyPays);
+router.put("/users/:userId/free-access", setFreeAccess);
 
 // Season campaign + sale (Valentine wishlist / Halloween drop / off)
 router.get("/season", adminGetSeason);
