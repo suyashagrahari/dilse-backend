@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
+import { entitlementFrom } from "../config/freeAccess";
 import User from "../models/User";
 import ReferralRecord from "../models/ReferralRecord";
 import PointTransaction from "../models/PointTransaction";
@@ -716,6 +717,14 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
         influencer: influencerBrief(user),
         /** Template slugs this user may use even while they are hidden. */
         earlyAccess,
+        /**
+         * Why this user publishes every priced template free, or null. Display
+         * only — the publish gate re-derives it. Under impersonation this is the
+         * impersonated user's answer, never the super admin's.
+         */
+        publishesFree: entitlementFrom(user),
+        /** Super admins only: their "Pay like a customer" switch. */
+        ...(user.role === "superadmin" ? { paysAsCustomer: !!user.paysAsCustomer } : {}),
       },
     });
   } catch (error) {
