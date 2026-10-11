@@ -109,7 +109,7 @@ router.use("/favorites", protect, favoriteRoutes);
 router.use("/wishlist", wishlistRoutes);
 // The wishlist sale countdown the blog and template banners render. Anonymous, cached.
 router.get("/promo/active", getActivePromo);
-// Which seasonal campaign the site shows and its sale. Anonymous, cached 15 s.
+// Which seasonal campaign THIS visitor sees (India or abroad) and its sale. Anonymous, privately cached 15 s.
 router.get("/season", getPublicSeason);
 router.use("/content", protect, userContentRoutes);
 router.use("/birthday-pages", birthdayPageRoutes);

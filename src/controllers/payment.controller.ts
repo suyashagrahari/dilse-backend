@@ -10,7 +10,7 @@ import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 import { recordEarningForOrder } from "../services/influencer.service";
-import { quoteFor, viewerFreeReason, type ViewerFreeReason } from "../services/pricingQuote.service";
+import { audienceFor, quoteFor, viewerFreeReason, type ViewerFreeReason } from "../services/pricingQuote.service";
 
 /** What the refusal says when nothing is owed, by reason. */
 function noPaymentMessage(reason: ViewerFreeReason, what: "payment" | "points"): string {
@@ -85,13 +85,13 @@ async function findOwnedPage(
  * carrying a hardcoded mirror of the server's prices, which is what it used to
  * do and what made a price change a two-repo deploy.
  */
-export const getPricingConfig = async (_req: Request, res: Response): Promise<void> => {
+export const getPricingConfig = async (req: Request, res: Response): Promise<void> => {
+  // PRIVATE: the season sale differs for visitors in India and abroad, so this
+  // answer is per visitor and a shared cache (CDN, proxy) must never hand one
+  // country's prices to the next. The browser may still keep it for a minute.
+  res.set("Cache-Control", "private, max-age=60");
   try {
-    const pricing = await allPricing();
-    // Same header and same reasoning as GET /api/template-visibility: a super
-    // admin's change reaching visitors about a minute later is worth not paying
-    // for this read on every gallery load.
-    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    const pricing = await allPricing({ audience: await audienceFor(req) });
     res.json({ success: true, data: pricing });
   } catch (error) {
     console.error("Pricing config error:", error);
@@ -507,7 +507,7 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
 
     // Read uncached: points are a currency too, and the same "charged what the
     // user was not shown" problem applies.
-    const pricing = await getPricingFresh(templateType);
+    const pricing = await getPricingFresh(templateType, await audienceFor(req));
 
     if (pricing.isFree || pricing.pointsCost === 0) {
       res.status(400).json({ success: false, error: "This template does not support points payment" });

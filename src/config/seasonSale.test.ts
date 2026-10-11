@@ -15,7 +15,7 @@ const priced = (slug: string, finalPricePaise: number, usdPriceCents: number | n
   derivePricing({ slug, isFree: false, finalPricePaise, discountPercent, pointsCost: 40, usdPriceCents });
 const season = ({ mode = "halloween", ...drop }: Partial<SeasonDrop & { mode: SeasonMode }> = {}): SeasonView => {
   const d = defaultSeason();
-  return { mode, drops: { ...d.drops, halloween: { ...d.drops.halloween, ...drop } } };
+  return { ...d, mode, drops: { ...d.drops, halloween: { ...d.drops.halloween, ...drop } } };
 };
 
 test("the default season is Halloween at 49% off the two Halloween slugs", () => {

@@ -67,6 +67,8 @@ import DraftNudge from "../models/DraftNudge";
 import PaymentOrder from "../models/PaymentOrder";
 import { TEMPLATE_REGISTRY, templateByType } from "../services/templateRegistry";
 import { getPricingBySlug } from "../config/templatePricing";
+// A creator's price as the admin sees it: no visitor here, so the default side of the season split.
+import { UNKNOWN_COUNTRY_AUDIENCE } from "../config/seasonSale";
 import { slugForTemplateType } from "../config/templateSlugs";
 import {
   classifyStall,
@@ -295,7 +297,7 @@ export const getDrafts = async (req: Request, res: Response): Promise<void> => {
       DraftNudge.find({ pageId: { $in: pageIds } }).select("pageId sentAt").lean(),
       Promise.all(
         [...new Set(registry.map((r) => r.templateType))].map(async (type) => {
-          const p = await getPricingBySlug(slugForTemplateType(type));
+          const p = await getPricingBySlug(slugForTemplateType(type), UNKNOWN_COUNTRY_AUDIENCE);
           return [type, { isFree: p.isFree, finalPricePaise: p.finalPricePaise }] as const;
         })
       ),
@@ -479,7 +481,7 @@ async function loadDraft(req: Request, res: Response) {
     return null;
   }
 
-  const price = await getPricingBySlug(slugForTemplateType(templateType));
+  const price = await getPricingBySlug(slugForTemplateType(templateType), UNKNOWN_COUNTRY_AUDIENCE);
   const orderStatuses = (
     await PaymentOrder.find({ pageId: new mongoose.Types.ObjectId(pageId) }).select("status").lean()
   ).map((o) => String((o as { status?: string }).status || ""));

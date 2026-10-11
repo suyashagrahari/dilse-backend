@@ -186,7 +186,10 @@ export function reachableFrom(slug: string, live: boolean, season: SeasonView | 
 
 /**
  * May this template's builder open and its pages be created and published,
- * for everybody? True when it is live in the gallery OR in the active drop.
+ * for everybody? True when it is live in the gallery OR in the active drop —
+ * with the India/abroad split on, the drop of EITHER side's mode (`dropSlugs`),
+ * so a shared link opens wherever its recipient is. Reachability is never
+ * per visitor; only the sale is.
  * Use this, never `isTemplateLive`, for access guards; `isTemplateLive` and
  * `hiddenSlugs` are for LISTING only.
  */

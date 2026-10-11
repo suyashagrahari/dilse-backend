@@ -21,12 +21,20 @@ import {
  * as such when `drops.halloween` is missing (config/seasonSale.ts
  * `seasonFromRow`) and still mirrored on every write for older builds.
  *
+ * `split` turns on different seasons for visitors in India and abroad
+ * (`modeIndia` / `modeAbroad`); while it is off `mode` applies to everyone.
+ * Rows from before the split have none of the three and read as split off with
+ * both sides at `mode` (`seasonFromRow`).
+ *
  * No row means `defaultSeason()` in config/seasonSale.ts — Halloween with 49%
  * off — so a super admin turns the sale off by writing a row.
  */
 export interface ISeasonSettings extends Document {
   key: "global";
   mode: SeasonMode;
+  split?: boolean;
+  modeIndia?: SeasonMode;
+  modeAbroad?: SeasonMode;
   drops?: Partial<Record<DropId, SeasonDrop>>;
   saleEnabled: boolean;
   salePercent: number;
@@ -49,6 +57,9 @@ const seasonSettingsSchema = new Schema<ISeasonSettings>(
   {
     key: { type: String, enum: ["global"], default: "global", unique: true },
     mode: { type: String, enum: SEASON_MODES as unknown as string[], default: "halloween" },
+    split: { type: Boolean, default: false },
+    modeIndia: { type: String, enum: SEASON_MODES as unknown as string[] },
+    modeAbroad: { type: String, enum: SEASON_MODES as unknown as string[] },
     drops: {
       type: new Schema(Object.fromEntries(DROP_IDS.map((id) => [id, { type: dropSchema(id) }])), { _id: false }),
       default: undefined,

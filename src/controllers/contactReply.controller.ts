@@ -13,6 +13,7 @@ import PageFeedback from "../models/PageFeedback";
 import PaymentOrder from "../models/PaymentOrder";
 import { TEMPLATE_REGISTRY } from "../services/templateRegistry";
 import { getPricing } from "../config/templatePricing";
+import { UNKNOWN_COUNTRY_AUDIENCE } from "../config/seasonSale"; // only `isFree` is read: the same on both sides of the season split
 import {
   draftContactReply,
   ContactAiRefusedError,
@@ -45,7 +46,7 @@ async function pagesFor(userId: mongoose.Types.ObjectId): Promise<PageRow[]> {
   const orders = await PaymentOrder.find({ userId, status: { $in: ["paid", "points_used"] } }).select("pageId status").lean();
   const byPage = new Map(orders.map((o) => [String(o.pageId), o.status]));
   const pricing = new Map<string, boolean>();
-  for (const t of new Set(rows.map((r) => r.templateType))) pricing.set(t, (await getPricing(t)).isFree);
+  for (const t of new Set(rows.map((r) => r.templateType))) pricing.set(t, (await getPricing(t, UNKNOWN_COUNTRY_AUDIENCE)).isFree);
 
   return rows.map((r) => {
     const status = byPage.get(String(r._id));
