@@ -5,7 +5,7 @@ import compression from "compression";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
-import { env } from "./config/env";
+import { env, isApexDeployment } from "./config/env";
 import routes from "./routes";
 import webhookRoutes from "./routes/webhooks.routes";
 import { notFound, errorHandler } from "./middleware/errorHandler";
@@ -156,9 +156,13 @@ app.use((req, res, next) => {
 // limiter below instead of spending this shared per-IP budget.
 const isSubdomainPicker = (path: string) => path.startsWith("/auth/subdomain");
 
+// Only the public site gets the tight budget. Staging also runs with
+// APP_ENV=production, but its traffic is a handful of reviewers — often behind
+// one office IP, clicking through the admin panels — and 100 calls per 15
+// minutes locked them out of the admin with "Too many requests".
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: env.IS_PROD ? 100 : 500,
+  max: isApexDeployment() ? 100 : 3000,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => isSubdomainPicker(req.path),

@@ -364,6 +364,7 @@ Detect the language AND THE SCRIPT of the sender's story, then write EVERY singl
 - If the story is in Hindi written in Devanagari (मैं), answer in Devanagari.
 - If the story is in Hinglish — Hindi written in Latin letters ("hum pehli baar mile the") — answer in Hinglish in Latin letters. Do NOT convert it to Devanagari; that would feel foreign to the sender.
 - The same applies to Tamil, Bengali, Marathi, Telugu, Urdu, Arabic, Spanish, French, or any other language and to romanised forms of them.
+- Judge the language by the grammar of the sender's own sentences, never by the names, places, foods or songs they mention. A story whose sentences are English is an English story even when every name and place in it is Indian: answer it in English.
 - Report what you used in the "language" and "languageName" fields.
 
 ## How to fill the fields

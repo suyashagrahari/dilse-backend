@@ -21,6 +21,24 @@ import { dateInvitation } from "./date-invitation";
 import { dedication } from "./dedication";
 import { flags } from "./flags";
 import { ganeshChaturthi } from "./happy-ganesh-chaturthi";
+import { halloween } from "./happy-halloween";
+import { halloweenPremium } from "./happy-halloween-premium";
+import { chocolateDay } from "./happy-chocolate-day";
+import { chocolateDayPremium } from "./happy-chocolate-day-premium";
+import { hugDay } from "./happy-hug-day";
+import { hugDayPremium } from "./happy-hug-day-premium";
+import { kissDay } from "./happy-kiss-day";
+import { kissDayPremium } from "./happy-kiss-day-premium";
+import { promiseDay } from "./happy-promise-day";
+import { promiseDayPremium } from "./happy-promise-day-premium";
+import { proposeDay } from "./happy-propose-day";
+import { proposeDayPremium } from "./happy-propose-day-premium";
+import { roseDay } from "./happy-rose-day";
+import { roseDayPremium } from "./happy-rose-day-premium";
+import { teddyDay } from "./happy-teddy-day";
+import { teddyDayPremium } from "./happy-teddy-day-premium";
+import { valentinesDay } from "./happy-valentines-day";
+import { valentinesDayPremium } from "./happy-valentines-day-premium";
 import { holdMyHand } from "./hold-my-hand";
 import { kundliMilan } from "./kundli-milan";
 import { legalNotice } from "./legal-notice";
@@ -63,6 +81,24 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   dateInvitation,
   dedication,
   flags,
+  chocolateDay,
+  chocolateDayPremium,
+  halloween,
+  halloweenPremium,
+  hugDay,
+  hugDayPremium,
+  kissDay,
+  kissDayPremium,
+  promiseDay,
+  promiseDayPremium,
+  proposeDay,
+  proposeDayPremium,
+  roseDay,
+  roseDayPremium,
+  teddyDay,
+  teddyDayPremium,
+  valentinesDay,
+  valentinesDayPremium,
   holdMyHand,
   kundliMilan,
   legalNotice,

@@ -6,6 +6,7 @@ import generateRoutes from "./generate.routes";
 import favoriteRoutes from "./favorite.routes";
 import wishlistRoutes from "./wishlist.routes";
 import { getActivePromo } from "../controllers/promo.controller";
+import { getPublicSeason } from "../controllers/season.controller";
 import userContentRoutes from "./userContent.routes";
 import birthdayPageRoutes from "./birthdayPage.routes";
 import valentinePageRoutes from "./valentinePage.routes";
@@ -30,6 +31,7 @@ import legalNoticePageRoutes from "./legalNoticePage.routes";
 import kundliMilanPageRoutes from "./kundliMilanPage.routes";
 import vendingMachinePageRoutes from "./vendingMachinePage.routes";
 import catchGamePageRoutes from "./catchGamePage.routes";
+import { makeValentineDayRouter } from "./valentineDayPage.routes";
 import flagsPageRoutes from "./flagsPage.routes";
 import dateInvitationPageRoutes from "./dateInvitationPage.routes";
 import photoPuzzlePageRoutes from "./photoPuzzlePage.routes";
@@ -107,6 +109,8 @@ router.use("/favorites", protect, favoriteRoutes);
 router.use("/wishlist", wishlistRoutes);
 // The wishlist sale countdown the blog and template banners render. Anonymous, cached.
 router.get("/promo/active", getActivePromo);
+// Which seasonal campaign the site shows and its sale. Anonymous, cached 15 s.
+router.get("/season", getPublicSeason);
 router.use("/content", protect, userContentRoutes);
 router.use("/birthday-pages", birthdayPageRoutes);
 router.use("/valentine-pages", valentinePageRoutes);
@@ -131,6 +135,27 @@ router.use("/legal-notice-pages", legalNoticePageRoutes);
 router.use("/kundli-milan-pages", kundliMilanPageRoutes);
 router.use("/vending-machine-pages", vendingMachinePageRoutes);
 router.use("/catch-pages", catchGamePageRoutes);
+// Valentine's week — eight days, one engine: /happy-rose-day-pages … /happy-valentines-day-pages.
+router.use("/happy-rose-day-pages", makeValentineDayRouter("happy-rose-day"));
+router.use("/happy-propose-day-pages", makeValentineDayRouter("happy-propose-day"));
+router.use("/happy-chocolate-day-pages", makeValentineDayRouter("happy-chocolate-day"));
+router.use("/happy-teddy-day-pages", makeValentineDayRouter("happy-teddy-day"));
+router.use("/happy-promise-day-pages", makeValentineDayRouter("happy-promise-day"));
+router.use("/happy-hug-day-pages", makeValentineDayRouter("happy-hug-day"));
+router.use("/happy-kiss-day-pages", makeValentineDayRouter("happy-kiss-day"));
+router.use("/happy-valentines-day-pages", makeValentineDayRouter("happy-valentines-day"));
+// Happy Halloween — the same engine, a ninth entry.
+router.use("/happy-halloween-pages", makeValentineDayRouter("happy-halloween"));
+// The ultra-premium tier: a twin of each day on the same engine (+ voice note, unlock, reply).
+router.use("/happy-rose-day-premium-pages", makeValentineDayRouter("happy-rose-day-premium"));
+router.use("/happy-propose-day-premium-pages", makeValentineDayRouter("happy-propose-day-premium"));
+router.use("/happy-chocolate-day-premium-pages", makeValentineDayRouter("happy-chocolate-day-premium"));
+router.use("/happy-teddy-day-premium-pages", makeValentineDayRouter("happy-teddy-day-premium"));
+router.use("/happy-promise-day-premium-pages", makeValentineDayRouter("happy-promise-day-premium"));
+router.use("/happy-hug-day-premium-pages", makeValentineDayRouter("happy-hug-day-premium"));
+router.use("/happy-kiss-day-premium-pages", makeValentineDayRouter("happy-kiss-day-premium"));
+router.use("/happy-valentines-day-premium-pages", makeValentineDayRouter("happy-valentines-day-premium"));
+router.use("/happy-halloween-premium-pages", makeValentineDayRouter("happy-halloween-premium"));
 router.use("/flags-pages", flagsPageRoutes);
 router.use("/date-invitation-pages", dateInvitationPageRoutes);
 router.use("/photo-puzzle-pages", photoPuzzlePageRoutes);
