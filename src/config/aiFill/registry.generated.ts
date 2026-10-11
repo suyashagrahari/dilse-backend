@@ -17,6 +17,7 @@ import { catchSchema } from "./catch";
 import { courtMarriage } from "./court-marriage";
 import { courtOfLove } from "./court-of-love";
 import { darling } from "./darling";
+import { dandiyaPartner } from "./dandiya-partner";
 import { dateInvitation } from "./date-invitation";
 import { dedication } from "./dedication";
 import { flags } from "./flags";
@@ -84,6 +85,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   chocolateDay,
   chocolateDayPremium,
   halloween,
+  dandiyaPartner,
   halloweenPremium,
   hugDay,
   hugDayPremium,

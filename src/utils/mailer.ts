@@ -478,15 +478,20 @@ export async function sendValentineAnswerEmail(opts: {
   // The premium twin ("happy-halloween-premium") gets the same wording.
   const halloween = baseDaySlug(opts.slug ?? "") === "happy-halloween";
   const times = (n: number) => `${n} ${n === 1 ? "time" : "times"}`;
+  const dandiya = opts.slug === "dandiya-partner";
   const dodges = halloween
     ? opts.noDodges > 0
       ? ` The No button ghosted them ${times(opts.noDodges)} first 👻`
       : " First try, not even a little spooked."
+    : dandiya
+      ? opts.noDodges > 0
+        ? ` The No button twirled away ${times(opts.noDodges)} first 🥢`
+        : " First try, straight into the circle."
     : opts.noDodges > 0
       ? ` After chasing the "No" button ${times(opts.noDodges)} 😄`
       : " First try, no hesitation.";
-  const subject = halloween ? `👻 ${who} said YES to being your boo` : `💍 ${who} said YES`;
-  const head = halloween ? `${who} said YES 🎃` : `${who} said YES 💘`;
+  const subject = halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
+  const head = halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
   const body = `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
   const band = halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
   const pageBg = halloween ? "#17122b" : "#1e0f24";

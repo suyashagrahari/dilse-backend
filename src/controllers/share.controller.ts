@@ -161,6 +161,8 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: VALENTINE_DAY_MODELS["happy-valentines-day"] as unknown as mongoose.Model<unknown>, templateType: "happy-valentines-day", editorRoute: "/happy-valentines-day", projectShared: valentineShared },
   // Happy Halloween — a ninth discriminator on the same engine.
   { model: VALENTINE_DAY_MODELS["happy-halloween"] as unknown as mongoose.Model<unknown>, templateType: "happy-halloween", editorRoute: "/happy-halloween", projectShared: valentineShared },
+  // Be My Dandiya Partner — Navratri, on the same engine.
+  { model: VALENTINE_DAY_MODELS["dandiya-partner"] as unknown as mongoose.Model<unknown>, templateType: "dandiya-partner", editorRoute: "/dandiya-partner", projectShared: valentineShared },
   // The ultra-premium twins — same discriminator collection; valentineShared withholds a sealed page.
   { model: VALENTINE_DAY_MODELS["happy-rose-day-premium"] as unknown as mongoose.Model<unknown>, templateType: "happy-rose-day-premium", editorRoute: "/happy-rose-day-premium", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["happy-propose-day-premium"] as unknown as mongoose.Model<unknown>, templateType: "happy-propose-day-premium", editorRoute: "/happy-propose-day-premium", projectShared: valentineShared },
