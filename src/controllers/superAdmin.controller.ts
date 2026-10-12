@@ -550,7 +550,34 @@ export const setAccountStatus = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    // A "delete" closure removed the pages and anonymised the account: its
+    // email is a placeholder and there is nobody left to let back in. A
+    // "hide" closure is reversible, and reinstating it is exactly this call.
+    if (user.status === "closed" && user.closureMode === "delete") {
+      res.status(400).json({
+        success: false,
+        error: "This account was closed and its data deleted — it cannot be reinstated.",
+      });
+      return;
+    }
+    // Moving a closed account to suspended/banned would silently drop the
+    // record of the owner's request. Reinstate it first if that is really meant.
+    if (user.status === "closed" && status !== "active") {
+      res.status(400).json({
+        success: false,
+        error: "This account is closed. Reinstate it (active) before suspending or banning.",
+      });
+      return;
+    }
+
     const before = user.status || "active";
+    if (before === "closed" && status === "active") {
+      // The closure is over; the audit entry below keeps its history.
+      user.closedAt = undefined;
+      user.closedBy = undefined;
+      user.closureReason = undefined;
+      user.closureMode = undefined;
+    }
     user.status = status as "active" | "suspended" | "banned";
     user.statusReason = status === "active" ? undefined : reason;
     user.statusChangedAt = new Date();

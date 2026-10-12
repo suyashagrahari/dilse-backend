@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
 import { entitlementFrom } from "../config/freeAccess";
 import User from "../models/User";
+import { blockedRefusal, isCurrentlyBlocked } from "../services/accountStatus";
 import ReferralRecord from "../models/ReferralRecord";
 import PointTransaction from "../models/PointTransaction";
 import {
@@ -212,6 +213,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // A blocked account (suspended, banned, or closed at the owner's request)
+    // is refused HERE, not only by `protect` on the next call: handing it a
+    // token pair would leave the client looking signed in until it tried to
+    // do something. Checked after the password so the status of an account is
+    // never disclosed to somebody who does not hold its credentials.
+    const loginBlocked = isCurrentlyBlocked(user);
+    if (loginBlocked) {
+      res.status(403).json({ success: false, ...blockedRefusal(loginBlocked) });
+      return;
+    }
+
     // Block login if email not verified
     if (!user.isVerified) {
       // Re-send a fresh OTP so they can verify
@@ -415,6 +427,15 @@ export const googleAuth = async (
 
     const isNewUser = !user;
 
+    // Google proving the address does not reopen an account that was closed,
+    // banned or suspended — and nothing below (linking, verifying, clearing the
+    // password) may touch it either, so this comes before all of it.
+    const googleBlocked = user ? isCurrentlyBlocked(user) : false;
+    if (googleBlocked) {
+      res.status(403).json({ success: false, ...blockedRefusal(googleBlocked) });
+      return;
+    }
+
     if (user) {
       // ── Linking Google to an account that already exists ───────────────
       //
@@ -563,6 +584,13 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
     if (user.otp !== String(otp).trim()) {
       res.status(400).json({ success: false, error: "Incorrect code. Please try again." });
+      return;
+    }
+
+    // A correct code still does not sign in a blocked account.
+    const otpBlocked = isCurrentlyBlocked(user);
+    if (otpBlocked) {
+      res.status(403).json({ success: false, ...blockedRefusal(otpBlocked) });
       return;
     }
 
@@ -999,15 +1027,9 @@ export const refreshToken = async (
     // A blocked account must not be handed a fresh token. `protect` would
     // refuse it on the next call anyway, but issuing one leaves the client
     // looking signed in until it tries to do something.
-    if (user.status === "banned" || user.status === "suspended") {
-      res.status(403).json({
-        success: false,
-        error:
-          user.status === "banned"
-            ? "This account has been banned."
-            : "This account is temporarily suspended.",
-        code: user.status === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_SUSPENDED",
-      });
+    const refreshBlocked = isCurrentlyBlocked(user);
+    if (refreshBlocked) {
+      res.status(403).json({ success: false, ...blockedRefusal(refreshBlocked) });
       return;
     }
 

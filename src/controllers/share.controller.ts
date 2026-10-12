@@ -44,6 +44,7 @@ import UsPage from "../models/UsPage";
 import RakshaBandhanPage from "../models/RakshaBandhanPage";
 import RakshaBandhanSisterPage from "../models/RakshaBandhanSisterPage";
 import GaneshChaturthiPage from "../models/GaneshChaturthiPage";
+import { HIDDEN_CONTENT_STATUSES } from "../services/accountStatus";
 import SharedAccess from "../models/SharedAccess";
 import PageView from "../models/PageView";
 import User from "../models/User";
@@ -557,8 +558,10 @@ export const discardMyDraft = async (req: Request, res: Response): Promise<void>
 export const getPublicProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const username = req.params.username as string;
-    const user = await User.findOne({ subdomain: username.toLowerCase() }).select("name avatar subdomain");
-    if (!user) {
+    const user = await User.findOne({ subdomain: username.toLowerCase() }).select("name avatar subdomain status");
+    // A banned or closed account's profile is hidden like its share links
+    // (bannedContent.ts): it would otherwise list every page those hide.
+    if (!user || HIDDEN_CONTENT_STATUSES.includes(user.status)) {
       res.status(404).json({ success: false, error: "User not found" });
       return;
     }
