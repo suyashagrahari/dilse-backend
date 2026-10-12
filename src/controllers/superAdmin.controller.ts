@@ -31,7 +31,7 @@ import { isSuperAdminEmail } from "../config/roles";
  */
 
 /** Loads the target and refuses the cases no super admin may act on. */
-async function loadTarget(
+export async function loadTarget(
   req: Request,
   res: Response,
   { mutating }: { mutating: boolean }
