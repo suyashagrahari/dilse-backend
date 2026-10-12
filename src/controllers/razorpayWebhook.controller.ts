@@ -106,7 +106,7 @@ export const razorpayWebhook = async (req: Request, res: Response): Promise<void
 
     const updated = await PaymentOrder.findOneAndUpdate(
       { _id: order._id, status: { $in: ["created", "failed"] } },
-      { $set: { status: "paid", razorpayPaymentId: payment.id } },
+      { $set: { status: "paid", razorpayPaymentId: payment.id, paidAt: new Date() } },
       { new: true }
     );
     if (updated) {
