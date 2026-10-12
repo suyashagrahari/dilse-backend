@@ -1,9 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import User from "../models/User";
 import { TEMPLATE_REGISTRY } from "./templateRegistry";
+import { HIDDEN_CONTENT_STATUSES } from "./accountStatus";
 
 /**
- * Hides the published pages of banned users.
+ * Hides the published pages of banned users — and of closed accounts.
+ *
+ * "Closed" (the owner asked us to close the account; see accountClosure) hides
+ * pages exactly as a ban does, through this same set, which is what makes a
+ * "hide" closure reversible: nothing on the pages is touched, and reinstating
+ * the account rebuilds the set without them. The names below still say
+ * "banned" because that is what the module was first written for.
  *
  * ── THE PROBLEM THIS SOLVES ─────────────────────────────────────────────────
  *
@@ -36,7 +43,7 @@ export async function rebuildBannedContent(): Promise<void> {
   if (building) return building;
   building = (async () => {
     try {
-      const banned = await User.find({ status: "banned" }).select("_id").lean();
+      const banned = await User.find({ status: { $in: HIDDEN_CONTENT_STATUSES } }).select("_id").lean();
       if (banned.length === 0) {
         blocked = new Set();
         return;
@@ -54,7 +61,7 @@ export async function rebuildBannedContent(): Promise<void> {
         }
       }
       blocked = next;
-      console.log(`[bannedContent] ${next.size} share link(s) hidden across ${banned.length} banned account(s)`);
+      console.log(`[bannedContent] ${next.size} share link(s) hidden across ${banned.length} banned/closed account(s)`);
     } catch (err) {
       // Keep the previous set rather than failing open to "nothing is hidden".
       console.error("[bannedContent] rebuild failed, keeping previous set", err);

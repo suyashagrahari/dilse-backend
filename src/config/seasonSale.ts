@@ -329,6 +329,38 @@ export function applySeasonSale(pricing: ResolvedPricing, season: SeasonView | n
   };
 }
 
+// ── WHERE A DISCOUNT CAME FROM ──────────────────────────────────────────────
+//
+// The order ledger records which discount a buyer received, so a statement can
+// say "Season sale — Dandiya 30%" rather than an unexplained "30%". The paid
+// amount itself never changes here: this reads the same branches
+// `applySeasonSale` takes, in the same order, and reports which one fired.
+// Keep the two in step — `seasonSale.test.ts` pins them together.
+
+export type DiscountSource = "none" | "admin" | "season_sale";
+
+export interface DiscountOrigin {
+  source: DiscountSource;
+  /** The drop whose sale applied ("dandiya"), only when source is "season_sale". */
+  seasonMode: DropId | null;
+}
+
+/**
+ * Which discount `applySeasonSale(pricing, season)` leaves on `pricing`.
+ *
+ * `pricing` is the row BEFORE the season sale (straight from `derivePricing`);
+ * `season` is the one-side view the read used (`seasonForAudience`).
+ */
+export function discountOriginOf(
+  pricing: ResolvedPricing,
+  season: SeasonView | null | undefined
+): DiscountOrigin {
+  if (pricing.isFree) return { source: "none", seasonMode: null };
+  if (pricing.discountPercent > 0) return { source: "admin", seasonMode: null };
+  if (salePercentFor(pricing.slug, season) === 0) return { source: "none", seasonMode: null };
+  return { source: "season_sale", seasonMode: activeDrop(season)?.id ?? null };
+}
+
 export type DropPatch = Partial<SeasonDrop>;
 export interface SeasonPatch {
   /** The single mode (everyone, while `split` is off). */

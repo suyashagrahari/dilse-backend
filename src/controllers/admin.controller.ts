@@ -272,7 +272,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       query.role = roleFilter;
     }
     const statusFilter = req.query.status as string;
-    if (statusFilter && ["active", "suspended", "banned"].includes(statusFilter)) {
+    if (statusFilter && ["active", "suspended", "banned", "closed"].includes(statusFilter)) {
       query.status = statusFilter;
     }
 

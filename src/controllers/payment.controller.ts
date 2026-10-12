@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import User from "../models/User";
 import PointTransaction from "../models/PointTransaction";
 import PaymentOrder from "../models/PaymentOrder";
-import { getPricingFresh, allPricing } from "../config/templatePricing";
+import { getPricingFreshWithOrigin, allPricing } from "../config/templatePricing";
 import { templateLabel } from "../config/templateCatalog";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { checkPublishAccess } from "../services/publishGate.service";
@@ -380,6 +380,16 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       amountInrPaise:  toInrPaise(charge.finalAmount, charge.currency, fxRateToINR),
       status:          "created",
       razorpayOrderId: razorpayOrder.id,
+      // The pricing snapshot for the revenue ledger and billing statements:
+      // exactly the `charge` the buyer agreed to above, and where its discount
+      // came from. Frozen here so a later price or season change never
+      // rewrites what a statement says.
+      listAmount:      charge.mrpAmount,
+      discountAmount:  charge.savingsAmount,
+      discountPercent: charge.discountPercent,
+      discountSource:  charge.discountPercent > 0 ? quote.discountSource : "none",
+      seasonMode:      charge.discountPercent > 0 ? quote.seasonMode : null,
+      templateLabel:   label,
     });
 
     res.status(201).json({
@@ -470,7 +480,7 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     // marked once and commission is recorded once.
     const updated = await PaymentOrder.findOneAndUpdate(
       { _id: paymentOrder._id, status: "created" },
-      { $set: { status: "paid", razorpayPaymentId, razorpaySignature } },
+      { $set: { status: "paid", razorpayPaymentId, razorpaySignature, paidAt: new Date() } },
       { new: true }
     );
     if (updated) {
@@ -507,7 +517,7 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
 
     // Read uncached: points are a currency too, and the same "charged what the
     // user was not shown" problem applies.
-    const pricing = await getPricingFresh(templateType, await audienceFor(req));
+    const { pricing, discount } = await getPricingFreshWithOrigin(templateType, await audienceFor(req));
 
     if (pricing.isFree || pricing.pointsCost === 0) {
       res.status(400).json({ success: false, error: "This template does not support points payment" });
@@ -589,6 +599,16 @@ export const spendPoints = async (req: Request, res: Response): Promise<void> =>
         currency:   "INR",
         status:     "points_used",
         pointsUsed: pricing.pointsCost,
+        // Snapshot of the INR price the points stood in for — the statement
+        // shows it struck through next to "500 points". Points are never
+        // counted as money; see services/revenue.service.ts.
+        listAmount:      pricing.mrpPaise,
+        discountAmount:  pricing.savingsPaise,
+        discountPercent: pricing.discountPercent,
+        discountSource:  pricing.discountPercent > 0 ? discount.source : "none",
+        seasonMode:      pricing.discountPercent > 0 ? discount.seasonMode : null,
+        templateLabel:   templateLabel(templateType),
+        paidAt:          new Date(),
       });
     } catch (err) {
       console.error("[points] unlock write failed after deducting, refunding:", err);

@@ -27,6 +27,7 @@ import {
 } from "../controllers/paymentSettings.controller";
 import { adminGetSeason, adminPreviewSeason, adminUpdateSeason } from "../controllers/season.controller";
 import { getMyPays, setMyPays, setFreeAccess } from "../controllers/freeAccess.controller";
+import revenueRoutes, { userRevenueRouter } from "./superAdminRevenue.routes";
 
 /**
  * Mounted at /api/admin/super behind `protect` + `requireSuperAdmin`.
@@ -78,5 +79,11 @@ router.post("/users/:userId/points", adjustPoints);
 router.post("/users/:userId/status", setAccountStatus);
 router.post("/users/:userId/force-logout", forceLogout);
 router.post("/users/:userId/impersonate", startImpersonation);
+
+// Revenue reports, per-user billing + statements, and account closure.
+// /revenue/* is the documented surface; the per-user routes are also reachable
+// directly under /users/:userId/* beside the other account actions.
+router.use("/revenue", revenueRoutes);
+router.use(userRevenueRouter);
 
 export default router;

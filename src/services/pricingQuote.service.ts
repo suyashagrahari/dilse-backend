@@ -10,7 +10,7 @@
 // header is read at all.
 
 import type { Request } from "express";
-import { getPricing, getPricingFresh, type ResolvedPricing } from "../config/templatePricing";
+import { getPricingFreshWithOrigin, getPricingWithOrigin, type ResolvedPricing } from "../config/templatePricing";
 import {
   currencyForCountry,
   localizePricing,
@@ -22,7 +22,7 @@ import { getPaymentSettings } from "./paymentSettings.service";
 import { resolveCountry } from "./geo.service";
 import { isFreeForViewer, type GeoSource } from "../config/whoPays";
 import { freeEntitlementFor, type FreeEntitlement } from "../config/freeAccess";
-import { audienceForCountry, type Audience } from "../config/seasonSale";
+import { audienceForCountry, type Audience, type DiscountSource, type DropId } from "../config/seasonSale";
 
 /** Why nothing is owed by this viewer on a priced template, or null when they pay. */
 export type ViewerFreeReason = FreeEntitlement | "free_in_india";
@@ -46,6 +46,15 @@ export interface Quote {
   freeForViewer: boolean;
   /** Which of those, or null. Always null on a free template. */
   freeReason: ViewerFreeReason | null;
+  /**
+   * Where `pricing.discountPercent` came from: the super admin's own discount
+   * on the pricing row, the active season's sale, or nothing. Recorded on the
+   * order for the revenue ledger and billing statements; never changes the
+   * amount (see `discountOriginOf` in config/seasonSale.ts).
+   */
+  discountSource: DiscountSource;
+  /** The season whose sale applied ("dandiya"), when discountSource is "season_sale". */
+  seasonMode: DropId | null;
 }
 
 function debugCountry(req: Request): string | null {
@@ -105,12 +114,13 @@ export async function quoteFor(req: Request, templateType: string, { fresh = fal
   // applies, so the quote and the order (both through here) cannot disagree.
   const geo = await resolveViewerCountry(req);
   const audience = audienceForCountry(geo.country);
-  const [base, settings, entitlement] = await Promise.all([
-    fresh ? getPricingFresh(templateType, audience) : getPricing(templateType, audience),
+  const [priced, settings, entitlement] = await Promise.all([
+    fresh ? getPricingFreshWithOrigin(templateType, audience) : getPricingWithOrigin(templateType, audience),
     getPaymentSettings(fresh),
     freeEntitlementFor(req.userId, { fresh }),
   ]);
 
+  const base = priced.pricing;
   const currency = currencyForCountry(geo.country, settings.intlPricingEnabled);
   const inIndiaFree = isFreeForViewer({ chargeOnlyAbroad: settings.chargeOnlyAbroad, country: geo.country, source: geo.source });
   const freeReason: ViewerFreeReason | null = base.isFree ? null : entitlement ?? (inIndiaFree ? "free_in_india" : null);
@@ -126,5 +136,7 @@ export async function quoteFor(req: Request, templateType: string, { fresh = fal
     intlPricingEnabled: settings.intlPricingEnabled,
     freeForViewer: freeReason !== null,
     freeReason,
+    discountSource: priced.discount.source,
+    seasonMode: priced.discount.seasonMode,
   };
 }

@@ -25,7 +25,16 @@ export interface IInfluencerProfile {
   joinedAt: Date;
 }
 
-export type AccountStatus = "active" | "suspended" | "banned";
+/**
+ * `closed` is the account's owner asking for it to be closed, carried out by a
+ * super admin (POST /admin/super/users/:id/close). It blocks sign-in and hides
+ * share links exactly as `banned` does; a "hide" closure is reversible with
+ * `active`, a "delete" closure has already removed the pages and anonymised
+ * this document, so there is nothing to reinstate.
+ */
+export type AccountStatus = "active" | "suspended" | "banned" | "closed";
+export const ACCOUNT_STATUSES: readonly AccountStatus[] = ["active", "suspended", "banned", "closed"];
+export type ClosureMode = "hide" | "delete";
 
 /**
  * "All templates free", granted by a super admin (influencers, mostly). Kept as
@@ -55,6 +64,17 @@ export interface IUser extends Document {
   statusChangedAt?: Date;
   statusChangedBy?: mongoose.Types.ObjectId;
   suspendedUntil?: Date;
+  /** Set when a super admin closes the account at the owner's request. */
+  closedAt?: Date;
+  closedBy?: mongoose.Types.ObjectId;
+  closureReason?: string;
+  closureMode?: ClosureMode;
+  /**
+   * sha256 of the lowercase email the account had before a "delete" closure
+   * anonymised it — enough to answer "was this address ever a customer?" for
+   * an accounting query, without keeping the address itself.
+   */
+  closedEmailHash?: string;
   /**
    * Bumped to invalidate every token already issued to this user. `protect`
    * compares it against the `tv` claim, so a bump is an immediate,
@@ -147,7 +167,7 @@ const userSchema = new Schema<IUser>(
     },
     status: {
       type: String,
-      enum: ["active", "suspended", "banned"],
+      enum: ACCOUNT_STATUSES,
       default: "active",
       index: true,
     },
@@ -155,6 +175,11 @@ const userSchema = new Schema<IUser>(
     statusChangedAt: { type: Date },
     statusChangedBy: { type: Schema.Types.ObjectId, ref: "User" },
     suspendedUntil: { type: Date },
+    closedAt: { type: Date },
+    closedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    closureReason: { type: String, maxlength: 500 },
+    closureMode: { type: String, enum: ["hide", "delete"] },
+    closedEmailHash: { type: String },
     tokenVersion: { type: Number, default: 0 },
     theme: {
       type: String,

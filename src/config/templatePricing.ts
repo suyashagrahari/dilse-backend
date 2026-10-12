@@ -46,7 +46,14 @@ import {
   type ResolvedPricing,
 } from "./pricingMath";
 
-import { applySeasonSale, seasonForAudience, type Audience } from "./seasonSale";
+import {
+  applySeasonSale,
+  discountOriginOf,
+  seasonForAudience,
+  type Audience,
+  type DiscountOrigin,
+  type SeasonView,
+} from "./seasonSale";
 import { getSeasonSettings } from "../services/seasonSettings.service";
 
 export type { PricingRow, ResolvedPricing } from "./pricingMath";
@@ -142,13 +149,36 @@ async function rows(): Promise<Map<string, PricingRow>> {
   return inflight;
 }
 
-/** The price for a template slug. Unpriced slugs are free. */
-export async function getPricingBySlug(slug: string, audience: Audience): Promise<ResolvedPricing> {
+/**
+ * A price together with where its discount came from. The order paths record
+ * the origin on the PaymentOrder (see models/PaymentOrder.ts), so the amount
+ * and its explanation are read in ONE pass over the same row and season — two
+ * reads could straddle a season switch and describe a discount nobody got.
+ */
+export interface PricingWithOrigin {
+  pricing: ResolvedPricing;
+  discount: DiscountOrigin;
+}
+
+const NO_DISCOUNT: DiscountOrigin = { source: "none", seasonMode: null };
+
+function priceRow(row: PricingRow, season: SeasonView): PricingWithOrigin {
+  const raw = derivePricing(row);
+  return { pricing: applySeasonSale(raw, season), discount: discountOriginOf(raw, season) };
+}
+
+/** `getPricingBySlug`, plus which discount applied. */
+export async function getPricingBySlugWithOrigin(slug: string, audience: Audience): Promise<PricingWithOrigin> {
   const key = String(slug || "").trim().toLowerCase();
-  if (!key) return freePricing(key);
+  if (!key) return { pricing: freePricing(key), discount: NO_DISCOUNT };
   const [map, season] = await Promise.all([rows(), getSeasonSettings()]);
   const row = map.get(key);
-  return row ? applySeasonSale(derivePricing(row), seasonForAudience(season, audience)) : freePricing(key);
+  return row ? priceRow(row, seasonForAudience(season, audience)) : { pricing: freePricing(key), discount: NO_DISCOUNT };
+}
+
+/** The price for a template slug. Unpriced slugs are free. */
+export async function getPricingBySlug(slug: string, audience: Audience): Promise<ResolvedPricing> {
+  return (await getPricingBySlugWithOrigin(slug, audience)).pricing;
 }
 
 /**
@@ -176,14 +206,26 @@ export async function getPricing(templateType: string, audience: Audience): Prom
  * user to try again is the only acceptable failure.
  */
 export async function getPricingFresh(templateType: string, audience: Audience): Promise<ResolvedPricing> {
+  return (await getPricingFreshWithOrigin(templateType, audience)).pricing;
+}
+
+/** `getPricingFresh`, plus which discount applied. Same throw-on-failure rule. */
+export async function getPricingFreshWithOrigin(templateType: string, audience: Audience): Promise<PricingWithOrigin> {
   const slug = slugForTemplateType(templateType);
-  if (!slug) return freePricing(slug);
+  if (!slug) return { pricing: freePricing(slug), discount: NO_DISCOUNT };
 
   const [doc, season] = await Promise.all([
     TemplatePricing.findOne({ slug }).select(SELECT).lean(),
     getSeasonSettings(true),
   ]);
-  return doc ? applySeasonSale(derivePricing(toRow(doc as never)), seasonForAudience(season, audience)) : freePricing(slug);
+  return doc
+    ? priceRow(toRow(doc as never), seasonForAudience(season, audience))
+    : { pricing: freePricing(slug), discount: NO_DISCOUNT };
+}
+
+/** `getPricing`, plus which discount applied. */
+export async function getPricingWithOrigin(templateType: string, audience: Audience): Promise<PricingWithOrigin> {
+  return getPricingBySlugWithOrigin(slugForTemplateType(templateType), audience);
 }
 
 /**
