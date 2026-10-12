@@ -145,6 +145,15 @@ export const env = {
   SES_OTP_FROM_EMAIL: process.env.SES_OTP_FROM_EMAIL || "verify@subhsandesh.in",
   SES_OTP_CONFIGURATION_SET: process.env.SES_OTP_CONFIGURATION_SET || process.env.SES_CONFIGURATION_SET || "",
 
+  // ── Billing statements (super admin → one customer, manual only) ─────────
+  //
+  // Sent as billing@ so a payment statement never arrives from the address
+  // that sends follow-ups. billing@ has no mailbox (apex mail is GoDaddy), so
+  // replies go to support@ via Reply-To. Covered by the subhsandesh.in SES
+  // domain identity — no per-address verification needed.
+  BILLING_FROM_EMAIL: process.env.BILLING_FROM_EMAIL || "billing@subhsandesh.in",
+  BILLING_REPLY_TO_EMAIL: process.env.BILLING_REPLY_TO_EMAIL || "support@subhsandesh.in",
+
   // ── Inbound: replies coming BACK to feedback@subhsandesh.in ──────────────
   //
   // Outbound threading needs none of this. These two only matter for putting

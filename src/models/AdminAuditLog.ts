@@ -67,7 +67,13 @@ export type AuditAction =
   // granted to / revoked from an account. See config/freeAccess.ts.
   | "superadmin.pays_as_customer"
   | "user.grant_free_access"
-  | "user.revoke_free_access";
+  | "user.revoke_free_access"
+  // Revenue: opening one user's billing drill-down (personal + payment data),
+  // a manual billing statement emailed to them, and closing their account at
+  // their request (with what was hidden or deleted).
+  | "user.view_billing"
+  | "billing.send_statement"
+  | "user.close";
 
 export interface IAdminAuditLog extends Document {
   actorId: mongoose.Types.ObjectId;
