@@ -1,4 +1,4 @@
-import User from "../models/User";
+import User, { type AccountStatus } from "../models/User";
 
 /**
  * Live account state for `protect`.
@@ -30,7 +30,7 @@ import User from "../models/User";
 const TTL_MS = 30_000;
 
 export interface AccountSnapshot {
-  status: "active" | "suspended" | "banned";
+  status: AccountStatus;
   tokenVersion: number;
   role: string;
   email: string;
@@ -55,7 +55,7 @@ export async function getAccountSnapshot(userId: string): Promise<AccountSnapsho
   const user = await User.findById(key)
     .select("status tokenVersion role email suspendedUntil")
     .lean<{
-      status?: AccountSnapshot["status"];
+      status?: AccountStatus;
       tokenVersion?: number;
       role?: string;
       email?: string;
@@ -87,11 +87,33 @@ export async function getAccountSnapshot(userId: string): Promise<AccountSnapsho
  * rather than written back, so a read path never needs a write; the stored
  * field is tidied the next time an admin touches the account.
  */
-export function isCurrentlyBlocked(snap: AccountSnapshot): false | "suspended" | "banned" {
+export type BlockedKind = "suspended" | "banned" | "closed";
+
+export function isCurrentlyBlocked(snap: Pick<AccountSnapshot, "status" | "suspendedUntil">): false | BlockedKind {
   if (snap.status === "banned") return "banned";
+  if (snap.status === "closed") return "closed";
   if (snap.status === "suspended") {
-    if (snap.suspendedUntil && snap.suspendedUntil.getTime() <= Date.now()) return false;
+    if (snap.suspendedUntil && new Date(snap.suspendedUntil).getTime() <= Date.now()) return false;
     return "suspended";
   }
   return false;
 }
+
+/**
+ * The refusal a blocked account gets, worded once. `protect`, the refresh path
+ * and every sign-in path (password, Google, OTP) answer with the same body, so
+ * the client can key its message on `code` whichever door was tried.
+ */
+export function blockedRefusal(kind: BlockedKind): { error: string; code: string } {
+  switch (kind) {
+    case "banned":
+      return { error: "This account has been banned.", code: "ACCOUNT_BANNED" };
+    case "closed":
+      return { error: "This account has been closed.", code: "ACCOUNT_CLOSED" };
+    default:
+      return { error: "This account is temporarily suspended.", code: "ACCOUNT_SUSPENDED" };
+  }
+}
+
+/** Statuses whose share links are hidden from recipients (see bannedContent.ts). */
+export const HIDDEN_CONTENT_STATUSES: readonly AccountStatus[] = ["banned", "closed"];

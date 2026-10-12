@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, isImpersonation } from "../utils/jwt";
-import { getAccountSnapshot, isCurrentlyBlocked } from "../services/accountStatus";
+import { blockedRefusal, getAccountSnapshot, isCurrentlyBlocked } from "../services/accountStatus";
 
 declare global {
   namespace Express {
@@ -65,14 +65,7 @@ export const protect = async (
 
   const blocked = isCurrentlyBlocked(snap);
   if (blocked) {
-    res.status(403).json({
-      success: false,
-      error:
-        blocked === "banned"
-          ? "This account has been banned."
-          : "This account is temporarily suspended.",
-      code: blocked === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_SUSPENDED",
-    });
+    res.status(403).json({ success: false, ...blockedRefusal(blocked) });
     return;
   }
 

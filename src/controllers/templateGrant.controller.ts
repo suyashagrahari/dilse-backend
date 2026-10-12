@@ -194,12 +194,13 @@ export const createTemplateGrant = async (req: Request, res: Response): Promise<
       res.status(404).json({ success: false, error: "That user does not exist" });
       return;
     }
-    if (String((target as unknown as { status?: string }).status || "") === "banned") {
+    const targetStatus = String((target as unknown as { status?: string }).status || "");
+    if (targetStatus === "banned" || targetStatus === "closed") {
       // `protect` would refuse them anyway, so the grant could never be used.
       // Refusing here says so, instead of storing something that cannot work.
       res.status(400).json({
         success: false,
-        error: "That account is banned — reinstate it before granting access.",
+        error: `That account is ${targetStatus} — reinstate it before granting access.`,
       });
       return;
     }

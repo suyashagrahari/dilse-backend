@@ -4,6 +4,7 @@ import { derivePricing, freePricing, MIN_USD_CENTS } from "./pricingMath";
 import {
   applySeasonSale,
   defaultSeason,
+  discountOriginOf,
   salePercentFor,
   validateSeasonPatch,
   type SeasonDrop,
@@ -146,4 +147,24 @@ test("a row the admin already discounted is charged exactly as set — no second
   assert.equal(p.finalPricePaise, 4900);
   assert.equal(p.discountPercent, 49);
   assert.equal(p.usdPriceCents, 199);
+});
+
+// ── discountOriginOf: the ledger's explanation of a discount ────────────────
+
+test("discountOriginOf reports the branch applySeasonSale took, without changing the price", () => {
+  const s = season();
+  const onSale = priced("happy-halloween", 19900);
+  assert.deepEqual(discountOriginOf(onSale, s), { source: "season_sale", seasonMode: "halloween" });
+  assert.ok(applySeasonSale(onSale, s).discountPercent > 0, "the sale really did apply");
+
+  // The admin's own discount wins and the season stays out of it.
+  const adminSale = priced("happy-halloween", 4900, null, 20);
+  assert.deepEqual(discountOriginOf(adminSale, s), { source: "admin", seasonMode: null });
+  assert.equal(applySeasonSale(adminSale, s), adminSale);
+
+  // Not in the drop, sale switched off, or free: no discount to explain.
+  assert.deepEqual(discountOriginOf(priced("birthday-gf", 9900), s), { source: "none", seasonMode: null });
+  assert.deepEqual(discountOriginOf(onSale, season({ saleEnabled: false })), { source: "none", seasonMode: null });
+  assert.deepEqual(discountOriginOf(freePricing("happy-halloween"), s), { source: "none", seasonMode: null });
+  assert.deepEqual(discountOriginOf(onSale, season({ mode: "off" })), { source: "none", seasonMode: null });
 });
