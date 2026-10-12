@@ -138,7 +138,10 @@ export const getAnalyticsOverview = async (req: Request, res: Response): Promise
     const templateStats = await Promise.all(
       ALL_PAGE_MODELS.map(async ({ model, type, label, slug }) => {
         const [total, published] = await Promise.all([
-          (model as mongoose.Model<unknown>).countDocuments(inRange),
+          // A fresh filter per query: a discriminator model (the festival days)
+          // writes its own `day` into the filter it is given, and a shared object
+          // then makes the next one fail with "Can't set discriminator key".
+          (model as mongoose.Model<unknown>).countDocuments({ ...inRange }),
           (model as mongoose.Model<unknown>).countDocuments({ ...inRange, isPublished: true }),
         ]);
         return { type, label, slug, live: !hidden.has(slug), total, published };
@@ -279,6 +282,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     // With a template, the date means "made a page of it that day"; without
     // one, it means "signed up that day".
     const templatePages = new Map<string, { count: number; last: Date }>();
+    const templateDaily: { date: string; pages: number; users: number }[] = [];
     if (templateType && !tpl) {
       res.status(400).json({ success: false, error: "Unknown template" });
       return;
@@ -292,6 +296,25 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       ])) as { _id: mongoose.Types.ObjectId | null; count: number; last: Date }[];
       for (const r of rows) if (r._id) templatePages.set(String(r._id), { count: r.count, last: r.last });
       query._id = { $in: [...templatePages.keys()].map((id) => new mongoose.Types.ObjectId(id)) };
+
+      // Day by day inside the range: "on the 9th, 3 people made 4 of them".
+      if (range && range.from <= range.to && (range.end.getTime() - range.start.getTime()) / 86400000 <= 366) {
+        const days = (await (tpl.model as mongoose.Model<unknown>).aggregate([
+          { $match: match },
+          {
+            $group: {
+              _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TZ } },
+              pages: { $sum: 1 },
+              users: { $addToSet: "$userId" },
+            },
+          },
+        ])) as { _id: string; pages: number; users: unknown[] }[];
+        const by = new Map(days.map((d) => [d._id, d]));
+        for (let d = range.from; d <= range.to; d = addDays(d, 1)) {
+          const r = by.get(d);
+          templateDaily.push({ date: d, pages: r?.pages || 0, users: r?.users.length || 0 });
+        }
+      }
     } else if (range) {
       query.createdAt = { $gte: range.start, $lt: range.end };
     }
@@ -334,7 +357,19 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
           total,
           totalPages: Math.ceil(total / limit),
         },
-        ...(tpl ? { template: { type: tpl.type, label: tpl.label, pages: [...templatePages.values()].reduce((a, b) => a + b.count, 0) } } : {}),
+        ...(tpl
+          ? {
+              template: {
+                type: tpl.type,
+                label: tpl.label,
+                slug: tpl.slug,
+                pages: [...templatePages.values()].reduce((a, b) => a + b.count, 0),
+                // Everyone who made one, before search / role / status narrow the list.
+                users: templatePages.size,
+                daily: templateDaily,
+              },
+            }
+          : {}),
       },
     });
   } catch (error) {
@@ -351,14 +386,16 @@ export const getUserTemplateCounts = async (req: Request, res: Response): Promis
     const match: Record<string, unknown> = {};
     if (range) match.createdAt = { $gte: range.start, $lt: range.end };
     const rows = await Promise.all(
-      ALL_PAGE_MODELS.map(async ({ model, type, label }) => {
+      ALL_PAGE_MODELS.map(async ({ model, type, label, slug }) => {
         const [r] = (await (model as mongoose.Model<unknown>).aggregate([
-          { $match: match },
+          { $match: { ...match } },
           { $group: { _id: "$userId" } },
           { $count: "users" },
         ])) as { users: number }[];
-        const pages = await (model as mongoose.Model<unknown>).countDocuments(match);
-        return { type, label, users: r?.users || 0, pages };
+        // Its own copy: a discriminator model writes `day` into the filter it is
+        // handed, and the shared one then breaks every other festival-day model.
+        const pages = await (model as mongoose.Model<unknown>).countDocuments({ ...match });
+        return { type, label, slug, users: r?.users || 0, pages };
       }),
     );
     rows.sort((a, b) => b.users - a.users || a.label.localeCompare(b.label));
@@ -398,7 +435,7 @@ export const getUserDetail = async (req: Request, res: Response): Promise<void> 
     }
 
     const pages = await Promise.all(
-      ALL_PAGE_MODELS.map(async ({ model, type, label }) => {
+      ALL_PAGE_MODELS.map(async ({ model, type, label, slug }) => {
         const docs = await (model as mongoose.Model<unknown>)
           .find({ userId })
           .select("shareId isPublished viewCount installCount createdAt updatedAt")
