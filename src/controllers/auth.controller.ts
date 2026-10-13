@@ -15,6 +15,7 @@ import { sendOtpEmail } from "../utils/mailer";
 import { grantedSlugsFor } from "../config/templateAccess";
 import { attachInfluencerReferral } from "../services/influencer.service";
 import { stampUserCountry } from "../services/userCountry.service";
+import { releaseIfClosed } from "../services/accountClosure.service";
 
 /** What the client needs to show influencer nav/profile entry points. */
 function influencerBrief(user: { influencer?: { status: string } | null }) {
@@ -118,7 +119,9 @@ export const register = async (
       return;
     }
 
-    const existingUser = await User.findOne({ email }).select("+password");
+    // A closed account does not hold its address any more: registering again
+    // is exactly how its owner starts over (releaseIfClosed).
+    const existingUser = await releaseIfClosed(await User.findOne({ email }).select("+password"));
     if (existingUser) {
       // "An account already exists" is true but useless to somebody who signed
       // up with Google and has simply forgotten. Name the way in.
@@ -187,7 +190,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user = await User.findOne({ email }).select("+password");
+    // A closed account is never signed back into: it is released and reads as
+    // absent, so the owner registers (or uses Google) and gets a new account.
+    const user = await releaseIfClosed(await User.findOne({ email }).select("+password"));
     if (!user) {
       res.status(401).json({
         success: false,
@@ -418,12 +423,16 @@ export const googleAuth = async (
     // `+password` is required, not optional: `password` is `select: false`, so
     // without it `user.password` reads as undefined even for an account that
     // has one — and the linking logic below turns on exactly that question.
-    let user = await User.findOne({
-      $or: [
-        ...(googleSub ? [{ googleId: googleSub }] : []),
-        { email: googleEmail },
-      ],
-    }).select("+password");
+    // A closed account is released and skipped, so Google creates a NEW account
+    // for its owner below instead of refusing them (releaseIfClosed).
+    let user = await releaseIfClosed(
+      await User.findOne({
+        $or: [
+          ...(googleSub ? [{ googleId: googleSub }] : []),
+          { email: googleEmail },
+        ],
+      }).select("+password")
+    );
 
     const isNewUser = !user;
 

@@ -11,6 +11,7 @@ import PageView from "../models/PageView";
 import AdminAuditLog from "../models/AdminAuditLog";
 import { audit, diff } from "../services/adminAudit";
 import { invalidateUser } from "../services/accountStatus";
+import { reclaimIdentity } from "../services/accountClosure.service";
 import { rebuildBannedContent } from "../services/bannedContent";
 import {
   TEMPLATE_REGISTRY,
@@ -131,11 +132,19 @@ export const getFullUserProfile = async (req: Request, res: Response): Promise<v
     delete safeUser.password;
     delete safeUser.refreshToken;
     delete safeUser.otp;
+    // A closed account gave its email up so its owner could start over; show
+    // who it was, and flag that the address is no longer this account's.
+    if (user.closedEmail) {
+      safeUser.email = user.closedEmail;
+      safeUser.emailReleased = true;
+      delete safeUser.closedEmail;
+      delete safeUser.closedGoogleId;
+    }
 
     await audit(req, {
       action: "user.view_profile",
       targetUserId: String(userId),
-      targetUserEmail: user.email,
+      targetUserEmail: user.closedEmail || user.email,
     });
 
     res.json({
@@ -568,6 +577,23 @@ export const setAccountStatus = async (req: Request, res: Response): Promise<voi
         error: "This account is closed. Reinstate it (active) before suspending or banning.",
       });
       return;
+    }
+
+    // A "hide" closure released the person's email and Google id (so they could
+    // start a new account). Give them back first; if a new account has taken the
+    // address meanwhile, the closed one cannot have it too — refuse, stay closed.
+    if (user.status === "closed" && status === "active") {
+      const back = await reclaimIdentity(user);
+      if (!back.ok) {
+        res.status(409).json({ success: false, error: back.error });
+        return;
+      }
+      if (user.closedEmail) {
+        user.email = user.closedEmail;
+        user.closedEmail = undefined;
+        user.closedGoogleId = undefined;
+        user.closedEmailHash = undefined;
+      }
     }
 
     const before = user.status || "active";

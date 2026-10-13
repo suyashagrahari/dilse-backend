@@ -199,8 +199,8 @@ export async function creationsReport(query: Record<string, unknown>, now = new 
   const [users, first] = await Promise.all([
     ids.length
       ? User.find({ _id: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) } })
-          .select("name email avatar createdAt status")
-          .lean<Array<{ _id: mongoose.Types.ObjectId; name?: string; email?: string; avatar?: string; createdAt?: Date; status?: string }>>()
+          .select("name email closedEmail avatar createdAt status")
+          .lean<Array<{ _id: mongoose.Types.ObjectId; name?: string; email?: string; closedEmail?: string; avatar?: string; createdAt?: Date; status?: string }>>()
       : Promise.resolve([]),
     firstPageAt(ids),
   ]);
@@ -212,7 +212,7 @@ export async function creationsReport(query: Record<string, unknown>, now = new 
     return {
       userId: c.userId,
       name: u?.name || "Deleted user",
-      email: u?.email || "",
+      email: u?.closedEmail || u?.email || "",
       avatar: u?.avatar || "",
       joinedAt: u?.createdAt ?? null,
       status: u?.status || (u ? "active" : "deleted"),
