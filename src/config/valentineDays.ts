@@ -45,6 +45,8 @@ export const BASE_DAY_SLUGS = [
   "happy-diwali",
   // I'm Sorry — an evergreen apology on the engine (✦ premium in the gallery).
   "sorry",
+  // Will You Be Mine? — an evergreen proposal page on the engine (✦ premium).
+  "will-you-be-mine",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -435,6 +437,54 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
           { key: "line", kind: "text", max: 60 },
         ],
       },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
+      { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── Will You Be Mine? ── an evergreen proposal page on the engine (✦
+  //    premium): a velvet ring box, our story (a heart path of chapters), the
+  //    reasons as a heart constellation, a love quiz, photos, the letter, hold
+  //    the heart till the ring box opens with a promise, then "Will you be
+  //    mine?" — the sender may let No become "Let me think about it", which
+  //    records reactions.answer "no". Four looks. ─────────────────────────────
+  "will-you-be-mine": {
+    title: "Will You Be Mine?",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client WYBM_TRACK, Perfect) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["s1-gate", "s2-story", "s3-quiz", "s4-propose", "s5-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["roseGold", "cherryBlossom", "starryNight", "ivoryLace"], default: "roseGold" },
+      /** What they're asking — changes the default question, the YES button, the certificate and the reply. */
+      { key: "tone", kind: "enum", options: ["girlfriend", "boyfriend", "marry", "date"], default: "girlfriend" },
+      { key: "openingLine", kind: "text", max: 60 },
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 36 },
+          { key: "line", kind: "text", max: 100 },
+        ],
+      },
+      { key: "reasons", kind: "list", maxItems: 6, itemMax: 70 },
+      {
+        key: "quiz",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "q", kind: "text", max: 60 },
+          { key: "right", kind: "text", max: 30 },
+          { key: "wrong1", kind: "text", max: 30 },
+          { key: "wrong2", kind: "text", max: 30 },
+        ],
+      },
+      { key: "promise", kind: "text", max: 140 },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },

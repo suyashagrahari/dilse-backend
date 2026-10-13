@@ -73,6 +73,7 @@ const LABELS: Record<string, string> = {
   "happy-halloween": "Happy Halloween",
   "dandiya-partner": "Be My Dandiya Partner",
   sorry: "I'm Sorry",
+  "will-you-be-mine": "Will You Be Mine?",
   "happy-diwali": "Happy Diwali",
   "happy-rose-day-premium": "Rose Day ✦ Premium",
   "happy-propose-day-premium": "Propose Day ✦ Premium",

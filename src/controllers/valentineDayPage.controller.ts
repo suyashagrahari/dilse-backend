@@ -55,6 +55,7 @@ const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "dandiya-partner": "Dandiya invitation",
   "happy-diwali": "Diwali",
   sorry: "Sorry",
+  "will-you-be-mine": "Proposal",
 };
 
 /** A premium day's emails use its base day's plain name ("Rose Day"). */

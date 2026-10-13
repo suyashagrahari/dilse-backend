@@ -64,6 +64,7 @@ import { valentineBestfriend } from "./valentine-bestfriend";
 import { valentineGf } from "./valentine-gf";
 import { vendingMachine } from "./vending-machine";
 import { watch } from "./watch";
+import { willYouBeMine } from "./will-you-be-mine";
 import { call } from "./call";
 import { challan } from "./challan";
 import { nutrition } from "./nutrition";
@@ -127,6 +128,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   valentineGf,
   vendingMachine,
   watch,
+  willYouBeMine,
   call,
   challan,
   nutrition,
