@@ -414,6 +414,8 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
     maxPhotos: 6,
     letterMax: 1500,
     asksQuestion: true,
+    /** Plays its own English song (client SORRY_TRACK) unless the sender picks another. */
+    musicTrack: true,
     gifSlots: ["s1-gate", "s2-sorry", "s3-promise", "s4-coupon", "s5-yes"],
     extras: [
       { key: "palette", kind: "enum", options: ["babyPink", "strawberryMilk", "mintMatcha", "lavenderDream", "peachCream", "skyCotton"], default: "babyPink" },
