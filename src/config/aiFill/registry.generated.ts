@@ -54,6 +54,7 @@ import { proposal } from "./proposal";
 import { recharge } from "./recharge";
 import { rewind } from "./rewind";
 import { searched } from "./searched";
+import { sorry } from "./sorry";
 import { sorryFriend } from "./sorry-friend";
 import { sorryGf } from "./sorry-gf";
 import { streak } from "./streak";
@@ -116,6 +117,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   recharge,
   rewind,
   searched,
+  sorry,
   sorryFriend,
   sorryGf,
   streak,

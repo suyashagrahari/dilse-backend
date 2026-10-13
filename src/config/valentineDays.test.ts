@@ -106,6 +106,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-halloween": ["tone", "houseName", "trickLine", "carveWord", "costume", "costumeWhy", "ingredients", "potionSpell", "question", "yesLine"],
   "dandiya-partner": ["tone", "openingLine", "nightLines", "myColor", "lookLine", "eventDate", "eventTime", "venue", "dressCode", "question", "yesLine", "answerMode", "noTries"],
   "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
+  sorry: ["palette", "tone", "openingLine", "moodLines", "confession", "reasons", "promise", "coupons", "question", "yesLine", "answerMode", "noTries"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -152,7 +153,7 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry"]
     );
   });
 
@@ -222,6 +223,41 @@ describe("Be My Dandiya Partner extras", () => {
     assert.equal(lines[0].length, 70);
     assert.equal((out.venue as string).length, 60);
     assert.equal(sanitizeExtras("dandiya-partner", { tone: "crush", myColor: "rani" }).myColor, "rani");
+  });
+});
+
+describe("I'm Sorry extras", () => {
+  it("palette and tone fall back to their defaults; lists, coupons and the confession are capped", () => {
+    const out = sanitizeExtras("sorry", {
+      palette: "neonGreen",
+      tone: "boss",
+      moodLines: Array.from({ length: 8 }, (_, i) => `mood ${i} ${"x".repeat(100)}`),
+      reasons: Array.from({ length: 9 }, () => "r".repeat(90)),
+      confession: "c".repeat(400),
+      coupons: Array.from({ length: 7 }, (_, i) => ({ title: `T${i}${"t".repeat(40)}`, line: "l".repeat(90), evil: "x" })),
+    });
+    assert.equal(out.palette, "babyPink");
+    assert.equal(out.tone, "partner");
+    assert.equal((out.moodLines as string[]).length, 5);
+    assert.equal((out.moodLines as string[])[0].length, 70);
+    assert.equal((out.reasons as string[]).length, 5);
+    assert.equal((out.confession as string).length, 160);
+    const coupons = out.coupons as { title: string; line: string }[];
+    assert.equal(coupons.length, 4);
+    assert.equal(coupons[0].title.length, 28);
+    assert.equal(coupons[0].line.length, 60);
+    assert.equal("evil" in coupons[0], false);
+    assert.equal(sanitizeExtras("sorry", { palette: "lavenderDream", tone: "bestie" }).palette, "lavenderDream");
+  });
+
+  it("asks the question, and keeps the two answer modes (the honest \"I need time\" is noAfterTries)", () => {
+    assert.equal(VALENTINE_DAYS.sorry.asksQuestion, true);
+    const bad = sanitizeExtras("sorry", { answerMode: "maybe", noTries: "9" });
+    assert.equal(bad.answerMode, "yesOnly");
+    assert.equal(bad.noTries, "4");
+    const ok = sanitizeExtras("sorry", { answerMode: "noAfterTries", noTries: "5" });
+    assert.equal(ok.answerMode, "noAfterTries");
+    assert.equal(ok.noTries, "5");
   });
 });
 
