@@ -3,14 +3,14 @@ import mongoose from "mongoose";
 import User from "../models/User";
 import PointTransaction from "../models/PointTransaction";
 import PaymentOrder from "../models/PaymentOrder";
-import { getPricingFreshWithOrigin, allPricing } from "../config/templatePricing";
+import { getPricingFreshWithOrigin } from "../config/templatePricing";
 import { templateLabel } from "../config/templateCatalog";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { createRazorpayOrder, verifyRazorpaySignature } from "../services/razorpay.service";
 import { env } from "../config/env";
 import { recordEarningForOrder } from "../services/influencer.service";
-import { audienceFor, quoteFor, viewerFreeReason, type ViewerFreeReason } from "../services/pricingQuote.service";
+import { audienceFor, pricingMapFor, quoteFor, viewerFreeReason, type ViewerFreeReason } from "../services/pricingQuote.service";
 
 /** What the refusal says when nothing is owed, by reason. */
 function noPaymentMessage(reason: ViewerFreeReason, what: "payment" | "points"): string {
@@ -86,12 +86,12 @@ async function findOwnedPage(
  * do and what made a price change a two-repo deploy.
  */
 export const getPricingConfig = async (req: Request, res: Response): Promise<void> => {
-  // PRIVATE: the season sale differs for visitors in India and abroad, so this
-  // answer is per visitor and a shared cache (CDN, proxy) must never hand one
+  // PRIVATE: the season sale and the currency differ for visitors in India and
+  // abroad, so this answer is per visitor and a shared cache (CDN, proxy) must never hand one
   // country's prices to the next. The browser may still keep it for a minute.
   res.set("Cache-Control", "private, max-age=60");
   try {
-    const pricing = await allPricing({ audience: await audienceFor(req) });
+    const pricing = await pricingMapFor(req);
     res.json({ success: true, data: pricing });
   } catch (error) {
     console.error("Pricing config error:", error);
