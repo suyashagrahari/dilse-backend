@@ -83,9 +83,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs ship a track", () => {
+  it("only the two Halloween slugs and Sorry ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-halloween", "happy-halloween-premium"]);
+    assert.deepEqual(withTrack, ["happy-halloween", "happy-halloween-premium", "sorry"]);
   });
 });
 
