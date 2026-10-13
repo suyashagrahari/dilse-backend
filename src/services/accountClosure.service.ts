@@ -3,11 +3,16 @@
 // A user writes in asking for their account to be closed; a super admin
 // carries it out from the Danger tab. Two modes:
 //
-//   hide    Reversible. status → "closed": sign-in is refused at every door
-//           (accountStatus.ts) and every share link is hidden through the same
-//           blocked set a ban uses (bannedContent.ts). The pages themselves are
-//           not touched — not even unpublished — so reinstating the account
-//           (setAccountStatus "active") brings everything back exactly as it was.
+//   hide    Reversible. status → "closed": every share link is hidden through
+//           the same blocked set a ban uses (bannedContent.ts) and every session
+//           ends. The pages themselves are not touched — not even unpublished.
+//           The person's IDENTITY is released (releaseIdentity): the email and
+//           Google id move to closedEmail / closedGoogleId and the account keeps
+//           a placeholder address, so the next time they sign in — Google,
+//           password or code — they get a brand-new, empty account. Reinstating
+//           (setAccountStatus "active") gives the identity back if no new
+//           account has claimed it since (reclaimIdentity), and with it the
+//           pages, exactly as they were.
 //
 //   delete  Permanent. Every page across the template registry is deleted,
 //           with the satellite data that only exists for this user, and the
@@ -91,6 +96,77 @@ export function emailHash(email: string): string {
   return crypto.createHash("sha256").update(String(email || "").trim().toLowerCase()).digest("hex");
 }
 
+/**
+ * Detach a closed account from the person who owned it: their email and Google
+ * id move aside and the account keeps a placeholder, so signing in again with
+ * either creates a NEW account instead of meeting the closed one. Query-level
+ * update — no save hooks on an account that is being closed. Idempotent: an
+ * account already released keeps the address it released first.
+ */
+export async function releaseIdentity(user: Pick<IUser, "_id" | "email" | "googleId" | "closedEmail">): Promise<void> {
+  const id = String(user._id);
+  const placeholder = anonymisedEmail(id);
+  if (user.email === placeholder) return;
+  const original = String(user.email || "").trim().toLowerCase();
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        email: placeholder,
+        closedEmail: user.closedEmail || original,
+        closedEmailHash: emailHash(original),
+        ...(user.googleId ? { closedGoogleId: user.googleId } : {}),
+      },
+      $unset: { googleId: 1, refreshToken: 1, otp: 1, otpExpiry: 1 },
+    }
+  );
+  invalidateUser(id);
+}
+
+/**
+ * The reverse of releaseIdentity, for a reinstated "hide" closure. Refuses —
+ * leaving the account closed — when a new account already uses the address:
+ * two accounts cannot share one, and the new one is the person's choice.
+ */
+export async function reclaimIdentity(
+  user: Pick<IUser, "_id" | "email" | "closedEmail" | "closedGoogleId">
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!user.closedEmail) return { ok: true }; // never released (closed before this existed)
+  const taken = await User.exists({ email: user.closedEmail, _id: { $ne: user._id } });
+  if (taken) {
+    return {
+      ok: false,
+      error: `${user.closedEmail} now belongs to a new account the person created after the closure, so this one cannot be reinstated with it.`,
+    };
+  }
+  const googleTaken = user.closedGoogleId
+    ? await User.exists({ googleId: user.closedGoogleId, _id: { $ne: user._id } })
+    : null;
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: { email: user.closedEmail, ...(user.closedGoogleId && !googleTaken ? { googleId: user.closedGoogleId } : {}) },
+      $unset: { closedEmail: 1, closedGoogleId: 1, closedEmailHash: 1 },
+    }
+  );
+  invalidateUser(String(user._id));
+  return { ok: true };
+}
+
+/**
+ * For the sign-in doors: a closed account found by email or Google id is
+ * released on the spot and treated as absent, so the person gets a new
+ * account. Every closure releases the identity when it happens; this covers
+ * accounts closed before that was so.
+ */
+export async function releaseIfClosed<T extends Pick<IUser, "_id" | "email" | "googleId" | "closedEmail" | "status"> | null>(
+  user: T
+): Promise<T | null> {
+  if (!user || user.status !== "closed") return user;
+  await releaseIdentity(user);
+  return null;
+}
+
 interface Satellite {
   model: mongoose.Model<unknown>;
   filter: (id: mongoose.Types.ObjectId, idStr: string) => Record<string, unknown>;
@@ -145,7 +221,7 @@ export async function closurePreview(user: IUser) {
   for (const { s, n } of satelliteCounts) if (n) wouldDelete[collectionOf(s.model)] = n;
 
   return {
-    user: { _id: idStr, email: user.email, name: user.name, status: user.status, closureMode: user.closureMode ?? null },
+    user: { _id: idStr, email: user.closedEmail || user.email, name: user.name, status: user.status, closureMode: user.closureMode ?? null },
     pages: {
       total: pageCounts.reduce((s, p) => s + p.total, 0),
       published: pageCounts.reduce((s, p) => s + p.published, 0),
@@ -169,7 +245,8 @@ export async function closurePreview(user: IUser) {
 export async function closeAccount(user: IUser, req: ClosureRequest, actorId: string) {
   const id = user._id;
   const idStr = String(id);
-  const previousEmail = user.email;
+  // An account already closed with "hide" holds a placeholder; its real address is closedEmail.
+  const previousEmail = user.closedEmail || user.email;
 
   if (user.status === "closed" && user.closureMode === "delete") {
     throw new ClosureError("This account has already been closed and its data deleted.", 409);
@@ -190,6 +267,7 @@ export async function closeAccount(user: IUser, req: ClosureRequest, actorId: st
   invalidateUser(idStr);
 
   if (req.mode === "hide") {
+    await releaseIdentity({ _id: id, email: previousEmail, googleId: user.googleId, closedEmail: user.closedEmail });
     await rebuildBannedContent();
     const preview = await closurePreview(user);
     return { mode: req.mode, deleted: {} as Record<string, number>, hiddenShareLinks: preview.hiddenShareLinks };
@@ -219,6 +297,9 @@ export async function closeAccount(user: IUser, req: ClosureRequest, actorId: st
         closedEmailHash: emailHash(previousEmail),
       },
       $unset: {
+        // Delete forgets the person: not even the released address is kept.
+        closedEmail: 1,
+        closedGoogleId: 1,
         googleId: 1,
         password: 1,
         refreshToken: 1,

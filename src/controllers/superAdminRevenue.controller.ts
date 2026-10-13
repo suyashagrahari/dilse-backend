@@ -216,9 +216,9 @@ export const closeUserAccount = async (req: Request, res: Response): Promise<voi
   try {
     const user = await loadTarget(req, res, { mutating: true });
     if (!user) return;
-    const request = checkClosureRequest(req.body, user.email);
+    const request = checkClosureRequest(req.body, user.closedEmail || user.email);
     const beforeStatus = user.status || "active";
-    const email = user.email;
+    const email = user.closedEmail || user.email;
 
     const result = await closeAccount(user, request, String(req.userId));
 
@@ -242,7 +242,7 @@ export const closeUserAccount = async (req: Request, res: Response): Promise<voi
       data: result,
       message:
         request.mode === "hide"
-          ? "Account closed. Its pages are hidden; reinstating the account restores them."
+          ? "Account closed. Its pages are hidden and the person is signed out; if they sign in again they start a new, empty account. Reinstating restores everything."
           : "Account closed and its pages deleted. Payment records were kept.",
     });
   } catch (error) {

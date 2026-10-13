@@ -252,6 +252,17 @@ export const getTemplatePopularity = async (req: Request, res: Response): Promis
 
 // ─── USER MANAGEMENT ────────────────────────────────────────────
 
+/**
+ * A closed account keeps a placeholder address so its owner can start over
+ * (accountClosure.service.ts); the admin still sees who it was. `emailReleased`
+ * tells the screen the address is no longer the account's own.
+ */
+function showRealEmail<T extends { email?: string; closedEmail?: string } | null>(u: T): T {
+  if (!u || !u.closedEmail) return u;
+  const { closedEmail, ...rest } = u;
+  return { ...rest, email: closedEmail, emailReleased: true } as unknown as T;
+}
+
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = Math.max(parseInt(req.query.page as string) || 1, 1);
@@ -269,6 +280,9 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
+        // A closed account gave its address up (accountClosure.service.ts) but is
+        // still found by it here.
+        { closedEmail: { $regex: search, $options: "i" } },
       ];
     }
     if (roleFilter && ["normal", "member", "admin", "superadmin"].includes(roleFilter)) {
@@ -321,11 +335,12 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
 
     const [users, total] = await Promise.all([
       User.find(query)
-        .select("name email avatar provider role status statusReason suspendedUntil points isVerified createdAt")
+        .select("name email closedEmail avatar provider role status statusReason suspendedUntil points isVerified createdAt")
         .sort({ [sortBy]: sortOrder })
         .skip((page - 1) * limit)
         .limit(limit)
-        .lean(),
+        .lean()
+        .then((rows) => rows.map(showRealEmail)),
       User.countDocuments(query),
     ]);
 
@@ -413,8 +428,9 @@ export const getUserDetail = async (req: Request, res: Response): Promise<void> 
     const { userId } = req.params;
 
     const user = await User.findById(userId)
-      .select("name email avatar provider role status statusReason suspendedUntil points totalPointsEarned isVerified referralCode subdomain createdAt updatedAt")
-      .lean();
+      .select("name email closedEmail avatar provider role status statusReason suspendedUntil points totalPointsEarned isVerified referralCode subdomain createdAt updatedAt")
+      .lean()
+      .then(showRealEmail);
 
     if (!user) {
       res.status(404).json({ success: false, error: "User not found" });

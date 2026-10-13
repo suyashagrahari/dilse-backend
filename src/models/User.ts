@@ -76,6 +76,15 @@ export interface IUser extends Document {
    */
   closedEmailHash?: string;
   /**
+   * A "hide" closure releases the person's identity so they can start over
+   * with a NEW account: `email` becomes a placeholder and `googleId` is
+   * cleared. The originals are kept here for the admin screens and so a
+   * reinstatement can give them back (when no new account has taken them).
+   * Indexed (sparse) so an admin search by the old address still finds it.
+   */
+  closedEmail?: string;
+  closedGoogleId?: string;
+  /**
    * Bumped to invalidate every token already issued to this user. `protect`
    * compares it against the `tv` claim, so a bump is an immediate,
    * irreversible logout of every device — the only force-logout available
@@ -180,6 +189,8 @@ const userSchema = new Schema<IUser>(
     closureReason: { type: String, maxlength: 500 },
     closureMode: { type: String, enum: ["hide", "delete"] },
     closedEmailHash: { type: String },
+    closedEmail: { type: String, lowercase: true, trim: true, index: { sparse: true } },
+    closedGoogleId: { type: String },
     tokenVersion: { type: Number, default: 0 },
     theme: {
       type: String,
