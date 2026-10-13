@@ -203,8 +203,16 @@ valentineDayPageSchema.methods.comparePassword = async function (candidate: stri
 
 export const ValentineDayPage = mongoose.model<IValentineDayPage>("ValentineDayPage", valentineDayPageSchema);
 
+/**
+ * Model names a slug may not derive: "happy-birthday" would become "BirthdayPage",
+ * which is already the legacy birthday template's own model (models/BirthdayPage.ts)
+ * and mongoose refuses to compile a second model of that name.
+ */
+const MODEL_NAME_OVERRIDES: Partial<Record<string, string>> = { "happy-birthday": "HappyBirthdayPage" };
+
 /** "happy-rose-day" → "RoseDayPage", "happy-valentines-day" → "ValentinesDayPage", "happy-halloween" → "HalloweenPage". */
 const modelName = (slug: string): string =>
+  MODEL_NAME_OVERRIDES[slug] ??
   slug
     .replace(/^happy-/, "")
     .split("-")

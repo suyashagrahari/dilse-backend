@@ -51,7 +51,7 @@ function call(handler: (req: Request, res: Response) => Promise<void>, body: unk
 
 const flush = () => new Promise((r) => setTimeout(r, 10));
 
-function setup(slug: "happy-propose-day" | "happy-rose-day" | "dandiya-partner", extras: Record<string, unknown> = {}) {
+function setup(slug: "happy-propose-day" | "happy-rose-day" | "dandiya-partner" | "happy-birthday", extras: Record<string, unknown> = {}) {
   const doc: Record<string, unknown> = {
     _id: "p1", userId: "owner-1", shareId: "share-1", isPublished: true,
     recipientName: "Ishita", senderName: "Kabir", extras: { question: "Will you be mine, forever? 💍", ...extras }, reactions: {},
@@ -95,6 +95,27 @@ describe("valentine react beacon", () => {
     assert.equal(emails[0].noDodges, 4);
     assert.equal(emails[0].dayName, "Propose Day");
     assert.equal(emails[0].question, "Will you be mine, forever? 💍");
+  });
+
+  it("happy-birthday: the yes carries the \"when?\" pick (count) into the record and the owner's email", async () => {
+    const { c, doc, emails } = setup("happy-birthday");
+    assert.equal((await call(c.react, { event: "answered", noDodges: 1, count: 2 })).json.recorded, true);
+    await flush();
+    const r = doc.reactions as Record<string, unknown>;
+    assert.equal(r.answer, "yes");
+    assert.equal(r.count, 2);
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0].slug, "happy-birthday");
+    assert.equal(emails[0].dayName, "Birthday");
+    assert.equal(emails[0].count, 2);
+    assert.equal((await call(c.react, { event: "answered", answer: "no" })).status, 400);
+  });
+
+  it("happy-birthday without a pick: the email has no count", async () => {
+    const { c, emails } = setup("happy-birthday");
+    await call(c.react, { event: "answered", noDodges: 0 });
+    await flush();
+    assert.equal("count" in emails[0], false);
   });
 
   it("a day that asks no question records an answer but sends no email", async () => {

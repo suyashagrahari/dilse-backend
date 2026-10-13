@@ -451,6 +451,9 @@ export async function sendDateRsvpEmail(opts: {
   }
 }
 
+/** Happy Birthday's "when?" answers, in the order the page offers them (client HB_PLANS). */
+const BIRTHDAY_PLANS = ["tonight 🌙", "this weekend 🗓️", "whenever you plan it — surprise them ✨"] as const;
+
 /**
  * A Valentine's-week question was answered (Propose Day, Valentine's Day).
  * Goes to the page owner — modelled on sendDateRsvpEmail. Usually "yes" (the
@@ -473,6 +476,8 @@ export async function sendValentineAnswerEmail(opts: {
   slug?: string;
   /** Default "yes". */
   answer?: "yes" | "no";
+  /** Happy Birthday: the "when?" pick — 1 tonight · 2 this weekend · 3 you plan it. */
+  count?: number;
 }): Promise<void> {
   // The names and question are the page owner's free text and the name lands in
   // the subject line: fold line breaks / control characters to a space.
@@ -485,7 +490,14 @@ export async function sendValentineAnswerEmail(opts: {
   const dandiya = opts.slug === "dandiya-partner";
   // The apology page: "yes" is forgiveness, and its only "no" is an honest "I need a little time".
   const sorry = opts.slug === "sorry";
-  const dodges = sorry
+  // The birthday page: yes to a birthday date, and (when the sender asked) when.
+  const birthday = opts.slug === "happy-birthday";
+  const plan = birthday ? BIRTHDAY_PLANS[(opts.count ?? 0) - 1] ?? "" : "";
+  const dodges = birthday
+    ? opts.noDodges > 0
+      ? ` The No button ran away ${times(opts.noDodges)} first 🎈`
+      : " First try, no hesitation 🎂"
+    : sorry
     ? opts.noDodges > 0
       ? ` The No button ran away ${times(opts.noDodges)} first 🥺`
       : " First try. No hesitation 💗"
@@ -501,22 +513,26 @@ export async function sendValentineAnswerEmail(opts: {
       ? ` After chasing the "No" button ${times(opts.noDodges)} 😄`
       : " First try, no hesitation.";
   const no = opts.answer === "no";
-  const subject = sorry
+  const subject = birthday
+    ? `🎂 ${who} said YES to a birthday date`
+    : sorry
     ? no
       ? `🤍 ${who} read your sorry page`
       : `💗 ${who} forgave you`
     : no
     ? `${who} answered your ${opts.dayName} page`
     : halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
-  const head = sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
-  const body = sorry && no
+  const head = birthday ? `${who} said YES 🥳` : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
+  const body = birthday
+    ? `${question ? `“${question}” — ` : ""}${who} said yes!${plan ? ` When: ${plan}.` : ""}${dodges}`
+    : sorry && no
     ? `${who} read every word of your apology and needs a little time. Give them some space; they know you're sorry. 🤍`
     : sorry
     ? `${question ? `“${question}” — ` : ""}${who} said yes. You're forgiven 💗${dodges}`
     : no
     ? `${question ? `“${question}” — ` : ""}${who} opened your ${opts.dayName} page, saw everything you made, and chose “no” this time. It takes courage to ask, and your page was still a gift. 🪔`
     : `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
-  const band = sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
+  const band = birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
   const pageBg = halloween ? "#17122b" : "#1e0f24";
   const cardBg = halloween ? "#251842" : "#2a1240";
   const button = halloween ? "#ff8a3d" : "#f6e3b4";

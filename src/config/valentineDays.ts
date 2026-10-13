@@ -45,6 +45,8 @@ export const BASE_DAY_SLUGS = [
   "happy-diwali",
   // I'm Sorry — an evergreen apology on the engine (✦ premium in the gallery).
   "sorry",
+  // Happy Birthday — an evergreen birthday surprise on the engine (✦ premium in the gallery).
+  "happy-birthday",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -439,6 +441,45 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "yesLine", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
       { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── Happy Birthday ── an evergreen birthday surprise on the engine (✦
+  //    premium): untie the gift, light + blow the candles, cut the cake, pop
+  //    the balloons (reasons), photos, the letter, unwrap coupons, "Birthday
+  //    date with me?" (No runs away; yes only) and, with askWhen, when — the
+  //    pick (1 tonight · 2 this weekend · 3 you plan it) lands in
+  //    reactions.count. Four cake-flavoured looks; a crown certificate. ─────
+  "happy-birthday": {
+    title: "Happy Birthday, My Love",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client HB_TRACK, Best Day of My Life) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["b1-gate", "b2-wish", "b3-party", "b4-gift", "b5-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["strawberryCake", "funfettiVanilla", "lavenderFrosting", "mintMacaron"], default: "strawberryCake" },
+      /** Whose birthday — changes the default question, the letter's sign-off and the reply. */
+      { key: "tone", kind: "enum", options: ["partner", "crush", "bestie"], default: "partner" },
+      { key: "crown", kind: "enum", options: ["queen", "king", "star"], default: "queen" },
+      /** The number on the cake topper ("" = a heart). */
+      { key: "age", kind: "text", max: 3 },
+      { key: "openingLine", kind: "text", max: 60 },
+      { key: "wishLine", kind: "text", max: 100 },
+      { key: "cakeLine", kind: "text", max: 90 },
+      { key: "reasons", kind: "list", maxItems: 5, itemMax: 70 },
+      {
+        key: "coupons",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "title", kind: "text", max: 28 },
+          { key: "line", kind: "text", max: 60 },
+        ],
+      },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      { key: "askWhen", kind: "enum", options: ["yes", "no"], default: "yes" },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish

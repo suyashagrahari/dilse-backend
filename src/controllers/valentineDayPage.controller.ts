@@ -55,6 +55,7 @@ const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "dandiya-partner": "Dandiya invitation",
   "happy-diwali": "Diwali",
   sorry: "Sorry",
+  "happy-birthday": "Birthday",
 };
 
 /** A premium day's emails use its base day's plain name ("Rose Day"). */
@@ -478,6 +479,8 @@ export function makeValentineDayController(slug: ValentineDaySlug, deps: Valenti
               question: typeof extras.question === "string" ? extras.question : "",
               answer,
               noDodges: typeof set["reactions.noDodges"] === "number" ? (set["reactions.noDodges"] as number) : 0,
+              // Happy Birthday's "when?" pick (1 tonight · 2 this weekend · 3 you plan it).
+              ...(typeof set["reactions.count"] === "number" ? { count: set["reactions.count"] as number } : {}),
               link: await shareUrlFor(page.shareId, String(page.userId)),
             });
           } catch (err) {

@@ -83,9 +83,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs and Sorry ship a track", () => {
+  it("only the two Halloween slugs, Sorry and Happy Birthday ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-halloween", "happy-halloween-premium", "sorry"]);
+    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "sorry"]);
   });
 });
 
@@ -107,6 +107,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "dandiya-partner": ["tone", "openingLine", "nightLines", "myColor", "lookLine", "eventDate", "eventTime", "venue", "dressCode", "question", "yesLine", "answerMode", "noTries"],
   "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   sorry: ["palette", "tone", "openingLine", "moodLines", "confession", "reasons", "promise", "coupons", "question", "yesLine", "answerMode", "noTries"],
+  "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -153,7 +154,7 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday"]
     );
   });
 
@@ -258,6 +259,48 @@ describe("I'm Sorry extras", () => {
     const ok = sanitizeExtras("sorry", { answerMode: "noAfterTries", noTries: "5" });
     assert.equal(ok.answerMode, "noAfterTries");
     assert.equal(ok.noTries, "5");
+  });
+});
+
+describe("Happy Birthday extras", () => {
+  it("palette, tone, crown and askWhen fall back to their defaults; lists, coupons and lines are capped", () => {
+    const out = sanitizeExtras("happy-birthday", {
+      palette: "chocolateFudge",
+      tone: "boss",
+      crown: "emperor",
+      askWhen: "maybe",
+      age: "12345",
+      wishLine: "w".repeat(300),
+      cakeLine: "c".repeat(300),
+      reasons: Array.from({ length: 9 }, () => "r".repeat(90)),
+      coupons: Array.from({ length: 7 }, (_, i) => ({ title: `T${i}${"t".repeat(40)}`, line: "l".repeat(90), evil: "x" })),
+    });
+    assert.equal(out.palette, "strawberryCake");
+    assert.equal(out.tone, "partner");
+    assert.equal(out.crown, "queen");
+    assert.equal(out.askWhen, "yes");
+    assert.equal((out.age as string).length, 3);
+    assert.equal((out.wishLine as string).length, 100);
+    assert.equal((out.cakeLine as string).length, 90);
+    assert.equal((out.reasons as string[]).length, 5);
+    assert.equal((out.reasons as string[])[0].length, 70);
+    const coupons = out.coupons as { title: string; line: string }[];
+    assert.equal(coupons.length, 4);
+    assert.equal(coupons[0].title.length, 28);
+    assert.equal(coupons[0].line.length, 60);
+    assert.equal("evil" in coupons[0], false);
+    const ok = sanitizeExtras("happy-birthday", { palette: "mintMacaron", crown: "king", askWhen: "no" });
+    assert.equal(ok.palette, "mintMacaron");
+    assert.equal(ok.crown, "king");
+    assert.equal(ok.askWhen, "no");
+  });
+
+  it("asks the question, takes only a yes, and keeps the \"when?\" pick in reactions.count", () => {
+    assert.equal(VALENTINE_DAYS["happy-birthday"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["happy-birthday"].musicTrack, true);
+    const { set } = reactionWrite("answered", { noDodges: 2, count: 2 }, new Date(0));
+    assert.equal(set["reactions.answer"], "yes");
+    assert.equal(set["reactions.count"], 2);
   });
 });
 
