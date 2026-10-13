@@ -46,6 +46,7 @@ import { kundliMilan } from "./kundli-milan";
 import { legalNotice } from "./legal-notice";
 import { loveGf } from "./love-gf";
 import { loveflix } from "./loveflix";
+import { missYou } from "./miss-you";
 import { missyouBestfriend } from "./missyou-bestfriend";
 import { missyouGf } from "./missyou-gf";
 import { photoPuzzle } from "./photo-puzzle";
@@ -109,6 +110,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   legalNotice,
   loveGf,
   loveflix,
+  missYou,
   missyouBestfriend,
   missyouGf,
   photoPuzzle,

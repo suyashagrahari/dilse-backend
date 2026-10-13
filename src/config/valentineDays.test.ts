@@ -83,9 +83,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs and Sorry ship a track", () => {
+  it("only the two Halloween slugs, Sorry and Miss You ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-halloween", "happy-halloween-premium", "sorry"]);
+    assert.deepEqual(withTrack, ["happy-halloween", "happy-halloween-premium", "miss-you", "sorry"]);
   });
 });
 
@@ -107,6 +107,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "dandiya-partner": ["tone", "openingLine", "nightLines", "myColor", "lookLine", "eventDate", "eventTime", "venue", "dressCode", "question", "yesLine", "answerMode", "noTries"],
   "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   sorry: ["palette", "tone", "openingLine", "moodLines", "confession", "reasons", "promise", "coupons", "question", "yesLine", "answerMode", "noTries"],
+  "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -153,7 +154,7 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "miss-you"]
     );
   });
 
@@ -256,6 +257,45 @@ describe("I'm Sorry extras", () => {
     assert.equal(bad.answerMode, "yesOnly");
     assert.equal(bad.noTries, "4");
     const ok = sanitizeExtras("sorry", { answerMode: "noAfterTries", noTries: "5" });
+    assert.equal(ok.answerMode, "noAfterTries");
+    assert.equal(ok.noTries, "5");
+  });
+});
+
+describe("Miss You extras", () => {
+  it("palette and tone fall back; km is clamped; the jar, the envelopes and the cities are capped", () => {
+    const out = sanitizeExtras("miss-you", {
+      palette: "neonGreen",
+      tone: "boss",
+      yourCity: "M".repeat(50),
+      distanceKm: 99999,
+      meetDate: "2026-11-07T00:00:00Z",
+      missThings: Array.from({ length: 9 }, () => "m".repeat(90)),
+      openWhen: Array.from({ length: 6 }, (_, i) => ({ when: `W${i}${"w".repeat(50)}`, note: "n".repeat(300), evil: "x" })),
+    });
+    assert.equal(out.palette, "midnightStars");
+    assert.equal(out.tone, "partner");
+    assert.equal((out.yourCity as string).length, 30);
+    assert.equal(out.distanceKm, 20000);
+    assert.equal((out.meetDate as string).length, 10);
+    assert.equal((out.missThings as string[]).length, 6);
+    assert.equal((out.missThings as string[])[0].length, 70);
+    const env = out.openWhen as { when: string; note: string }[];
+    assert.equal(env.length, 4);
+    assert.equal(env[0].when.length, 40);
+    assert.equal(env[0].note.length, 160);
+    assert.equal("evil" in env[0], false);
+    assert.equal(sanitizeExtras("miss-you", { palette: "cloudLilac", distanceKm: -5 }).palette, "cloudLilac");
+    assert.equal(sanitizeExtras("miss-you", { distanceKm: -5 }).distanceKm, 0);
+  });
+
+  it("asks the question, ships its own track, and keeps both answer modes (\"Not tonight\" is noAfterTries)", () => {
+    assert.equal(VALENTINE_DAYS["miss-you"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["miss-you"].musicTrack, true);
+    const bad = sanitizeExtras("miss-you", { answerMode: "maybe", noTries: "9" });
+    assert.equal(bad.answerMode, "yesOnly");
+    assert.equal(bad.noTries, "4");
+    const ok = sanitizeExtras("miss-you", { answerMode: "noAfterTries", noTries: "5" });
     assert.equal(ok.answerMode, "noAfterTries");
     assert.equal(ok.noTries, "5");
   });

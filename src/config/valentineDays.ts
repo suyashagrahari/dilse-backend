@@ -45,6 +45,8 @@ export const BASE_DAY_SLUGS = [
   "happy-diwali",
   // I'm Sorry — an evergreen apology on the engine (✦ premium in the gallery).
   "sorry",
+  // Miss You — an evergreen long-distance "I miss you" on the engine (✦ premium in the gallery).
+  "miss-you",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -435,6 +437,47 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
           { key: "line", kind: "text", max: 60 },
         ],
       },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
+      { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── Miss You ── an evergreen long-distance "I miss you" (✦ premium): an
+  //    incoming love call, two cities on a map (km worked out client-side when
+  //    distanceKm is 0), a countdown to meetDate, a jar of things I miss,
+  //    photos, open-when envelopes, the letter as a paper plane, a hug across
+  //    the map and "Video call tonight?" — the sender may let No become "Not
+  //    tonight", which records reactions.answer "no". Four looks. ───────────
+  "miss-you": {
+    title: "I Miss You, Come Back Soon",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client MISS_YOU_TRACK, The Night We Met) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["m1-call", "m2-miss", "m3-hug", "m4-wait", "m5-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["midnightStars", "sunsetPeach", "cloudLilac", "moonlightMint"], default: "midnightStars" },
+      /** Who it's for — changes the default question, the reply and the ticket's seat. */
+      { key: "tone", kind: "enum", options: ["partner", "crush", "bestie"], default: "partner" },
+      { key: "openingLine", kind: "text", max: 60 },
+      { key: "yourCity", kind: "text", max: 30 },
+      { key: "myCity", kind: "text", max: 30 },
+      { key: "distanceKm", kind: "number", min: 0, max: 20000, default: 0 },
+      /** "YYYY-MM-DD" or "" (the countdown then says "soon"). */
+      { key: "meetDate", kind: "text", max: 10 },
+      { key: "missThings", kind: "list", maxItems: 6, itemMax: 70 },
+      {
+        key: "openWhen",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "when", kind: "text", max: 40 },
+          { key: "note", kind: "longtext", max: 160 },
+        ],
+      },
+      { key: "hugLine", kind: "text", max: 80 },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
