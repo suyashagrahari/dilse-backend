@@ -10,7 +10,7 @@
 // header is read at all.
 
 import type { Request } from "express";
-import { getPricingFreshWithOrigin, getPricingWithOrigin, type ResolvedPricing } from "../config/templatePricing";
+import { allPricing, getPricingFreshWithOrigin, getPricingWithOrigin, type ResolvedPricing } from "../config/templatePricing";
 import {
   currencyForCountry,
   localizePricing,
@@ -139,4 +139,34 @@ export async function quoteFor(req: Request, templateType: string, { fresh = fal
     discountSource: priced.discount.source,
     seasonMode: priced.discount.seasonMode,
   };
+}
+
+/** One template's price for display, in the currency this visitor will be charged in. */
+export type DisplayPricing = ResolvedPricing & {
+  currency: Currency;
+  /** Major units (rupees / dollars) in `currency` — what checkout will charge. */
+  displayFinal: number;
+  displayMrp: number;
+};
+
+/**
+ * GET /payment/pricing: every priced template for THIS visitor — their side of
+ * the season split, and their currency. The INR fields stay as they were (gates
+ * and admin read them); `currency` + `displayFinal` / `displayMrp` are what a
+ * price badge shows, decided exactly as quoteFor decides the checkout currency,
+ * so a visitor abroad sees "$1.99" on the page and is then charged $1.99.
+ */
+export async function pricingMapFor(req: Request): Promise<Record<string, DisplayPricing>> {
+  const geo = await resolveViewerCountry(req);
+  const [map, settings] = await Promise.all([
+    allPricing({ audience: audienceForCountry(geo.country) }),
+    getPaymentSettings(),
+  ]);
+  const currency = currencyForCountry(geo.country, settings.intlPricingEnabled);
+  const out: Record<string, DisplayPricing> = {};
+  for (const [slug, p] of Object.entries(map)) {
+    const local = localizePricing(p, currency, settings.inrPerUsd);
+    out[slug] = { ...p, currency, displayFinal: local.finalAmount / 100, displayMrp: local.mrpAmount / 100 };
+  }
+  return out;
 }
