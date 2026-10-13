@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { validateSchema } from "./aiFill/types";
+import { willYouBeMine } from "./aiFill/will-you-be-mine";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -83,9 +85,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs, Sorry, Happy Birthday and Miss You ship a track", () => {
+  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You and Will You Be Mine ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry"]);
+    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "will-you-be-mine"]);
   });
 });
 
@@ -108,6 +110,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   sorry: ["palette", "tone", "openingLine", "moodLines", "confession", "reasons", "promise", "coupons", "question", "yesLine", "answerMode", "noTries"],
   "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
+  "will-you-be-mine": ["palette", "tone", "openingLine", "story", "reasons", "quiz", "promise", "question", "yesLine", "answerMode", "noTries"],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -155,7 +158,7 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine"]
     );
   });
 
@@ -339,6 +342,55 @@ describe("Miss You extras", () => {
     assert.equal(bad.answerMode, "yesOnly");
     assert.equal(bad.noTries, "4");
     const ok = sanitizeExtras("miss-you", { answerMode: "noAfterTries", noTries: "5" });
+    assert.equal(ok.answerMode, "noAfterTries");
+    assert.equal(ok.noTries, "5");
+  });
+});
+
+describe("Will You Be Mine extras", () => {
+  it("palette and tone fall back to their defaults; story, reasons and quiz are capped", () => {
+    const out = sanitizeExtras("will-you-be-mine", {
+      palette: "neonGreen",
+      tone: "boss",
+      story: Array.from({ length: 7 }, (_, i) => ({ when: `W${i}${"w".repeat(40)}`, title: "t".repeat(60), line: "l".repeat(200), evil: "x" })),
+      reasons: Array.from({ length: 9 }, () => "r".repeat(90)),
+      quiz: Array.from({ length: 5 }, () => ({ q: "q".repeat(90), right: "r".repeat(50), wrong1: "a".repeat(50), wrong2: "b".repeat(50), hack: 1 })),
+      promise: "p".repeat(400),
+    });
+    assert.equal(out.palette, "roseGold");
+    assert.equal(out.tone, "girlfriend");
+    const story = out.story as { when: string; title: string; line: string }[];
+    assert.equal(story.length, 4);
+    assert.equal(story[0].when.length, 24);
+    assert.equal(story[0].title.length, 36);
+    assert.equal(story[0].line.length, 100);
+    assert.equal("evil" in story[0], false);
+    assert.equal((out.reasons as string[]).length, 6);
+    assert.equal((out.reasons as string[])[0].length, 70);
+    const quiz = out.quiz as Record<string, string>[];
+    assert.equal(quiz.length, 3);
+    assert.deepEqual([quiz[0].q.length, quiz[0].right.length, quiz[0].wrong1.length, quiz[0].wrong2.length], [60, 30, 30, 30]);
+    assert.equal("hack" in quiz[0], false);
+    assert.equal((out.promise as string).length, 140);
+    const ok = sanitizeExtras("will-you-be-mine", { palette: "starryNight", tone: "marry" });
+    assert.equal(ok.palette, "starryNight");
+    assert.equal(ok.tone, "marry");
+  });
+
+  it("its AI fill schema is valid (the server skips a broken one at boot)", () => {
+    assert.deepEqual(validateSchema(willYouBeMine), []);
+    for (const f of willYouBeMine.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(VALENTINE_DAYS["will-you-be-mine"].extras.some((e) => e.key === key), f.path);
+    }
+  });
+
+  it("asks the question, and keeps the two answer modes (the honest \"let me think\" is noAfterTries)", () => {
+    assert.equal(VALENTINE_DAYS["will-you-be-mine"].asksQuestion, true);
+    const bad = sanitizeExtras("will-you-be-mine", { answerMode: "maybe", noTries: "9" });
+    assert.equal(bad.answerMode, "yesOnly");
+    assert.equal(bad.noTries, "4");
+    const ok = sanitizeExtras("will-you-be-mine", { answerMode: "noAfterTries", noTries: "5" });
     assert.equal(ok.answerMode, "noAfterTries");
     assert.equal(ok.noTries, "5");
   });
