@@ -43,6 +43,8 @@ export const BASE_DAY_SLUGS = [
   "dandiya-partner",
   // Diwali wishes — another occasion on the engine.
   "happy-diwali",
+  // I'm Sorry — an evergreen apology on the engine (✦ premium in the gallery).
+  "sorry",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -398,6 +400,41 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
        * dodges forever; "noAfterTries" — No dodges `noTries` times, then can
        * be pressed and records `reactions.answer: "no"` (see answerAllows).
        */
+      { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
+      { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── I'm Sorry ── an evergreen apology on the engine (✦ premium): a sealed
+  //    envelope, "how upset are you?", what I did (scratch it off), guilt
+  //    bubbles, photos, the letter, a pinky promise, make-it-up coupons and
+  //    "Will you forgive me?" — the sender may let No become "I need a little
+  //    time", which records reactions.answer "no". Six pastel looks. ─────────
+  sorry: {
+    title: "I'm Sorry, Please Forgive Me",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    gifSlots: ["s1-gate", "s2-sorry", "s3-promise", "s4-coupon", "s5-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["babyPink", "strawberryMilk", "mintMatcha", "lavenderDream", "peachCream", "skyCotton"], default: "babyPink" },
+      /** Who it's for — changes the default question, the certificate and the reply. */
+      { key: "tone", kind: "enum", options: ["partner", "crush", "bestie"], default: "partner" },
+      { key: "openingLine", kind: "text", max: 60 },
+      { key: "moodLines", kind: "list", maxItems: 5, itemMax: 70 },
+      { key: "confession", kind: "longtext", max: 160 },
+      { key: "reasons", kind: "list", maxItems: 5, itemMax: 70 },
+      { key: "promise", kind: "text", max: 120 },
+      {
+        key: "coupons",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "title", kind: "text", max: 28 },
+          { key: "line", kind: "text", max: 60 },
+        ],
+      },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
       { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
     ],
