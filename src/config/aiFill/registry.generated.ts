@@ -61,6 +61,7 @@ import { searched } from "./searched";
 import { sorry } from "./sorry";
 import { sorryFriend } from "./sorry-friend";
 import { sorryGf } from "./sorry-gf";
+import { sorryPremium } from "./sorry-premium";
 import { streak } from "./streak";
 import { trainTicket } from "./train-ticket";
 import { us } from "./us";
@@ -129,6 +130,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   sorry,
   sorryFriend,
   sorryGf,
+  sorryPremium,
   streak,
   trainTicket,
   us,

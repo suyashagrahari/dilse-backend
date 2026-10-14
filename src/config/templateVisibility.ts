@@ -118,6 +118,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "will-you-be-mine",
   // Miss You ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "miss-you-premium",
+  // I'm Sorry ✦ Premium ships hidden the same way; released (and priced) by the super admin.
+  "sorry-premium",
   // The ultra-premium tier ships hidden too; each twin is released on its own.
   "happy-rose-day-premium",
   "happy-propose-day-premium",

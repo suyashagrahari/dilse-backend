@@ -60,6 +60,7 @@ const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "miss-you": "Miss You",
   "miss-you-premium": "Miss You ✦ Premium",
   "will-you-be-mine": "Proposal",
+  "sorry-premium": "Sorry",
 };
 
 /** A premium day's emails use its base day's plain name ("Rose Day"). */

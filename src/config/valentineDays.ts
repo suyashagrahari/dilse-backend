@@ -55,6 +55,8 @@ export const BASE_DAY_SLUGS = [
   "will-you-be-mine",
   // Miss You ✦ Premium — the premium edition of Miss You: a long-distance day, morning to sunrise.
   "miss-you-premium",
+  // I'm Sorry ✦ Premium ("After the Rain") — Sorry's premium edition on the engine.
+  "sorry-premium",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -660,6 +662,40 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "yesLine", kind: "text", max: 80 },
       /** "noAfterTries" here means "Yes, or Later": the Later button is there from the start. */
       { key: "answerMode", kind: "enum", options: ["noAfterTries", "yesOnly"], default: "noAfterTries" },
+    ],
+  },
+  // ── I'm Sorry ✦ Premium ("After the Rain") ── Sorry's premium edition: a
+  //    bear knocks at her door in the rain, she waters a wilted flower (what I
+  //    did), mends a cracked heart (how it felt), cracks fortune cookies (what
+  //    I learnt), shakes a jar of paper stars, sees the photos on a washing
+  //    line, sails the letter across a puddle, signs a peace contract and
+  //    answers "Forgive me?" — by default with an honest "I need a little
+  //    time" next to Yes (answerMode "noAfterTries" records reactions.answer
+  //    "no"). The sky clears into a rainbow. Four pastel skies. ─────────────
+  "sorry-premium": {
+    title: "After the Rain — I'm Sorry",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client SP_TRACK, Thinking Out Loud) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["p1-knock", "p2-bloom", "p3-mend", "p4-stars", "p5-sign", "p6-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["rainyBlush", "mintMorning", "lilacDrizzle", "peachSunbreak"], default: "rainyBlush" },
+      /** Cute / emotional / funny — changes the knock-knock joke, the question, the treaty and the reply. */
+      { key: "tone", kind: "enum", options: ["sweet", "heartfelt", "silly"], default: "sweet" },
+      /** yyyy-mm-dd, optional: "days together" on the star jar and the treaty. */
+      { key: "togetherSince", kind: "text", max: 10 },
+      { key: "knockLine", kind: "text", max: 70 },
+      { key: "confession", kind: "longtext", max: 160 },
+      { key: "feelings", kind: "list", maxItems: 3, itemMax: 80 },
+      { key: "lessons", kind: "list", maxItems: 3, itemMax: 80 },
+      { key: "stars", kind: "list", maxItems: 6, itemMax: 70 },
+      { key: "promises", kind: "list", maxItems: 4, itemMax: 70 },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      /** "noAfterTries" (default here): Yes, or "I need a little time" — no runaway button on this page. */
+      { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "noAfterTries" },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
