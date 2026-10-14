@@ -57,6 +57,8 @@ export const BASE_DAY_SLUGS = [
   "miss-you-premium",
   // I'm Sorry ✦ Premium ("After the Rain") — Sorry's premium edition on the engine.
   "sorry-premium",
+  // The Proposal ✦ Premium — the proposal's premium edition, a fairytale garden (✦ premium).
+  "proposal-premium",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -576,6 +578,48 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "hugLine", kind: "text", max: 80 },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
+      { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
+      { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── The Proposal ✦ Premium ── the proposal's premium edition, a fairytale
+  //    garden at golden hour (✦ premium): a wax-sealed invitation, string
+  //    lights (one word of lightsLine per bulb), our story carousel, a love
+  //    lock with the days since `since`, a flower of reasons, photos, the
+  //    letter, a ring box with the promise, then "Will you be mine?" — the
+  //    sender may let No become "Let me think about it", which records
+  //    reactions.answer "no". Four light looks. ─────────────────────────────
+  "proposal-premium": {
+    title: "The Proposal",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client PROPOSAL_TRACK, Lover) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["s1-peek", "s2-story", "s3-flowers", "s4-kneel", "s5-please", "s6-yay", "s7-hug"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["roseGoldBlush", "champagnePearl", "lilacGarden", "peachBellini"], default: "roseGoldBlush" },
+      /** What they're asking — changes the default question, the YES button, the certificate and the reply. */
+      { key: "tone", kind: "enum", options: ["girlfriend", "boyfriend", "marry"], default: "girlfriend" },
+      { key: "openingLine", kind: "text", max: 60 },
+      { key: "lightsLine", kind: "text", max: 48 },
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 36 },
+          { key: "line", kind: "text", max: 100 },
+        ],
+      },
+      /** "Together since" (YYYY-MM-DD from a date input) — the love lock's day count. */
+      { key: "since", kind: "text", max: 10 },
+      { key: "reasons", kind: "list", maxItems: 7, itemMax: 70 },
+      { key: "promise", kind: "text", max: 140 },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      { key: "datePlan", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
       { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
     ],
