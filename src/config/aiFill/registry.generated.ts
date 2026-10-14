@@ -68,6 +68,7 @@ import { vendingMachine } from "./vending-machine";
 import { watch } from "./watch";
 import { willYouBeMine } from "./will-you-be-mine";
 import { happyAnniversary } from "./happy-anniversary";
+import { anniversaryPremium } from "./anniversary-premium";
 import { call } from "./call";
 import { challan } from "./challan";
 import { nutrition } from "./nutrition";
@@ -135,6 +136,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   watch,
   willYouBeMine,
   happyAnniversary,
+  anniversaryPremium,
   call,
   challan,
   nutrition,

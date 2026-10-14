@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { validateSchema } from "./aiFill/types";
 import { willYouBeMine } from "./aiFill/will-you-be-mine";
 import { happyAnniversary } from "./aiFill/happy-anniversary";
+import { anniversaryPremium } from "./aiFill/anniversary-premium";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -86,9 +87,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You, Will You Be Mine and Happy Anniversary ship a track", () => {
+  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You, Will You Be Mine and both Anniversary pages ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-anniversary", "happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "will-you-be-mine"]);
+    assert.deepEqual(withTrack, ["anniversary-premium", "happy-anniversary", "happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "will-you-be-mine"]);
   });
 });
 
@@ -113,6 +114,10 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
   "will-you-be-mine": ["palette", "tone", "openingLine", "story", "reasons", "quiz", "promise", "question", "yesLine", "answerMode", "noTries"],
   "happy-anniversary": ["palette", "tone", "relation", "togetherSince", "ticketLine", "funStat", "milestones", "firstPlace", "firstMemory", "reasons", "promises", "plan", "question", "yesLine", "awardTitle"],
+  "anniversary-premium": [
+    "palette", "tone", "since", "metOn", "openingLine", "metPlace", "metLine", "chapters", "firsts", "littleThings", "reasons", "ourSong", "mostSaid",
+    "stats", "promises", "plans", "question", "datePlan", "yesLine", "lock", "openOn", "passHint",
+  ],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -153,6 +158,8 @@ describe("Valentine's week day configs", () => {
   it("every $2 day has five GIF slots (the anniversary museum six) and sane limits; only Propose, Valentine's and Halloween ask", () => {
     for (const slug of BASE_DAY_SLUGS) {
       const d = VALENTINE_DAYS[slug];
+      // The flagship anniversary book carries the ultra-premium limits (pinned in its own suite).
+      if (slug === "anniversary-premium") continue;
       assert.equal(d.gifSlots.length, slug === "happy-anniversary" ? 6 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
       assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
@@ -160,7 +167,7 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine", "happy-anniversary"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine", "happy-anniversary", "anniversary-premium"]
     );
   });
 
@@ -578,5 +585,57 @@ describe("Happy Anniversary extras", () => {
     assert.equal(d.asksQuestion, true);
     assert.equal(d.musicTrack, true);
     assert.deepEqual(d.gifSlots, ["h1-welcome", "h2-together", "h3-gallery", "h4-globe", "h5-yes", "h6-award"]);
+  });
+});
+
+describe("Anniversary Premium extras", () => {
+  it("palette, tone and lock fall back to their defaults; chapters, firsts and lists are capped", () => {
+    const out = sanitizeExtras("anniversary-premium", {
+      palette: "midnight",
+      tone: "boss",
+      lock: "vault",
+      chapters: Array.from({ length: 9 }, (_, i) => ({ when: `Y${i}${"w".repeat(40)}`, title: "t".repeat(60), line: "l".repeat(200), season: "rainy", evil: "x" })),
+      firsts: Array.from({ length: 8 }, () => ({ title: "f".repeat(60), line: "l".repeat(200) })),
+      littleThings: Array.from({ length: 9 }, () => "h".repeat(90)),
+      reasons: Array.from({ length: 12 }, () => "r".repeat(90)),
+      stats: Array.from({ length: 5 }, () => ({ num: "9".repeat(20), label: "x".repeat(60) })),
+      promises: Array.from({ length: 7 }, () => "p".repeat(100)),
+      plans: Array.from({ length: 7 }, () => "q".repeat(100)),
+      since: "2022-10-19T00:00:00Z",
+    });
+    assert.equal(out.palette, "champagnePearl");
+    assert.equal(out.tone, "girlfriend");
+    assert.equal(out.lock, "none");
+    const ch = out.chapters as Record<string, string>[];
+    assert.equal(ch.length, 6);
+    assert.deepEqual([ch[0].when.length, ch[0].title.length, ch[0].line.length], [20, 40, 120]);
+    assert.equal(ch[0].season, "spring");
+    assert.equal("evil" in ch[0], false);
+    assert.equal((out.firsts as unknown[]).length, 5);
+    assert.equal((out.littleThings as string[]).length, 6);
+    assert.equal((out.reasons as string[]).length, 8);
+    assert.equal((out.stats as unknown[]).length, 3);
+    assert.equal((out.promises as string[]).length, 5);
+    assert.equal((out.plans as string[]).length, 4);
+    assert.equal((out.since as string).length, 10);
+    const ok = sanitizeExtras("anniversary-premium", { palette: "sageLinen", tone: "wife", lock: "passcode" });
+    assert.deepEqual([ok.palette, ok.tone, ok.lock], ["sageLinen", "wife", "passcode"]);
+  });
+
+  it("its AI fill schema is valid (the server skips a broken one at boot)", () => {
+    assert.deepEqual(validateSchema(anniversaryPremium), []);
+    for (const f of anniversaryPremium.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(VALENTINE_DAYS["anniversary-premium"].extras.some((e) => e.key === key), f.path);
+    }
+  });
+
+  it("asks the question (yes only) and ships its own track", () => {
+    assert.equal(VALENTINE_DAYS["anniversary-premium"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["anniversary-premium"].musicTrack, true);
+    const d = VALENTINE_DAYS["anniversary-premium"];
+    assert.equal(d.gifSlots.length, 6);
+    assert.deepEqual([d.maxPhotos, d.letterMax], [10, 2500]);
+    assert.notEqual(d.premium, true);
   });
 });

@@ -499,7 +499,9 @@ export async function sendValentineAnswerEmail(opts: {
   const mine = opts.slug === "will-you-be-mine";
   // The anniversary museum: "another year of us?" — both of its buttons are a yes.
   const anniversary = opts.slug === "happy-anniversary";
-  const dodges = anniversary
+  // The anniversary book: yes-only, answered by dragging a heart into the sender's.
+  const anni = opts.slug === "anniversary-premium";
+  const dodges = anniversary || anni
     ? ""
     : birthday
     ? opts.noDodges > 0
@@ -531,6 +533,8 @@ export async function sendValentineAnswerEmail(opts: {
   const no = opts.answer === "no";
   const subject = anniversary
     ? `💗 ${who} said yes to another year of you two`
+    : anni
+    ? `💞 ${who} said yes — happy anniversary`
     : birthday
     ? `🎂 ${who} said YES to a birthday date`
     : missYou
@@ -548,9 +552,11 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${who} answered your ${opts.dayName} page`
     : halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
-  const head = anniversary ? `${who} said yes to another year 💗` : birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
+  const head = anniversary ? `${who} said yes to another year 💗` : anni ? `${who} said yes 💞` : birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
   const body = anniversary
     ? `${question ? `“${question}” — ` : ""}${who} walked through your whole little museum and said yes to another year. Happy anniversary, you two 🖼️💗`
+    : anni
+    ? `${question ? `“${question}” — ` : ""}${who} read your whole book — every chapter, every promise — and put their heart right next to yours. Happy anniversary 💗`
     : birthday
     ? `${question ? `“${question}” — ` : ""}${who} said yes!${plan ? ` When: ${plan}.` : ""}${dodges}`
     : missYou && no
