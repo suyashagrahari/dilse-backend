@@ -47,6 +47,8 @@ export const BASE_DAY_SLUGS = [
   "sorry",
   // Happy Birthday — an evergreen birthday surprise on the engine (✦ premium in the gallery).
   "happy-birthday",
+  // Birthday Surprise ✦ Premium — a pop-up birthday storybook (✦ premium, evergreen).
+  "birthday-premium",
   // Miss You — an evergreen long-distance "I miss you" on the engine (✦ premium in the gallery).
   "miss-you",
   // Will You Be Mine? — an evergreen proposal page on the engine (✦ premium).
@@ -483,6 +485,53 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
           { key: "line", kind: "text", max: 60 },
         ],
       },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      { key: "askWhen", kind: "enum", options: ["yes", "no"], default: "yes" },
+    ],
+  },
+  // ── Birthday Surprise ✦ Premium ── a pop-up birthday storybook (✦
+  //    premium): peel the storybook open, blow a dandelion (wishes), a hot-air
+  //    balloon ride over the milestones (days together from togetherSince), a
+  //    claw machine of reasons, a photo-booth strip, bake-your-own cake, a
+  //    scratch-off golden ticket, the pop-up letter, "Birthday date with me
+  //    tonight?" (yes only; "hmm…" spins a wheel that lands on yes) and, with
+  //    askWhen, when — the pick (1 tonight · 2 this weekend · 3 you plan it)
+  //    lands in reactions.count. Four pastel looks; a stamped birthday passport.
+  "birthday-premium": {
+    title: "A Birthday Storybook",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client BP_TRACK) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["bp-wake", "bp-dance", "bp-cake", "bp-gift", "bp-kiss"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["buttercream", "lavenderMacaron", "peachSorbet", "cottonCandy"], default: "buttercream" },
+      /** The voice of the default lines — cute, emotional or funny. */
+      { key: "tone", kind: "enum", options: ["cute", "emotional", "funny"], default: "cute" },
+      /** The topper on the cake they bake ("" = a heart). */
+      { key: "age", kind: "text", max: 3 },
+      /** YYYY-MM-DD or "" (the days-together counter hides). */
+      { key: "togetherSince", kind: "text", max: 10 },
+      { key: "coverLine", kind: "text", max: 60 },
+      /** One wish on each dandelion seed. */
+      { key: "wishes", kind: "list", maxItems: 5, itemMax: 40 },
+      {
+        key: "milestones",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 40 },
+          { key: "line", kind: "text", max: 80 },
+        ],
+      },
+      /** One reason in each claw-machine capsule. */
+      { key: "reasons", kind: "list", maxItems: 6, itemMax: 80 },
+      { key: "cakeLine", kind: "text", max: 90 },
+      { key: "ticketTitle", kind: "text", max: 32 },
+      { key: "ticketLine", kind: "text", max: 90 },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
       { key: "askWhen", kind: "enum", options: ["yes", "no"], default: "yes" },

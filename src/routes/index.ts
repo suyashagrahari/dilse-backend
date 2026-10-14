@@ -151,6 +151,8 @@ router.use("/dandiya-partner-pages", makeValentineDayRouter("dandiya-partner"));
 router.use("/sorry-pages", makeValentineDayRouter("sorry"));
 // Happy Birthday — the same engine.
 router.use("/happy-birthday-pages", makeValentineDayRouter("happy-birthday"));
+// Birthday Surprise ✦ Premium — the pop-up birthday storybook, same engine.
+router.use("/birthday-premium-pages", makeValentineDayRouter("birthday-premium"));
 // Miss You — the same engine.
 router.use("/miss-you-pages", makeValentineDayRouter("miss-you"));
 // Miss You ✦ Premium — the same engine.

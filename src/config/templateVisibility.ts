@@ -110,6 +110,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "sorry",
   // Happy Birthday ships hidden the same way; released (and priced) by the super admin.
   "happy-birthday",
+  // Birthday Surprise ✦ Premium ships hidden the same way; released (and priced) by the super admin.
+  "birthday-premium",
   // Miss You ships hidden the same way; released (and priced) by the super admin.
   "miss-you",
   // Will You Be Mine ships hidden the same way; released (and priced) by the super admin.

@@ -51,7 +51,7 @@ function call(handler: (req: Request, res: Response) => Promise<void>, body: unk
 
 const flush = () => new Promise((r) => setTimeout(r, 10));
 
-function setup(slug: "happy-propose-day" | "happy-rose-day" | "dandiya-partner" | "happy-birthday", extras: Record<string, unknown> = {}) {
+function setup(slug: "happy-propose-day" | "happy-rose-day" | "dandiya-partner" | "happy-birthday" | "birthday-premium", extras: Record<string, unknown> = {}) {
   const doc: Record<string, unknown> = {
     _id: "p1", userId: "owner-1", shareId: "share-1", isPublished: true,
     recipientName: "Ishita", senderName: "Kabir", extras: { question: "Will you be mine, forever? 💍", ...extras }, reactions: {},
@@ -108,6 +108,20 @@ describe("valentine react beacon", () => {
     assert.equal(emails[0].slug, "happy-birthday");
     assert.equal(emails[0].dayName, "Birthday");
     assert.equal(emails[0].count, 2);
+    assert.equal((await call(c.react, { event: "answered", answer: "no" })).status, 400);
+  });
+
+  it("birthday-premium: the yes carries the wheel spins and the \"when?\" pick into the owner's email", async () => {
+    const { c, doc, emails } = setup("birthday-premium");
+    assert.equal((await call(c.react, { event: "answered", noDodges: 2, count: 1 })).json.recorded, true);
+    await flush();
+    const r = doc.reactions as Record<string, unknown>;
+    assert.equal(r.answer, "yes");
+    assert.equal(r.count, 1);
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0].slug, "birthday-premium");
+    assert.equal(emails[0].dayName, "Birthday");
+    assert.equal(emails[0].count, 1);
     assert.equal((await call(c.react, { event: "answered", answer: "no" })).status, 400);
   });
 

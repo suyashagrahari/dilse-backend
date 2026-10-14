@@ -56,6 +56,7 @@ const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "happy-diwali": "Diwali",
   sorry: "Sorry",
   "happy-birthday": "Birthday",
+  "birthday-premium": "Birthday",
   "miss-you": "Miss You",
   "miss-you-premium": "Miss You ✦ Premium",
   "will-you-be-mine": "Proposal",

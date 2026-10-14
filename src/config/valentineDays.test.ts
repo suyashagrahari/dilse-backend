@@ -85,9 +85,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You (both) and Will You Be Mine ship a track", () => {
+  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You, Will You Be Mine and their premium editions ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "miss-you-premium", "sorry", "will-you-be-mine"]);
+    assert.deepEqual(withTrack, ["birthday-premium", "happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "miss-you-premium", "sorry", "will-you-be-mine"]);
   });
 });
 
@@ -110,6 +110,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-diwali": ["tone", "doorNote", "wishes", "initials", "sparkleWord", "mithai", "mithaiNote", "blessing"],
   sorry: ["palette", "tone", "openingLine", "moodLines", "confession", "reasons", "promise", "coupons", "question", "yesLine", "answerMode", "noTries"],
   "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
+  "birthday-premium": ["palette", "tone", "age", "togetherSince", "coverLine", "wishes", "milestones", "reasons", "cakeLine", "ticketTitle", "ticketLine", "question", "yesLine", "askWhen"],
   "will-you-be-mine": ["palette", "tone", "openingLine", "story", "reasons", "quiz", "promise", "question", "yesLine", "answerMode", "noTries"],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
@@ -159,7 +160,7 @@ describe("Valentine's week day configs", () => {
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine", "miss-you-premium"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "birthday-premium", "miss-you", "will-you-be-mine", "miss-you-premium"]
     );
   });
 
@@ -567,5 +568,56 @@ describe("reactionWrite", () => {
 
   it("never touches another event's field", () => {
     assert.deepEqual(Object.keys(reactionWrite("opened", { noDodges: 3, count: 3 }, now).set), ["reactions.openedAt"]);
+  });
+});
+
+describe("Birthday Premium extras", () => {
+  it("palette, tone and askWhen fall back to their defaults; wishes, milestones, reasons and lines are capped", () => {
+    const out = sanitizeExtras("birthday-premium", {
+      palette: "midnight",
+      tone: "spooky",
+      askWhen: "maybe",
+      age: "12345",
+      togetherSince: "2023-02-14T00:00:00Z",
+      coverLine: "c".repeat(200),
+      wishes: Array.from({ length: 9 }, () => "w".repeat(90)),
+      milestones: Array.from({ length: 8 }, (_, i) => ({ when: `W${i}${"w".repeat(40)}`, title: "t".repeat(90), line: "l".repeat(200), evil: "x" })),
+      reasons: Array.from({ length: 9 }, () => "r".repeat(120)),
+      cakeLine: "k".repeat(300),
+      ticketTitle: "T".repeat(90),
+      ticketLine: "L".repeat(300),
+    });
+    assert.equal(out.palette, "buttercream");
+    assert.equal(out.tone, "cute");
+    assert.equal(out.askWhen, "yes");
+    assert.equal((out.age as string).length, 3);
+    assert.equal((out.togetherSince as string).length, 10);
+    assert.equal((out.coverLine as string).length, 60);
+    assert.equal((out.wishes as string[]).length, 5);
+    assert.equal((out.wishes as string[])[0].length, 40);
+    const ms = out.milestones as { when: string; title: string; line: string }[];
+    assert.equal(ms.length, 5);
+    assert.equal(ms[0].when.length, 24);
+    assert.equal(ms[0].title.length, 40);
+    assert.equal(ms[0].line.length, 80);
+    assert.equal("evil" in ms[0], false);
+    assert.equal((out.reasons as string[]).length, 6);
+    assert.equal((out.reasons as string[])[0].length, 80);
+    assert.equal((out.cakeLine as string).length, 90);
+    assert.equal((out.ticketTitle as string).length, 32);
+    assert.equal((out.ticketLine as string).length, 90);
+    const ok = sanitizeExtras("birthday-premium", { palette: "cottonCandy", tone: "funny", askWhen: "no" });
+    assert.equal(ok.palette, "cottonCandy");
+    assert.equal(ok.tone, "funny");
+    assert.equal(ok.askWhen, "no");
+  });
+
+  it("asks the question, ships its own track and keeps the \"when?\" pick in reactions.count", () => {
+    assert.equal(VALENTINE_DAYS["birthday-premium"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["birthday-premium"].musicTrack, true);
+    assert.equal(VALENTINE_DAYS["birthday-premium"].gifSlots.length, 5);
+    const { set } = reactionWrite("answered", { noDodges: 1, count: 3 }, new Date(0));
+    assert.equal(set["reactions.answer"], "yes");
+    assert.equal(set["reactions.count"], 3);
   });
 });
