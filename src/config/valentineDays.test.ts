@@ -85,9 +85,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You and Will You Be Mine ship a track", () => {
+  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You (both) and Will You Be Mine ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "will-you-be-mine"]);
+    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "miss-you-premium", "sorry", "will-you-be-mine"]);
   });
 });
 
@@ -112,6 +112,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
   "will-you-be-mine": ["palette", "tone", "openingLine", "story", "reasons", "quiz", "promise", "question", "yesLine", "answerMode", "noTries"],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
+  "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -148,17 +149,17 @@ describe("Valentine's week day configs", () => {
     }
   });
 
-  it("every $2 day has five GIF slots and sane limits; only Propose, Valentine's and Halloween ask", () => {
+  it("every $2 day has five GIF slots (Miss You ✦ Premium six) and sane limits; only Propose, Valentine's and Halloween ask", () => {
     for (const slug of BASE_DAY_SLUGS) {
       const d = VALENTINE_DAYS[slug];
-      assert.equal(d.gifSlots.length, 5, slug);
+      assert.equal(d.gifSlots.length, slug === "miss-you-premium" ? 6 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
       assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
       assert.notEqual(d.premium, true, slug);
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine", "miss-you-premium"]
     );
   });
 
@@ -305,6 +306,43 @@ describe("Happy Birthday extras", () => {
     const { set } = reactionWrite("answered", { noDodges: 2, count: 2 }, new Date(0));
     assert.equal(set["reactions.answer"], "yes");
     assert.equal(set["reactions.count"], 2);
+  });
+});
+
+describe("Miss You ✦ Premium extras", () => {
+  it("palette, tone and unit fall back; km is clamped; the radio, the picnic and the stars are capped", () => {
+    const out = sanitizeExtras("miss-you-premium", {
+      palette: "midnightStars",
+      tone: "boss",
+      unit: "lightyears",
+      myCity: "B".repeat(50),
+      distanceKm: 99999,
+      voiceNotes: Array.from({ length: 5 }, () => "v".repeat(200)),
+      picnicLines: Array.from({ length: 8 }, () => "p".repeat(100)),
+      missThings: Array.from({ length: 9 }, () => "m".repeat(90)),
+      heartLine: "h".repeat(200),
+    });
+    assert.equal(out.palette, "cottonCandy");
+    assert.equal(out.tone, "partner");
+    assert.equal(out.unit, "km");
+    assert.equal((out.myCity as string).length, 30);
+    assert.equal(out.distanceKm, 20000);
+    assert.equal((out.voiceNotes as string[]).length, 3);
+    assert.equal((out.voiceNotes as string[])[0].length, 90);
+    assert.equal((out.picnicLines as string[]).length, 5);
+    assert.equal((out.picnicLines as string[])[0].length, 70);
+    assert.equal((out.missThings as string[]).length, 6);
+    assert.equal((out.heartLine as string).length, 80);
+    assert.equal(sanitizeExtras("miss-you-premium", { palette: "mintBreeze", unit: "mi" }).unit, "mi");
+  });
+
+  it("asks the question, ships its own track, and lets them say Later by default", () => {
+    assert.equal(VALENTINE_DAYS["miss-you-premium"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["miss-you-premium"].musicTrack, true);
+    assert.equal(sanitizeExtras("miss-you-premium", {}).answerMode, "noAfterTries");
+    assert.equal(sanitizeExtras("miss-you-premium", { answerMode: "yesOnly" }).answerMode, "yesOnly");
+    assert.equal(answerAllows(sanitizeExtras("miss-you-premium", {}), "no"), true);
+    assert.equal(answerAllows(sanitizeExtras("miss-you-premium", { answerMode: "yesOnly" }), "no"), false);
   });
 });
 

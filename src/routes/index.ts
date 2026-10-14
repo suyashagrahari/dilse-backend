@@ -153,6 +153,8 @@ router.use("/sorry-pages", makeValentineDayRouter("sorry"));
 router.use("/happy-birthday-pages", makeValentineDayRouter("happy-birthday"));
 // Miss You — the same engine.
 router.use("/miss-you-pages", makeValentineDayRouter("miss-you"));
+// Miss You ✦ Premium — the same engine.
+router.use("/miss-you-premium-pages", makeValentineDayRouter("miss-you-premium"));
 // Will You Be Mine? (a proposal page) — the same engine.
 router.use("/will-you-be-mine-pages", makeValentineDayRouter("will-you-be-mine"));
 // Happy Diwali — the same engine.

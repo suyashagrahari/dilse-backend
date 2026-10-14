@@ -48,6 +48,7 @@ import { legalNotice } from "./legal-notice";
 import { loveGf } from "./love-gf";
 import { loveflix } from "./loveflix";
 import { missYou } from "./miss-you";
+import { missYouPremium } from "./miss-you-premium";
 import { missyouBestfriend } from "./missyou-bestfriend";
 import { missyouGf } from "./missyou-gf";
 import { photoPuzzle } from "./photo-puzzle";
@@ -114,6 +115,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   loveGf,
   loveflix,
   missYou,
+  missYouPremium,
   missyouBestfriend,
   missyouGf,
   photoPuzzle,

@@ -51,6 +51,8 @@ export const BASE_DAY_SLUGS = [
   "miss-you",
   // Will You Be Mine? — an evergreen proposal page on the engine (✦ premium).
   "will-you-be-mine",
+  // Miss You ✦ Premium — the premium edition of Miss You: a long-distance day, morning to sunrise.
+  "miss-you-premium",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -573,6 +575,42 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "yesLine", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
       { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── Miss You ✦ Premium ── the premium edition of Miss You (✦ premium): a
+  //    long-distance day from morning to sunrise — curtains, a radio of voice
+  //    notes, a photo-booth strip, a picnic, a tear-off countdown, a bottle
+  //    letter, synced heartbeats, initials in the stars, "Video call tonight?"
+  //    (yes, or — by default — an honest "Later 🌙", recorded as
+  //    reactions.answer "no") and an airmail postcard. Four light looks. ─────
+  "miss-you-premium": {
+    title: "Miss You ✦ Premium — Two Dots, One Heart",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client MISS_PREM_TRACK, Thinking Out Loud) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["p1-hello", "p2-radio", "p3-picnic", "p4-heart", "p5-miss", "p6-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["cottonCandy", "lavenderPostcard", "peachAirmail", "mintBreeze"], default: "cottonCandy" },
+      /** Who it's for — changes the default question, the postcard stamp and the reply. */
+      { key: "tone", kind: "enum", options: ["partner", "crush", "bestie"], default: "partner" },
+      { key: "openingLine", kind: "text", max: 60 },
+      { key: "yourCity", kind: "text", max: 30 },
+      { key: "myCity", kind: "text", max: 30 },
+      { key: "distanceKm", kind: "number", min: 0, max: 20000, default: 0 },
+      { key: "unit", kind: "enum", options: ["km", "mi"], default: "km" },
+      /** "YYYY-MM-DD" or "" (the calendar then says "soon"). */
+      { key: "meetDate", kind: "text", max: 10 },
+      { key: "voiceNotes", kind: "list", maxItems: 3, itemMax: 90 },
+      /** One line per picnic item (basket, chai, strawberries, earphones, sunflowers). */
+      { key: "picnicLines", kind: "list", maxItems: 5, itemMax: 70 },
+      { key: "heartLine", kind: "text", max: 80 },
+      { key: "missThings", kind: "list", maxItems: 6, itemMax: 70 },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      /** "noAfterTries" here means "Yes, or Later": the Later button is there from the start. */
+      { key: "answerMode", kind: "enum", options: ["noAfterTries", "yesOnly"], default: "noAfterTries" },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
