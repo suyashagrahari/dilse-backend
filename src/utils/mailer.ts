@@ -497,7 +497,11 @@ export async function sendValentineAnswerEmail(opts: {
   const missYou = opts.slug === "miss-you";
   // The proposal page: "yes" makes it official; its only "no" is an honest "Let me think about it".
   const mine = opts.slug === "will-you-be-mine";
-  const dodges = birthday
+  // The anniversary book: yes-only, answered by dragging a heart into the sender's.
+  const anni = opts.slug === "anniversary-premium";
+  const dodges = anni
+    ? ""
+    : birthday
     ? opts.noDodges > 0
       ? ` The No button ran away ${times(opts.noDodges)} first 🎈`
       : " First try, no hesitation 🎂"
@@ -525,7 +529,9 @@ export async function sendValentineAnswerEmail(opts: {
       ? ` After chasing the "No" button ${times(opts.noDodges)} 😄`
       : " First try, no hesitation.";
   const no = opts.answer === "no";
-  const subject = birthday
+  const subject = anni
+    ? `💞 ${who} said yes — happy anniversary`
+    : birthday
     ? `🎂 ${who} said YES to a birthday date`
     : missYou
     ? no
@@ -542,8 +548,10 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${who} answered your ${opts.dayName} page`
     : halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
-  const head = birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
-  const body = birthday
+  const head = anni ? `${who} said yes 💞` : birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
+  const body = anni
+    ? `${question ? `“${question}” — ` : ""}${who} read your whole book — every chapter, every promise — and put their heart right next to yours. Happy anniversary 💗`
+    : birthday
     ? `${question ? `“${question}” — ` : ""}${who} said yes!${plan ? ` When: ${plan}.` : ""}${dodges}`
     : missYou && no
     ? `${question ? `“${question}” — ` : ""}${who} went through your whole miss-you page and said “not tonight” this time. Same moon, different sky; they'll be thinking of you. 🌙`
