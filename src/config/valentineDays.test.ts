@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { validateSchema } from "./aiFill/types";
 import { willYouBeMine } from "./aiFill/will-you-be-mine";
+import { sorryPremium } from "./aiFill/sorry-premium";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -85,9 +86,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You and Will You Be Mine ship a track", () => {
+  it("only the two Halloween slugs, Sorry (and its premium edition), Happy Birthday, Miss You and Will You Be Mine ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "will-you-be-mine"]);
+    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "sorry-premium", "will-you-be-mine"]);
   });
 });
 
@@ -112,6 +113,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
   "will-you-be-mine": ["palette", "tone", "openingLine", "story", "reasons", "quiz", "promise", "question", "yesLine", "answerMode", "noTries"],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
+  "sorry-premium": ["palette", "tone", "togetherSince", "knockLine", "confession", "feelings", "lessons", "stars", "promises", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
   "happy-rose-day-premium": ["roseColor", "colorReason", "openingLine", "question", "yesLine", "sinceDate", "signOff", "shayari"],
@@ -151,14 +153,15 @@ describe("Valentine's week day configs", () => {
   it("every $2 day has five GIF slots and sane limits; only Propose, Valentine's and Halloween ask", () => {
     for (const slug of BASE_DAY_SLUGS) {
       const d = VALENTINE_DAYS[slug];
-      assert.equal(d.gifSlots.length, 5, slug);
+      // Sorry's ✦ premium edition carries one sticker per act (six).
+      assert.equal(d.gifSlots.length, slug === "sorry-premium" ? 6 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
       assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
       assert.notEqual(d.premium, true, slug);
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine", "sorry-premium"]
     );
   });
 
@@ -393,6 +396,49 @@ describe("Will You Be Mine extras", () => {
     const ok = sanitizeExtras("will-you-be-mine", { answerMode: "noAfterTries", noTries: "5" });
     assert.equal(ok.answerMode, "noAfterTries");
     assert.equal(ok.noTries, "5");
+  });
+});
+
+describe("I'm Sorry ✦ Premium extras", () => {
+  it("palette and tone fall back to their defaults; the lists are capped", () => {
+    const out = sanitizeExtras("sorry-premium", {
+      palette: "midnight",
+      tone: "angry",
+      knockLine: "k".repeat(200),
+      confession: "c".repeat(400),
+      feelings: Array.from({ length: 6 }, () => "f".repeat(120)),
+      lessons: Array.from({ length: 6 }, () => "l".repeat(120)),
+      stars: Array.from({ length: 9 }, () => "s".repeat(120)),
+      promises: Array.from({ length: 7 }, () => "p".repeat(120)),
+    });
+    assert.equal(out.palette, "rainyBlush");
+    assert.equal(out.tone, "sweet");
+    assert.equal((out.knockLine as string).length, 70);
+    assert.equal((out.confession as string).length, 160);
+    assert.deepEqual([(out.feelings as string[]).length, (out.feelings as string[])[0].length], [3, 80]);
+    assert.deepEqual([(out.lessons as string[]).length, (out.lessons as string[])[0].length], [3, 80]);
+    assert.deepEqual([(out.stars as string[]).length, (out.stars as string[])[0].length], [6, 70]);
+    assert.deepEqual([(out.promises as string[]).length, (out.promises as string[])[0].length], [4, 70]);
+    const ok = sanitizeExtras("sorry-premium", { palette: "lilacDrizzle", tone: "silly", togetherSince: "2024-02-14" });
+    assert.equal(ok.palette, "lilacDrizzle");
+    assert.equal(ok.tone, "silly");
+    assert.equal(ok.togetherSince, "2024-02-14");
+  });
+
+  it("asks the question with an honest \"I need a little time\" by default, and ships its own track", () => {
+    assert.equal(VALENTINE_DAYS["sorry-premium"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["sorry-premium"].musicTrack, true);
+    assert.equal(sanitizeExtras("sorry-premium", {}).answerMode, "noAfterTries");
+    assert.equal(sanitizeExtras("sorry-premium", { answerMode: "maybe" }).answerMode, "noAfterTries");
+    assert.equal(sanitizeExtras("sorry-premium", { answerMode: "yesOnly" }).answerMode, "yesOnly");
+  });
+
+  it("its AI fill schema is valid and only writes keys the page has", () => {
+    assert.deepEqual(validateSchema(sorryPremium), []);
+    for (const f of sorryPremium.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(VALENTINE_DAYS["sorry-premium"].extras.some((e) => e.key === key), f.path);
+    }
   });
 });
 

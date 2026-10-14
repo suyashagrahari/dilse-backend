@@ -490,6 +490,8 @@ export async function sendValentineAnswerEmail(opts: {
   const dandiya = opts.slug === "dandiya-partner";
   // The apology page: "yes" is forgiveness, and its only "no" is an honest "I need a little time".
   const sorry = opts.slug === "sorry";
+  // Its premium edition ("After the Rain"): no runaway No; "no" is an honest "I need a little time".
+  const sorryPremium = opts.slug === "sorry-premium";
   // The birthday page: yes to a birthday date, and (when the sender asked) when.
   const birthday = opts.slug === "happy-birthday";
   const plan = birthday ? BIRTHDAY_PLANS[(opts.count ?? 0) - 1] ?? "" : "";
@@ -497,7 +499,9 @@ export async function sendValentineAnswerEmail(opts: {
   const missYou = opts.slug === "miss-you";
   // The proposal page: "yes" makes it official; its only "no" is an honest "Let me think about it".
   const mine = opts.slug === "will-you-be-mine";
-  const dodges = birthday
+  const dodges = sorryPremium
+    ? " The rain's gone 🌈"
+    : birthday
     ? opts.noDodges > 0
       ? ` The No button ran away ${times(opts.noDodges)} first 🎈`
       : " First try, no hesitation 🎂"
@@ -535,6 +539,10 @@ export async function sendValentineAnswerEmail(opts: {
     ? no
       ? `🤍 ${who} wants a little time to think`
       : `💍 ${who} said YES to being yours`
+    : sorryPremium
+    ? no
+      ? `🌦️ ${who} read every word, and needs a little time`
+      : `🌈 ${who} forgave you`
     : sorry
     ? no
       ? `🤍 ${who} read your sorry page`
@@ -542,7 +550,7 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${who} answered your ${opts.dayName} page`
     : halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
-  const head = birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
+  const head = birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorryPremium ? (no ? `${who} needs a little time 🌦️` : `${who} forgave you 🌈`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
   const body = birthday
     ? `${question ? `“${question}” — ` : ""}${who} said yes!${plan ? ` When: ${plan}.` : ""}${dodges}`
     : missYou && no
@@ -553,6 +561,10 @@ export async function sendValentineAnswerEmail(opts: {
     ? `${who} saw everything you made — every chapter, every star — and wants a little time to think. That's not a no; give them a little space. 🤍`
     : mine
     ? `${question ? `“${question}” — ` : ""}${who} said yes. It's official: you're theirs, and they're yours 💗${dodges}`
+    : sorryPremium && no
+    ? `${who} opened the door, read every word and signed your peace contract, and needs a little time before the sun comes out. Give them some space; they know you're sorry. 🌦️`
+    : sorryPremium
+    ? `${question ? `“${question}” — ` : ""}${who} said yes and pushed the last clouds away. You're forgiven; go give them that hug.${dodges}`
     : sorry && no
     ? `${who} read every word of your apology and needs a little time. Give them some space; they know you're sorry. 🤍`
     : sorry
@@ -560,7 +572,7 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${question ? `“${question}” — ` : ""}${who} opened your ${opts.dayName} page, saw everything you made, and chose “no” this time. It takes courage to ask, and your page was still a gift. 🪔`
     : `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
-  const band = birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : mine ? "linear-gradient(115deg,#9a3150,#e0637f,#e2a98f)" : missYou ? "linear-gradient(115deg,#1a1f4b,#5b3fb0,#ff7eae)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
+  const band = birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : mine ? "linear-gradient(115deg,#9a3150,#e0637f,#e2a98f)" : missYou ? "linear-gradient(115deg,#1a1f4b,#5b3fb0,#ff7eae)" : sorryPremium ? "linear-gradient(115deg,#b5365a,#f4a7bb,#9ccbf2)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
   const pageBg = halloween ? "#17122b" : "#1e0f24";
   const cardBg = halloween ? "#251842" : "#2a1240";
   const button = halloween ? "#ff8a3d" : "#f6e3b4";
