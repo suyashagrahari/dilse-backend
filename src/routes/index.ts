@@ -162,6 +162,10 @@ router.use("/will-you-be-mine-pages", makeValentineDayRouter("will-you-be-mine")
 router.use("/sorry-premium-pages", makeValentineDayRouter("sorry-premium"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
+// Happy Anniversary ("Our Little Love Museum") — the same engine.
+router.use("/happy-anniversary-pages", makeValentineDayRouter("happy-anniversary"));
+// Anniversary ✦ Premium ("The Book of Us") — the same engine.
+router.use("/anniversary-premium-pages", makeValentineDayRouter("anniversary-premium"));
 // Happy Diwali — the same engine.
 router.use("/happy-diwali-pages", makeValentineDayRouter("happy-diwali"));
 // The ultra-premium tier: a twin of each day on the same engine (+ voice note, unlock, reply).

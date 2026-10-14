@@ -172,6 +172,8 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: VALENTINE_DAY_MODELS["will-you-be-mine"] as unknown as mongoose.Model<unknown>, templateType: "will-you-be-mine", editorRoute: "/will-you-be-mine", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["sorry-premium"] as unknown as mongoose.Model<unknown>, templateType: "sorry-premium", editorRoute: "/sorry-premium", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["proposal-premium"] as unknown as mongoose.Model<unknown>, templateType: "proposal-premium", editorRoute: "/proposal-premium", projectShared: valentineShared },
+  { model: VALENTINE_DAY_MODELS["happy-anniversary"] as unknown as mongoose.Model<unknown>, templateType: "happy-anniversary", editorRoute: "/happy-anniversary", projectShared: valentineShared },
+  { model: VALENTINE_DAY_MODELS["anniversary-premium"] as unknown as mongoose.Model<unknown>, templateType: "anniversary-premium", editorRoute: "/anniversary-premium", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["happy-diwali"] as unknown as mongoose.Model<unknown>, templateType: "happy-diwali", editorRoute: "/happy-diwali", projectShared: valentineShared },
   // The ultra-premium twins — same discriminator collection; valentineShared withholds a sealed page.
   { model: VALENTINE_DAY_MODELS["happy-rose-day-premium"] as unknown as mongoose.Model<unknown>, templateType: "happy-rose-day-premium", editorRoute: "/happy-rose-day-premium", projectShared: valentineShared },
