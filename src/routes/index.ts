@@ -155,6 +155,8 @@ router.use("/happy-birthday-pages", makeValentineDayRouter("happy-birthday"));
 router.use("/miss-you-pages", makeValentineDayRouter("miss-you"));
 // Will You Be Mine? (a proposal page) — the same engine.
 router.use("/will-you-be-mine-pages", makeValentineDayRouter("will-you-be-mine"));
+// Happy Anniversary ("Our Little Love Museum") — the same engine.
+router.use("/happy-anniversary-pages", makeValentineDayRouter("happy-anniversary"));
 // Happy Diwali — the same engine.
 router.use("/happy-diwali-pages", makeValentineDayRouter("happy-diwali"));
 // The ultra-premium tier: a twin of each day on the same engine (+ voice note, unlock, reply).

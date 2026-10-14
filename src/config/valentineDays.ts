@@ -51,6 +51,8 @@ export const BASE_DAY_SLUGS = [
   "miss-you",
   // Will You Be Mine? — an evergreen proposal page on the engine (✦ premium).
   "will-you-be-mine",
+  // Happy Anniversary — "Our Little Love Museum", evergreen on the engine (✦ premium).
+  "happy-anniversary",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -573,6 +575,51 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "yesLine", kind: "text", max: 80 },
       { key: "answerMode", kind: "enum", options: ["yesOnly", "noAfterTries"], default: "yesOnly" },
       { key: "noTries", kind: "enum", options: ["4", "5"], default: "4" },
+    ],
+  },
+  // ── Happy Anniversary ── "Our Little Love Museum", an evergreen anniversary
+  //    page on the engine (✦ premium): tear the ticket, the time-together
+  //    clock (from togetherSince), the portrait gallery, the audio guide of our
+  //    story (milestones), the restoration studio (firstPlace/firstMemory), the
+  //    snow globe of reasons, the guestbook letter, the next exhibition
+  //    (promises + plan) and "another year of us?" — both buttons are a yes —
+  //    then the Masterpiece of the Year award. Four looks, six GIF slots. ────
+  "happy-anniversary": {
+    title: "Our Little Love Museum",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client HA_TRACK, Perfect) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["h1-welcome", "h2-together", "h3-gallery", "h4-globe", "h5-yes", "h6-award"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["blushGallery", "sageCream", "lavenderMuseum", "peachMarble"], default: "blushGallery" },
+      /** How it sounds — changes the question, the award, the audio guide's voice and the reply. */
+      { key: "tone", kind: "enum", options: ["cute", "emotional", "funny"], default: "cute" },
+      /** Who they are — the word on the award. */
+      { key: "relation", kind: "enum", options: ["girlfriend", "boyfriend", "wife", "husband", "partner"], default: "girlfriend" },
+      /** yyyy-mm-dd — the clock room counts up from it. */
+      { key: "togetherSince", kind: "text", max: 10 },
+      { key: "ticketLine", kind: "text", max: 50 },
+      { key: "funStat", kind: "text", max: 60 },
+      {
+        key: "milestones",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 36 },
+          { key: "line", kind: "text", max: 110 },
+        ],
+      },
+      { key: "firstPlace", kind: "text", max: 40 },
+      { key: "firstMemory", kind: "longtext", max: 160 },
+      { key: "reasons", kind: "list", maxItems: 4, itemMax: 80 },
+      { key: "promises", kind: "list", maxItems: 3, itemMax: 70 },
+      { key: "plan", kind: "text", max: 80 },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+      { key: "awardTitle", kind: "text", max: 40 },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
