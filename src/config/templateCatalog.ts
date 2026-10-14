@@ -74,6 +74,7 @@ const LABELS: Record<string, string> = {
   "dandiya-partner": "Be My Dandiya Partner",
   sorry: "I'm Sorry",
   "happy-birthday": "Happy Birthday",
+  "birthday-premium": "Birthday Surprise ✦ Premium",
   "miss-you": "I Miss You",
   "will-you-be-mine": "Will You Be Mine?",
   "happy-diwali": "Happy Diwali",

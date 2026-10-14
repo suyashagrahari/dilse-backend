@@ -491,15 +491,19 @@ export async function sendValentineAnswerEmail(opts: {
   // The apology page: "yes" is forgiveness, and its only "no" is an honest "I need a little time".
   const sorry = opts.slug === "sorry";
   // The birthday page: yes to a birthday date, and (when the sender asked) when.
-  const birthday = opts.slug === "happy-birthday";
+  const birthday = opts.slug === "happy-birthday" || opts.slug === "birthday-premium";
   const plan = birthday ? BIRTHDAY_PLANS[(opts.count ?? 0) - 1] ?? "" : "";
   // The long-distance page: the question is a small ask ("Video call tonight?"); its only "no" is a gentle "Not tonight 🌙".
   const missYou = opts.slug === "miss-you";
   // The proposal page: "yes" makes it official; its only "no" is an honest "Let me think about it".
   const mine = opts.slug === "will-you-be-mine";
+  // The birthday storybook has no runaway No: "hmm…" spins a prize wheel where every slice says yes.
+  const storybook = opts.slug === "birthday-premium";
   const dodges = birthday
     ? opts.noDodges > 0
-      ? ` The No button ran away ${times(opts.noDodges)} first 🎈`
+      ? storybook
+        ? ` They spun the “hmm…” wheel ${times(opts.noDodges)} first — it only says yes 🎡`
+        : ` The No button ran away ${times(opts.noDodges)} first 🎈`
       : " First try, no hesitation 🎂"
     : missYou
     ? opts.noDodges > 0

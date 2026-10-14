@@ -26,6 +26,7 @@ import { diwali } from "./happy-diwali";
 import { halloween } from "./happy-halloween";
 import { halloweenPremium } from "./happy-halloween-premium";
 import { birthday } from "./happy-birthday";
+import { birthdayPremium } from "./birthday-premium";
 import { chocolateDay } from "./happy-chocolate-day";
 import { chocolateDayPremium } from "./happy-chocolate-day-premium";
 import { hugDay } from "./happy-hug-day";
@@ -93,6 +94,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   halloween,
   dandiyaPartner,
   birthday,
+  birthdayPremium,
   halloweenPremium,
   hugDay,
   hugDayPremium,
