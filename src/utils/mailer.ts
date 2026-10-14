@@ -496,7 +496,9 @@ export async function sendValentineAnswerEmail(opts: {
   // The long-distance page: the question is a small ask ("Video call tonight?"); its only "no" is a gentle "Not tonight 🌙".
   const missYou = opts.slug === "miss-you";
   // The proposal page: "yes" makes it official; its only "no" is an honest "Let me think about it".
-  const mine = opts.slug === "will-you-be-mine";
+  // The Proposal ✦ Premium (the garden edition) words it the same way, with its No that wilts.
+  const garden = opts.slug === "proposal-premium";
+  const mine = opts.slug === "will-you-be-mine" || garden;
   const dodges = birthday
     ? opts.noDodges > 0
       ? ` The No button ran away ${times(opts.noDodges)} first 🎈`
@@ -505,6 +507,10 @@ export async function sendValentineAnswerEmail(opts: {
     ? opts.noDodges > 0
       ? ` The No button ran away ${times(opts.noDodges)} first 🥹`
       : " First try. They miss you too 💗"
+    : garden
+    ? opts.noDodges > 0
+      ? ` The No button wilted ${times(opts.noDodges)} first, and the YES button just kept blooming 🌷`
+      : " First try. Not a second of doubt 💗"
     : mine
     ? opts.noDodges > 0
       ? ` The No button ran away ${times(opts.noDodges)} first, and the YES button just kept growing 🙈`
@@ -550,7 +556,7 @@ export async function sendValentineAnswerEmail(opts: {
     : missYou
     ? `${question ? `“${question}” — ` : ""}${who} said yes. Go call them 💗${dodges}`
     : mine && no
-    ? `${who} saw everything you made — every chapter, every star — and wants a little time to think. That's not a no; give them a little space. 🤍`
+    ? `${who} saw everything you made — ${garden ? "every chapter, every petal" : "every chapter, every star"} — and wants a little time to think. That's not a no; give them a little space. 🤍`
     : mine
     ? `${question ? `“${question}” — ` : ""}${who} said yes. It's official: you're theirs, and they're yours 💗${dodges}`
     : sorry && no
@@ -560,7 +566,7 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${question ? `“${question}” — ` : ""}${who} opened your ${opts.dayName} page, saw everything you made, and chose “no” this time. It takes courage to ask, and your page was still a gift. 🪔`
     : `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
-  const band = birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : mine ? "linear-gradient(115deg,#9a3150,#e0637f,#e2a98f)" : missYou ? "linear-gradient(115deg,#1a1f4b,#5b3fb0,#ff7eae)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
+  const band = birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : garden ? "linear-gradient(115deg,#a63d58,#d45e78,#ffd3a6)" : mine ? "linear-gradient(115deg,#9a3150,#e0637f,#e2a98f)" : missYou ? "linear-gradient(115deg,#1a1f4b,#5b3fb0,#ff7eae)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
   const pageBg = halloween ? "#17122b" : "#1e0f24";
   const cardBg = halloween ? "#251842" : "#2a1240";
   const button = halloween ? "#ff8a3d" : "#f6e3b4";

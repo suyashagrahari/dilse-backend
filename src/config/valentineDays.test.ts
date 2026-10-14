@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { validateSchema } from "./aiFill/types";
 import { willYouBeMine } from "./aiFill/will-you-be-mine";
+import { proposalPremium } from "./aiFill/proposal-premium";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -87,7 +88,7 @@ describe("sanitizeMusic — the template's own track", () => {
   });
   it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You and Will You Be Mine ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "sorry", "will-you-be-mine"]);
+    assert.deepEqual(withTrack, ["happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "proposal-premium", "sorry", "will-you-be-mine"]);
   });
 });
 
@@ -111,6 +112,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   sorry: ["palette", "tone", "openingLine", "moodLines", "confession", "reasons", "promise", "coupons", "question", "yesLine", "answerMode", "noTries"],
   "happy-birthday": ["palette", "tone", "crown", "age", "openingLine", "wishLine", "cakeLine", "reasons", "coupons", "question", "yesLine", "askWhen"],
   "will-you-be-mine": ["palette", "tone", "openingLine", "story", "reasons", "quiz", "promise", "question", "yesLine", "answerMode", "noTries"],
+  "proposal-premium": ["palette", "tone", "openingLine", "lightsLine", "story", "since", "reasons", "promise", "question", "yesLine", "datePlan", "answerMode", "noTries"],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -148,17 +150,17 @@ describe("Valentine's week day configs", () => {
     }
   });
 
-  it("every $2 day has five GIF slots and sane limits; only Propose, Valentine's and Halloween ask", () => {
+  it("every $2 day has five GIF slots (The Proposal ✦ Premium seven) and sane limits; only Propose, Valentine's and Halloween ask", () => {
     for (const slug of BASE_DAY_SLUGS) {
       const d = VALENTINE_DAYS[slug];
-      assert.equal(d.gifSlots.length, 5, slug);
+      assert.equal(d.gifSlots.length, slug === "proposal-premium" ? 7 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
       assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
       assert.notEqual(d.premium, true, slug);
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "miss-you", "will-you-be-mine", "proposal-premium"]
     );
   });
 
@@ -391,6 +393,56 @@ describe("Will You Be Mine extras", () => {
     assert.equal(bad.answerMode, "yesOnly");
     assert.equal(bad.noTries, "4");
     const ok = sanitizeExtras("will-you-be-mine", { answerMode: "noAfterTries", noTries: "5" });
+    assert.equal(ok.answerMode, "noAfterTries");
+    assert.equal(ok.noTries, "5");
+  });
+});
+
+describe("The Proposal ✦ Premium extras", () => {
+  it("palette and tone fall back to their defaults; lights, story, since, reasons and the date plan are capped", () => {
+    const out = sanitizeExtras("proposal-premium", {
+      palette: "midnight",
+      tone: "date",
+      lightsLine: "l".repeat(90),
+      story: Array.from({ length: 8 }, (_, i) => ({ when: `W${i}${"w".repeat(40)}`, title: "t".repeat(60), line: "l".repeat(200), evil: "x" })),
+      since: "2024-02-14T00:00:00.000Z",
+      reasons: Array.from({ length: 10 }, () => "r".repeat(90)),
+      promise: "p".repeat(400),
+      datePlan: "d".repeat(200),
+    });
+    assert.equal(out.palette, "roseGoldBlush");
+    assert.equal(out.tone, "girlfriend");
+    assert.equal((out.lightsLine as string).length, 48);
+    const story = out.story as { when: string; title: string; line: string }[];
+    assert.equal(story.length, 5);
+    assert.deepEqual([story[0].when.length, story[0].title.length, story[0].line.length], [24, 36, 100]);
+    assert.equal("evil" in story[0], false);
+    assert.equal(out.since, "2024-02-14");
+    assert.equal((out.reasons as string[]).length, 7);
+    assert.equal((out.reasons as string[])[0].length, 70);
+    assert.equal((out.promise as string).length, 140);
+    assert.equal((out.datePlan as string).length, 80);
+    const ok = sanitizeExtras("proposal-premium", { palette: "lilacGarden", tone: "marry" });
+    assert.equal(ok.palette, "lilacGarden");
+    assert.equal(ok.tone, "marry");
+  });
+
+  it("its AI fill schema is valid (the server skips a broken one at boot)", () => {
+    assert.deepEqual(validateSchema(proposalPremium), []);
+    assert.ok(proposalPremium.fields.length <= 40);
+    for (const f of proposalPremium.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(VALENTINE_DAYS["proposal-premium"].extras.some((e) => e.key === key), f.path);
+    }
+  });
+
+  it("asks the question, ships seven GIF slots, and keeps the two answer modes", () => {
+    assert.equal(VALENTINE_DAYS["proposal-premium"].asksQuestion, true);
+    assert.equal(VALENTINE_DAYS["proposal-premium"].gifSlots.length, 7);
+    const bad = sanitizeExtras("proposal-premium", { answerMode: "maybe", noTries: "9" });
+    assert.equal(bad.answerMode, "yesOnly");
+    assert.equal(bad.noTries, "4");
+    const ok = sanitizeExtras("proposal-premium", { answerMode: "noAfterTries", noTries: "5" });
     assert.equal(ok.answerMode, "noAfterTries");
     assert.equal(ok.noTries, "5");
   });
