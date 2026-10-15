@@ -60,16 +60,18 @@ const LOOSE_MATCH_WINDOW_DAYS = 45;
  */
 const REPLY_PREFIX = /^\s*(?:re|aw|sv|antw|ref|res|r|fw|fwd|forward)\s*(?:\[\d+\])?\s*:/i;
 
-export type MatchRung = "headers" | "subject" | "recent" | "none";
+export type MatchRung = "headers" | "token" | "subject" | "sender" | "recent" | "none";
 
 export interface ThreadIdentity {
-  kind: "draft" | "feedback" | "inbound";
+  kind: "draft" | "feedback" | "inbound" | "influencer";
   userId?: string;
   userName?: string;
   userEmail: string;
   pageId?: string;
   templateType?: string;
   templateLabel?: string;
+  /** Influencer threads only: the footer reference. */
+  threadToken?: string;
 }
 
 /** Every conversation about one page, newest first. Bodies included. */
@@ -109,7 +111,19 @@ export async function openThread(
   let seq = 1;
   let keyPrefix: string;
 
-  if (identity.pageId && mongoose.Types.ObjectId.isValid(identity.pageId)) {
+  if (identity.kind === "influencer" && identity.userId && mongoose.Types.ObjectId.isValid(identity.userId)) {
+    // One conversation per influencer, numbered the same way page threads
+    // are, and made race-safe by the same unique `threadKey`.
+    const newest = await EmailThread.findOne({
+      kind: "influencer",
+      userId: new mongoose.Types.ObjectId(identity.userId),
+    })
+      .sort({ seq: -1 })
+      .select("seq")
+      .lean<{ seq: number }>();
+    seq = (newest?.seq || 0) + 1;
+    keyPrefix = `influencer:${identity.userId}`;
+  } else if (identity.pageId && mongoose.Types.ObjectId.isValid(identity.pageId)) {
     const newest = await EmailThread.findOne({ pageId: new mongoose.Types.ObjectId(identity.pageId) })
       .sort({ seq: -1 })
       .select("seq")
@@ -138,6 +152,7 @@ export async function openThread(
     subject: base,
     subjectKey: subjectKey(base),
     seq,
+    ...(identity.threadToken ? { threadToken: identity.threadToken } : {}),
     messages: [],
     messageCount: 0,
     lastMessageAt: new Date(),
@@ -257,7 +272,11 @@ export async function matchInboundThread(ev: InboundEvidence): Promise<InboundMa
   // ── Rung 2: same person, same subject ──────────────────────────────────
   const key = subjectKey(ev.subject);
   if (key) {
-    const hit = await EmailThread.findOne({ userEmail: from, subjectKey: key })
+    // A fresh filter object per query, never a shared one — and influencer
+    // threads are out of reach here: mail to feedback@ / the general reply
+    // inbox that merely comes from an influencer's address is about their
+    // pages, not the programme. Influencer mail has its own ladder below.
+    const hit = await EmailThread.findOne({ userEmail: from, subjectKey: key, kind: { $ne: "influencer" } })
       .sort({ lastMessageAt: -1 })
       .lean<IEmailThread>();
     if (hit) return { thread: hit, rung: "subject" };
@@ -292,6 +311,7 @@ export async function matchInboundThread(ev: InboundEvidence): Promise<InboundMa
     const since = new Date(Date.now() - LOOSE_MATCH_WINDOW_DAYS * 86_400_000);
     const recent = await EmailThread.findOne({
       userEmail: from,
+      kind: { $ne: "influencer" },
       status: "open",
       lastMessageAt: { $gte: since },
     })
@@ -309,4 +329,88 @@ export async function inboundAlreadyStored(rfcMessageId: string): Promise<boolea
   if (!id) return false;
   const hit = await EmailThread.findOne({ "messages.rfcMessageId": id }).select("_id").lean();
   return !!hit;
+}
+
+// ─── Influencer mail: its own ladder ────────────────────────────────────────
+//
+// Mail ADDRESSED to an influencer address (influencer-support@, or the
+// receiving alias it forwards to) is matched here instead of above. The rungs
+// differ because the population differs: every legitimate sender is a known
+// influencer with exactly one conversation, so "same person" is strong
+// evidence on its own and needs no reply-shaped guard.
+//
+//   1. headers — In-Reply-To / References against an id we hold (any kind:
+//      an exact header match is never wrong).
+//   2. token   — the `Ref: INF-XXXXXXXX` from our footer, found in the
+//      subject or the quoted history. Survives a client that strips headers
+//      AND a reply from a different address.
+//   3. sender  — the newest influencer thread for this address.
+//   4. sender  — no thread yet, but the address belongs to an influencer:
+//      `influencerUser` is returned and the caller opens their thread.
+//   5. none    — an unmatched inbound thread, as for any other mail.
+//
+// The lookups are injected so the ladder is tested without Mongo.
+
+export interface InfluencerMatchDeps {
+  byMessageId(id: string): Promise<IEmailThread | null>;
+  byToken(token: string): Promise<IEmailThread | null>;
+  latestForEmail(email: string): Promise<IEmailThread | null>;
+  influencerUserByEmail(email: string): Promise<{ _id: unknown; name?: string; email: string } | null>;
+}
+
+export interface InfluencerInboundEvidence extends InboundEvidence {
+  /** The token pulled from subject/body by the caller, or "". */
+  token: string;
+}
+
+export interface InfluencerMatch extends InboundMatch {
+  /** Set on rung 4: the influencer whose first thread must be opened. */
+  influencerUser?: { _id: unknown; name?: string; email: string } | null;
+}
+
+export const mongoInfluencerMatchDeps: InfluencerMatchDeps = {
+  byMessageId: (id) => EmailThread.findOne({ "messages.rfcMessageId": id }).lean<IEmailThread>(),
+  byToken: (token) => EmailThread.findOne({ threadToken: token }).lean<IEmailThread>(),
+  latestForEmail: (email) =>
+    EmailThread.findOne({ kind: "influencer", userEmail: email })
+      .sort({ lastMessageAt: -1 })
+      .lean<IEmailThread>(),
+  influencerUserByEmail: async (email) => {
+    // Imported lazily: the model pulls in the whole user schema, and the
+    // pure parts of this module are imported by tests that never touch Mongo.
+    const { default: User } = await import("../models/User");
+    return User.findOne({ email, influencer: { $exists: true, $ne: null } })
+      .select("_id name email")
+      .lean<{ _id: unknown; name?: string; email: string }>();
+  },
+};
+
+export async function matchInfluencerInbound(
+  ev: InfluencerInboundEvidence,
+  deps: InfluencerMatchDeps = mongoInfluencerMatchDeps
+): Promise<InfluencerMatch> {
+  const from = String(ev.fromEmail || "").trim().toLowerCase();
+
+  const seen = new Set<string>();
+  for (const id of [...parseMessageIds(ev.inReplyTo), ...parseMessageIds(ev.references).reverse()]) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const hit = await deps.byMessageId(id);
+    if (hit) return { thread: hit, rung: "headers" };
+  }
+
+  if (ev.token) {
+    const hit = await deps.byToken(ev.token);
+    if (hit) return { thread: hit, rung: "token" };
+  }
+
+  if (!from) return { thread: null, rung: "none" };
+
+  const latest = await deps.latestForEmail(from);
+  if (latest) return { thread: latest, rung: "sender" };
+
+  const user = await deps.influencerUserByEmail(from);
+  if (user) return { thread: null, rung: "sender", influencerUser: user };
+
+  return { thread: null, rung: "none" };
 }

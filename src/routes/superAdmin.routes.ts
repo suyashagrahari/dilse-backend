@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import {
   getFullUserProfile,
   getPageContent,
@@ -29,6 +30,11 @@ import { adminGetSeason, adminPreviewSeason, adminUpdateSeason } from "../contro
 import { getMyPays, setMyPays, setFreeAccess } from "../controllers/freeAccess.controller";
 import revenueRoutes, { userRevenueRouter } from "./superAdminRevenue.routes";
 import { getCreations } from "../controllers/superAdminCreations.controller";
+import {
+  draftInfluencerMailHandler,
+  getInfluencerMail,
+  sendInfluencerMailHandler,
+} from "../controllers/influencerMail.controller";
 
 /**
  * Mounted at /api/admin/super behind `protect` + `requireSuperAdmin`.
@@ -69,6 +75,30 @@ router.get("/influencers/:userId", adminGetInfluencer);
 router.patch("/influencers/:userId", adminUpdateInfluencer);
 router.post("/influencers/:userId/payouts", adminRecordPayout);
 router.delete("/influencers/:userId/payouts/:payoutId", adminDeletePayout);
+
+// Influencer chat (email). `draft` calls the model and sends nothing; `send`
+// sends and never calls the model. Both limited per admin: a draft is a paid
+// model request, and a send is mail from our domain's reputation.
+const perAdmin = (limit: number, windowMinutes: number, error: string) =>
+  rateLimit({
+    windowMs: windowMinutes * 60 * 1000,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `influencer-mail:${req.userId || req.ip}`,
+    message: { success: false, error },
+  });
+router.get("/influencers/:userId/mail", getInfluencerMail);
+router.post(
+  "/influencers/:userId/mail/draft",
+  perAdmin(30, 10, "Too many drafts in a short time. Please wait a few minutes."),
+  draftInfluencerMailHandler
+);
+router.post(
+  "/influencers/:userId/mail/send",
+  perAdmin(40, 60, "Too many emails sent in the last hour. Please wait."),
+  sendInfluencerMailHandler
+);
 
 // Page actions
 router.put("/pages/:templateType/:pageId/password", setPagePassword);

@@ -140,6 +140,9 @@ export function intentFor(ctx: ThreadAiContext): string {
   if (ctx.kind === "feedback") {
     return "This conversation began with feedback the creator left after publishing a page. Answer what they actually raised, and where they reported a problem say plainly what is and is not being done about it.";
   }
+  if (ctx.kind === "influencer") {
+    return "This person is an influencer in our referral programme (they share a link and earn commission on payments from people they refer). Answer what they raised. Never state commission rates, earnings or payout dates — the influencer panel drafts those from real figures.";
+  }
   if (ctx.kind === "draft") {
     return "This conversation began because the creator started a page and never published it, and we wrote to ask why. Respond to what they said, without pressing them to publish.";
   }

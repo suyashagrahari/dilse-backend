@@ -63,6 +63,9 @@ export type AuditAction =
   | "influencer.update"
   | "influencer.payout_recorded"
   | "influencer.payout_deleted"
+  // An email to an influencer from /admin/influencers/:id, sent as
+  // influencer-support@. Records whether it began as an AI draft.
+  | "influencer.mail_sent"
   // A super admin's own "Pay like a customer" switch, and "All templates free"
   // granted to / revoked from an account. See config/freeAccess.ts.
   | "superadmin.pays_as_customer"
