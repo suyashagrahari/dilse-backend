@@ -13,16 +13,9 @@ import {
 } from "../services/influencer.service";
 import { clampPercent } from "../config/influencerMath";
 import { audit } from "../services/adminAudit";
+import { parseInstagramHandle, profileInstagramUpdate } from "../config/instagramHandle";
 
-const INSTAGRAM_RE = /^[a-z0-9._]{1,30}$/i;
 const UPI_RE = /^[a-z0-9._-]{2,64}@[a-z0-9.-]{2,32}$/i;
-
-function cleanInstagram(v: unknown): string | undefined | null {
-  if (v === undefined) return undefined;
-  const s = String(v || "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "");
-  if (!s) return "";
-  return INSTAGRAM_RE.test(s) ? s.toLowerCase() : null;
-}
 
 function cleanUpi(v: unknown): string | undefined | null {
   if (v === undefined) return undefined;
@@ -53,11 +46,14 @@ export const registerInfluencer = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const instagram = cleanInstagram(req.body.instagram);
-    if (instagram === null) {
-      res.status(400).json({ success: false, field: "instagram", error: "That doesn't look like an Instagram username" });
+    // Compulsory since 2026-10: the handle is what tells followers the invite
+    // page is really theirs.
+    const ig = parseInstagramHandle(req.body.instagram);
+    if (!ig.ok) {
+      res.status(400).json({ success: false, field: "instagram", error: ig.message });
       return;
     }
+    const instagram = ig.handle;
     const upiId = cleanUpi(req.body.upiId);
     if (upiId === null) {
       res.status(400).json({ success: false, field: "upiId", error: "Enter a UPI ID like name@okaxis" });
@@ -79,7 +75,7 @@ export const registerInfluencer = async (req: Request, res: Response): Promise<v
       user.subdomain = name;
     }
 
-    user.influencer = { status: "active", instagram: instagram || undefined, upiId: upiId || undefined, commissionPercent: null, joinedAt: new Date() };
+    user.influencer = { status: "active", instagram, upiId: upiId || undefined, commissionPercent: null, joinedAt: new Date() };
     try {
       await user.save();
     } catch (err) {
@@ -119,17 +115,17 @@ export const updateMyInfluencerProfile = async (req: Request, res: Response): Pr
       res.status(404).json({ success: false, code: "NOT_INFLUENCER", error: "You are not registered as an influencer" });
       return;
     }
-    const instagram = cleanInstagram(req.body.instagram);
+    const ig = profileInstagramUpdate(req.body.instagram, user.influencer.instagram);
     const upiId = cleanUpi(req.body.upiId);
-    if (instagram === null) {
-      res.status(400).json({ success: false, field: "instagram", error: "That doesn't look like an Instagram username" });
+    if (!ig.ok) {
+      res.status(400).json({ success: false, field: "instagram", error: ig.message });
       return;
     }
     if (upiId === null) {
       res.status(400).json({ success: false, field: "upiId", error: "Enter a UPI ID like name@okaxis" });
       return;
     }
-    if (instagram !== undefined) user.influencer.instagram = instagram || undefined;
+    if (ig.value !== undefined) user.influencer.instagram = ig.value;
     if (upiId !== undefined) user.influencer.upiId = upiId || undefined;
     user.markModified("influencer");
     await user.save();
