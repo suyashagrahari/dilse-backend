@@ -77,7 +77,18 @@ export interface IThreadMessage {
 export interface IEmailThread extends Document {
   /** Unique. `draft:<pageId>:<seq>` for follow-ups, `inbound:<id>` otherwise. */
   threadKey: string;
-  kind: "draft" | "feedback" | "inbound";
+  /**
+   * "influencer" is a conversation with one member of the influencer
+   * programme, keyed by their user id rather than a page. One open thread per
+   * influencer — it is the chat on /admin/influencers/:id.
+   */
+  kind: "draft" | "feedback" | "inbound" | "influencer";
+  /**
+   * A short opaque reference printed in the footer of influencer mail
+   * (`Ref: INF-7K2Q9MXA`). Quoted history usually carries it back, so a reply
+   * whose headers were stripped can still be placed. Empty on other kinds.
+   */
+  threadToken?: string;
 
   userId?: mongoose.Types.ObjectId;
   userName: string;
@@ -141,7 +152,8 @@ const threadMessageSchema = new Schema<IThreadMessage>(
 const emailThreadSchema = new Schema<IEmailThread>(
   {
     threadKey: { type: String, required: true, unique: true, trim: true, maxlength: 200 },
-    kind: { type: String, enum: ["draft", "feedback", "inbound"], default: "draft", index: true },
+    kind: { type: String, enum: ["draft", "feedback", "inbound", "influencer"], default: "draft", index: true },
+    threadToken: { type: String, trim: true, uppercase: true, maxlength: 24 },
 
     userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     userName: { type: String, default: "", trim: true, maxlength: 160 },
@@ -174,5 +186,12 @@ emailThreadSchema.index({ userEmail: 1, lastMessageAt: -1 });
 emailThreadSchema.index({ userEmail: 1, subjectKey: 1, lastMessageAt: -1 });
 // "Which conversations exist about this page", for the drafts panel.
 emailThreadSchema.index({ pageId: 1, seq: -1 });
+// Influencer chat: "this person's conversation", and inbound matching by the
+// footer reference. Partial, so the many threads without a token never collide.
+emailThreadSchema.index({ kind: 1, userId: 1, seq: -1 });
+emailThreadSchema.index(
+  { threadToken: 1 },
+  { unique: true, partialFilterExpression: { threadToken: { $type: "string" } } }
+);
 
 export default mongoose.model<IEmailThread>("EmailThread", emailThreadSchema);

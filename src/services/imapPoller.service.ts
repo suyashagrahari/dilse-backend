@@ -38,19 +38,8 @@ import { simpleParser } from "mailparser";
 import { env } from "../config/env";
 import { threadReplyToAddress } from "./ses.service";
 import MailPollState from "../models/MailPollState";
-import {
-  appendMessage,
-  inboundAlreadyStored,
-  matchInboundThread,
-  openThread,
-} from "./threadStore.service";
-import {
-  normalizeMessageId,
-  parseMessageIds,
-  stripQuotedReply,
-} from "./emailThread.service";
-
-const BODY_STORE_MAX = 60_000;
+import { ingestInboundMail, inboundText, RECIPIENT_HEADERS } from "./inboundIngest.service";
+import { influencerInboundAddresses } from "./influencerMail.service";
 /** Per tick. A backlog is worked through over several ticks rather than at once. */
 const MAX_PER_RUN = 40;
 /** First run on an empty watermark looks back this far, not to the beginning. */
@@ -58,6 +47,54 @@ const FIRST_RUN_LOOKBACK_DAYS = 14;
 
 export function imapConfigured(): boolean {
   return !!env.IMAP_HOST && !!env.IMAP_USER && !!env.IMAP_PASSWORD;
+}
+
+/**
+ * One mailbox to watch.
+ *
+ * There can be two: the shared support@ inbox (IMAP_*), and the dedicated
+ * influencer-support@ mailbox (INFLUENCER_IMAP_*). Each keeps its own
+ * watermark — `MailPollState` is keyed by host, user and folder.
+ */
+export interface MailboxConfig {
+  label: string;
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  mailbox: string;
+  /** Only mail addressed to one of these is ingested. */
+  filter: string[];
+}
+
+export function primaryMailbox(): MailboxConfig {
+  return {
+    label: "support",
+    host: env.IMAP_HOST,
+    port: env.IMAP_PORT,
+    user: env.IMAP_USER,
+    password: env.IMAP_PASSWORD,
+    mailbox: env.IMAP_MAILBOX,
+    filter: filterAddresses(),
+  };
+}
+
+export function influencerImapConfigured(): boolean {
+  return !!env.INFLUENCER_IMAP_HOST && !!env.INFLUENCER_IMAP_USER && !!env.INFLUENCER_IMAP_PASSWORD;
+}
+
+export function influencerMailbox(): MailboxConfig {
+  return {
+    label: "influencer",
+    host: env.INFLUENCER_IMAP_HOST,
+    port: env.INFLUENCER_IMAP_PORT,
+    user: env.INFLUENCER_IMAP_USER,
+    password: env.INFLUENCER_IMAP_PASSWORD,
+    mailbox: env.INFLUENCER_IMAP_MAILBOX,
+    // A dedicated mailbox, but still filtered: a newsletter or a GoDaddy
+    // notice sitting in it is not an influencer writing to us.
+    filter: [...new Set([...influencerInboundAddresses(), env.INFLUENCER_IMAP_USER.toLowerCase()])].filter(Boolean),
+  };
 }
 
 /** The addresses whose mail we want out of the shared inbox. */
@@ -145,7 +182,8 @@ export function senderFrom(headers: Record<string, string>, ours: string[]): str
   return "";
 }
 
-const stateKey = () => `${env.IMAP_HOST}:${env.IMAP_USER}:${env.IMAP_MAILBOX}`;
+const stateKeyFor = (c: MailboxConfig) => `${c.host}:${c.user}:${c.mailbox}`;
+const stateKey = () => stateKeyFor(primaryMailbox());
 
 export interface PollResult {
   outcome: "ok" | "skipped" | "error";
@@ -158,11 +196,11 @@ export interface PollResult {
  * One pass over the mailbox. Safe to call repeatedly; safe to call twice at
  * once — a message already recorded is recognised by its `Message-ID`.
  */
-export async function pollOnce(): Promise<PollResult> {
-  if (!imapConfigured()) return { outcome: "skipped", stored: 0, skipped: 0 };
+export async function pollOnce(cfg: MailboxConfig = primaryMailbox()): Promise<PollResult> {
+  if (!cfg.host || !cfg.user || !cfg.password) return { outcome: "skipped", stored: 0, skipped: 0 };
 
-  const key = stateKey();
-  const wanted = filterAddresses();
+  const key = stateKeyFor(cfg);
+  const wanted = cfg.filter;
   // Every address that is us, so our own sent mail is never read back in as a
   // creator's reply.
   const ours = [
@@ -173,6 +211,8 @@ export async function pollOnce(): Promise<PollResult> {
     // writing to themselves inside their own conversation.
     String(env.SES_REPLY_TO_EMAIL || "").toLowerCase(),
     String(env.IMAP_USER || "").toLowerCase(),
+    String(cfg.user || "").toLowerCase(),
+    ...influencerInboundAddresses(),
     ...wanted,
   ].filter(Boolean);
 
@@ -180,10 +220,10 @@ export async function pollOnce(): Promise<PollResult> {
   let skipped = 0;
 
   const client = new ImapFlow({
-    host: env.IMAP_HOST,
-    port: env.IMAP_PORT,
-    secure: env.IMAP_PORT === 993,
-    auth: { user: env.IMAP_USER, pass: env.IMAP_PASSWORD },
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 993,
+    auth: { user: cfg.user, pass: cfg.password },
     logger: false,
     // Without this a hung TLS handshake keeps the tick alive forever and the
     // interval stacks up connections.
@@ -193,7 +233,7 @@ export async function pollOnce(): Promise<PollResult> {
   try {
     await client.connect();
     // READ-ONLY. See the header: this is a person's inbox.
-    const box = await client.mailboxOpen(env.IMAP_MAILBOX, { readOnly: true });
+    const box = await client.mailboxOpen(cfg.mailbox, { readOnly: true });
 
     const state = await MailPollState.findOne({ key }).lean();
     const serverValidity = String(box.uidValidity ?? "");
@@ -246,55 +286,25 @@ export async function pollOnce(): Promise<PollResult> {
           continue;
         }
 
-        const rfcMessageId = normalizeMessageId(parsed.messageId || headers["message-id"] || "");
-        if (rfcMessageId && (await inboundAlreadyStored(rfcMessageId))) {
+        const result = await ingestInboundMail({
+          fromEmail,
+          fromName: parsed.from?.value?.[0]?.name || "",
+          subject: String(parsed.subject || ""),
+          text: inboundText(parsed),
+          messageId: parsed.messageId || headers["message-id"] || "",
+          inReplyTo: headers["in-reply-to"] || "",
+          references: headers["references"] || "",
+          at: parsed.date || new Date(),
+          recipients: RECIPIENT_HEADERS.map((h) => headers[h] || "").filter(Boolean),
+        });
+        if (result.outcome === "duplicate") {
           skipped++;
           highest = Math.max(highest, Number(uid));
           continue;
         }
-
-        const subject = String(parsed.subject || "").slice(0, 300);
-        const rawText = String(parsed.text || "").slice(0, BODY_STORE_MAX);
-        const trimmed = stripQuotedReply(rawText);
-
-        const match = await matchInboundThread({
-          fromEmail,
-          subject,
-          inReplyTo: headers["in-reply-to"] || "",
-          references: headers["references"] || "",
-          messageId: rfcMessageId,
-        });
-
-        let threadId = match.thread?._id;
-        if (!threadId) {
-          const opened = await openThread(
-            {
-              kind: "inbound",
-              userEmail: fromEmail,
-              userName: parsed.from?.value?.[0]?.name || "",
-            },
-            subject
-          );
-          threadId = opened._id;
-        }
-
-        await appendMessage(threadId as never, {
-          direction: "inbound",
-          subject,
-          body: trimmed,
-          rawBody: rawText,
-          at: parsed.date || new Date(),
-          rfcMessageId,
-          rfcMessageIdSource: rfcMessageId ? "received" : "",
-          inReplyTo: parseMessageIds(headers["in-reply-to"] || "")[0] || "",
-          references: parseMessageIds(headers["references"] || ""),
-          source: "inbound-ses",
-          trimmed: trimmed !== rawText.trim(),
-        });
-
+        console.log(`IMAP[${cfg.label}]: stored a reply from ${fromEmail} (route: ${result.route}, matched by: ${result.rung})`);
         stored++;
         highest = Math.max(highest, Number(uid));
-        console.log(`IMAP: stored a reply from ${fromEmail} (matched by: ${match.rung})`);
       } catch (error) {
         // One unparseable message must not stop the batch, and must not be
         // retried forever — the watermark moves past it.
@@ -337,31 +347,24 @@ export async function pollOnce(): Promise<PollResult> {
   }
 }
 
-let timer: NodeJS.Timeout | null = null;
-let running = false;
+const timers: NodeJS.Timeout[] = [];
 
-/** Start the loop. A no-op when IMAP is not configured. */
-export function startImapPoller(): void {
-  if (timer) return;
-  if (!imapConfigured()) {
-    console.log("IMAP poller: not configured, replies must be pasted in by hand");
-    return;
-  }
-
+function startLoop(cfg: MailboxConfig): void {
   const seconds = Math.max(30, env.IMAP_POLL_SECONDS || 120);
   console.log(
-    `IMAP poller: watching ${env.IMAP_USER} every ${seconds}s for mail to ${filterAddresses().join(", ")}`
+    `IMAP poller[${cfg.label}]: watching ${cfg.user} every ${seconds}s for mail to ${cfg.filter.join(", ")}`
   );
 
+  let running = false;
   const tick = async () => {
     // Overlap guard. A slow pass must not have a second one started on top of
     // it — two passes would fetch the same UIDs and race on the watermark.
     if (running) return;
     running = true;
     try {
-      await pollOnce();
+      await pollOnce(cfg);
     } catch (error) {
-      console.error("IMAP poller tick threw:", error);
+      console.error(`IMAP poller[${cfg.label}] tick threw:`, error);
     } finally {
       running = false;
     }
@@ -370,14 +373,29 @@ export function startImapPoller(): void {
   // A short delay, not immediate: the process is still opening its Mongo
   // connection when this is called.
   setTimeout(tick, 8000);
-  timer = setInterval(tick, seconds * 1000);
+  const timer = setInterval(tick, seconds * 1000);
   // Do not hold the process open on its own account.
   timer.unref?.();
+  timers.push(timer);
+}
+
+/** Start the loops. A no-op for each mailbox that is not configured. */
+export function startImapPoller(): void {
+  if (timers.length) return;
+  if (imapConfigured()) startLoop(primaryMailbox());
+  else console.log("IMAP poller: not configured, replies must be pasted in by hand");
+
+  if (influencerImapConfigured()) {
+    const cfg = influencerMailbox();
+    // Same login as the primary loop means the same mailbox — one loop
+    // already reads it, and the recipient routing sorts influencer mail out.
+    if (!imapConfigured() || stateKeyFor(cfg) !== stateKey()) startLoop(cfg);
+  }
 }
 
 export function stopImapPoller(): void {
-  if (timer) clearInterval(timer);
-  timer = null;
+  for (const t of timers) clearInterval(t);
+  timers.length = 0;
 }
 
 /**
@@ -449,5 +467,46 @@ export async function imapStatus() {
     lastError: state?.lastError || "",
     totalStored: state?.totalStored || 0,
     totalSkipped: state?.totalSkipped || 0,
+  };
+}
+
+/**
+ * "Will an influencer's reply appear in the chat on its own?"
+ *
+ * Three ways it can: the dedicated mailbox is polled; the shared support@
+ * poller's filter includes an influencer address (influencer-support@ set up
+ * as an alias into support@); or the SES webhook is armed AND an influencer
+ * address lives on the receiving subdomain (a forwarding target, or the
+ * Reply-To itself). Anything else means the panel must say "not configured".
+ */
+export async function influencerInboundStatus() {
+  const addresses = influencerInboundAddresses();
+  const replyDomain = (env.SES_REPLY_TO_EMAIL.split("@")[1] || "").toLowerCase();
+  const apex = (influencerInboundAddresses()[0] || "").split("@")[1] || "";
+
+  const mechanisms: string[] = [];
+  let state: { lastOkAt: Date | null; lastError: string } | null = null;
+
+  if (influencerImapConfigured()) {
+    mechanisms.push("imap-influencer");
+    const row = await MailPollState.findOne({ key: stateKeyFor(influencerMailbox()) }).lean();
+    state = { lastOkAt: row?.lastOkAt || null, lastError: row?.lastError || "" };
+  }
+  if (imapConfigured() && filterAddresses().some((a) => addresses.includes(a))) {
+    mechanisms.push("imap-shared");
+  }
+  const onReceivingDomain = addresses.some((a) => {
+    const d = a.split("@")[1] || "";
+    return !!d && d !== apex && (d === replyDomain || d.startsWith("reply."));
+  });
+  if (sesInboundConfigured() && onReceivingDomain) mechanisms.push("ses-webhook");
+
+  return {
+    configured: mechanisms.length > 0,
+    mechanisms,
+    addresses,
+    lastOkAt: state?.lastOkAt || null,
+    lastError: state?.lastError || "",
+    etaSeconds: mechanisms.includes("ses-webhook") ? 15 : mechanisms.length ? Math.max(30, env.IMAP_POLL_SECONDS || 120) : 0,
   };
 }

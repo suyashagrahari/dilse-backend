@@ -533,6 +533,7 @@ export function shapeThread(t: {
     fromAddress?: string;
     aiAssisted?: boolean;
     rfcMessageIdSource?: string;
+    providerMessageId?: string;
     source: string;
     trimmed?: boolean;
   }[];
@@ -550,6 +551,10 @@ export function shapeThread(t: {
     notes: t.notes || "",
     messages: (t.messages || []).map((m) => ({
       direction: m.direction,
+      // Outbound only: SES (or the dev stub) accepted it and gave back an id.
+      // Delivery itself is not tracked — there is no bounce feed — so this
+      // says "sent", never "delivered".
+      sent: m.direction === "outbound" && !!m.providerMessageId,
       subject: m.subject,
       body: m.body,
       // Only when the trim actually removed something — otherwise the panel

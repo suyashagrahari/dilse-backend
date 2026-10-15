@@ -221,6 +221,46 @@ export const env = {
   IMAP_FILTER_TO: process.env.IMAP_FILTER_TO || process.env.SES_FROM_EMAIL || "feedback@subhsandesh.in",
   IMAP_POLL_SECONDS: parseInt(process.env.IMAP_POLL_SECONDS || "120", 10),
 
+  // ── Influencer conversations (admin → one influencer, AI-drafted) ────────
+  //
+  // Mail to influencers goes out as its own address so a creator-programme
+  // conversation never arrives from the address that sends draft nudges, and
+  // so replies can land in a mailbox that only holds influencer mail. Covered
+  // by the subhsandesh.in SES domain identity — no per-address verification.
+  //
+  // Where a REPLY goes is a separate decision, exactly as for feedback mail:
+  //
+  //   · INFLUENCER_REPLY_TO_EMAIL unset → replies go to INFLUENCER_FROM_EMAIL,
+  //     an apex address whose MX is GoDaddy. The app sees them only if that
+  //     mailbox is polled (INFLUENCER_IMAP_*) or forwards a copy to an address
+  //     on the SES receiving subdomain (listed in INFLUENCER_INBOUND_ADDRESSES).
+  //   · INFLUENCER_REPLY_TO_EMAIL=influencer@reply.subhsandesh.in → replies go
+  //     straight to SES and the webhook, with no GoDaddy hop at all.
+  //
+  // See docs/influencer-mail-setup.md. Nothing here touches the apex MX.
+  INFLUENCER_FROM_EMAIL: process.env.INFLUENCER_FROM_EMAIL || "influencer-support@subhsandesh.in",
+  INFLUENCER_FROM_NAME: process.env.INFLUENCER_FROM_NAME || "SubhSandesh Creators",
+  INFLUENCER_REPLY_TO_EMAIL: process.env.INFLUENCER_REPLY_TO_EMAIL || "",
+  /**
+   * Extra addresses that mean "this is influencer mail" when they appear as a
+   * recipient, comma-separated — typically the SES receiving alias a GoDaddy
+   * forwarding rule points at (`influencer@reply.subhsandesh.in`). The From
+   * and Reply-To addresses above are always included.
+   */
+  INFLUENCER_INBOUND_ADDRESSES: process.env.INFLUENCER_INBOUND_ADDRESSES || "",
+  /** Optional IMAP login for the influencer-support@ mailbox itself. */
+  INFLUENCER_IMAP_HOST: process.env.INFLUENCER_IMAP_HOST || process.env.IMAP_HOST || "",
+  INFLUENCER_IMAP_PORT: parseInt(process.env.INFLUENCER_IMAP_PORT || process.env.IMAP_PORT || "993", 10),
+  INFLUENCER_IMAP_USER: process.env.INFLUENCER_IMAP_USER || "",
+  INFLUENCER_IMAP_PASSWORD: process.env.INFLUENCER_IMAP_PASSWORD || "",
+  INFLUENCER_IMAP_MAILBOX: process.env.INFLUENCER_IMAP_MAILBOX || "INBOX",
+  /**
+   * Local development only: record influencer sends as if SES accepted them,
+   * without contacting any provider. Ignored whenever APP_ENV=production
+   * (which includes staging), so it can never swallow a real send.
+   */
+  INFLUENCER_MAIL_STUB: process.env.INFLUENCER_MAIL_STUB === "1" && APP_ENV !== "production",
+
   // Razorpay (payment gateway)
   // RAZORPAY_KEY_ID   — public key, safe to expose to client
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client

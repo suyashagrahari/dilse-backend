@@ -4,6 +4,7 @@ import InfluencerSettings from "../models/InfluencerSettings";
 import InfluencerEarning from "../models/InfluencerEarning";
 import InfluencerPayout from "../models/InfluencerPayout";
 import InfluencerClick from "../models/InfluencerClick";
+import EmailThread from "../models/EmailThread";
 import PaymentOrder, { type IPaymentOrder } from "../models/PaymentOrder";
 import { orderInrPaise } from "../config/currency";
 import { TEMPLATE_REGISTRY } from "./templateRegistry";
@@ -400,7 +401,7 @@ export async function listInfluencersSummary() {
     getInfluencerSettings(),
   ]);
   const ids = influencers.map((i) => i._id);
-  const [signups, earned, paid, clicks] = await Promise.all([
+  const [signups, earned, paid, clicks, mail] = await Promise.all([
     User.aggregate([{ $match: { referredByInfluencer: { $in: ids } } }, { $group: { _id: "$referredByInfluencer", n: { $sum: 1 } } }]),
     InfluencerEarning.aggregate([
       { $match: { influencerId: { $in: ids } } },
@@ -408,9 +409,23 @@ export async function listInfluencersSummary() {
     ]),
     InfluencerPayout.aggregate([{ $match: { influencerId: { $in: ids } } }, { $group: { _id: "$influencerId", total: { $sum: "$amountPaise" } } }]),
     InfluencerClick.aggregate([{ $match: { influencerId: { $in: ids } } }, { $group: { _id: "$influencerId", total: { $sum: "$count" } } }]),
+    // The chat badge on each card: unread replies, and who spoke last.
+    EmailThread.aggregate([
+      { $match: { kind: "influencer", userId: { $in: ids } } },
+      { $sort: { lastMessageAt: -1 } },
+      {
+        $group: {
+          _id: "$userId",
+          unread: { $max: { $cond: ["$unread", 1, 0] } },
+          messages: { $sum: "$messageCount" },
+          lastMessageAt: { $first: "$lastMessageAt" },
+          lastDirection: { $first: "$lastDirection" },
+        },
+      },
+    ]),
   ]);
   const by = <T extends { _id: unknown }>(rows: T[]) => new Map(rows.map((r) => [String(r._id), r]));
-  const S = by(signups), E = by(earned), P = by(paid), C = by(clicks);
+  const S = by(signups), E = by(earned), P = by(paid), C = by(clicks), M = by(mail);
 
   return {
     settings,
@@ -441,6 +456,14 @@ export async function listInfluencersSummary() {
         earnedPaise,
         paidOutPaise,
         pendingPaise: pendingPaise(earnedPaise, paidOutPaise),
+        mail: (() => {
+          const m = M.get(id) as
+            | { unread?: number; messages?: number; lastMessageAt?: Date; lastDirection?: string }
+            | undefined;
+          return m
+            ? { unread: !!m.unread, messages: m.messages || 0, lastMessageAt: m.lastMessageAt || null, lastDirection: m.lastDirection || "" }
+            : { unread: false, messages: 0, lastMessageAt: null, lastDirection: "" };
+        })(),
       };
     }),
   };

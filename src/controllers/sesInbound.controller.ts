@@ -52,15 +52,8 @@ import {
   verifySnsMessage,
   type SnsMessage,
 } from "../services/snsSignature";
-import {
-  appendMessage,
-  inboundAlreadyStored,
-  matchInboundThread,
-  openThread,
-} from "../services/threadStore.service";
-import { normalizeMessageId, parseMessageIds, stripQuotedReply } from "../services/emailThread.service";
-
-const BODY_STORE_MAX = 60_000;
+import { ingestInboundMail, inboundText, RECIPIENT_HEADERS } from "../services/inboundIngest.service";
+import { influencerInboundAddresses } from "../services/influencerMail.service";
 
 /** Constant-time compare, so the token cannot be found a character at a time. */
 function tokenMatches(given: string, expected: string): boolean {
@@ -101,6 +94,10 @@ export function ourAddresses(): string[] {
     env.SES_FROM_EMAIL,
     env.SES_REPLY_TO_EMAIL,
     env.SES_OTP_FROM_EMAIL,
+    // Influencer mail goes out as, and asks for replies at, its own
+    // addresses. A forwarded copy carries them in From / Reply-To exactly as
+    // feedback mail carries feedback@.
+    ...influencerInboundAddresses(),
   ]
     .map((a) => String(a || "").toLowerCase().trim())
     // The env values may carry a display name; only the address matters.
@@ -223,8 +220,8 @@ export const sesInboundWebhook = async (req: Request, res: Response): Promise<vo
     notificationType?: string;
     eventType?: string;
     content?: string;
-    mail?: { source?: string; commonHeaders?: { subject?: string } };
-    receipt?: { action?: { type?: string } };
+    mail?: { source?: string; destination?: string[]; commonHeaders?: { subject?: string } };
+    receipt?: { recipients?: string[]; action?: { type?: string } };
   };
   try {
     payload = JSON.parse(String(msg.Message || "{}"));
@@ -259,70 +256,43 @@ export const sesInboundWebhook = async (req: Request, res: Response): Promise<vo
     const parsed = await simpleParser(Buffer.from(raw, "utf8"));
     const headers = parsed.headers as Map<string, unknown>;
 
-    const rfcMessageId = normalizeMessageId(parsed.messageId || headerValue(headers, "message-id"));
-    if (rfcMessageId && (await inboundAlreadyStored(rfcMessageId))) {
-      // 200, not an error: SNS retries anything else, for hours.
-      res.json({ success: true, message: "Already stored" });
-      return;
-    }
-
-    const subject = String(parsed.subject || payload.mail?.commonHeaders?.subject || "").slice(0, 300);
-    const inReplyTo = headerValue(headers, "in-reply-to");
-    const references = headerValue(headers, "references");
-
     const fromEmail = senderOf(
       headerValue(headers, "reply-to"),
       parsed.from?.text || headerValue(headers, "from"),
       String(payload.mail?.source || "")
     );
 
-    const rawText = String(parsed.text || "").slice(0, BODY_STORE_MAX);
-    const trimmedText = stripQuotedReply(rawText);
+    // Who it was ADDRESSED to decides which ladder matches it (influencer
+    // mail vs everything else). SES's own envelope list is the most reliable
+    // record of that; the headers cover aliases and forwards.
+    const recipients = [
+      ...(payload.receipt?.recipients || []),
+      ...(payload.mail?.destination || []),
+      ...RECIPIENT_HEADERS.map((h) => headerValue(headers, h)),
+    ].filter(Boolean);
 
-    const match = await matchInboundThread({
+    const result = await ingestInboundMail({
       fromEmail,
-      subject,
-      inReplyTo,
-      references,
-      messageId: rfcMessageId,
+      fromName: parsed.from?.value?.[0]?.name || "",
+      subject: String(parsed.subject || payload.mail?.commonHeaders?.subject || ""),
+      text: inboundText(parsed),
+      messageId: parsed.messageId || headerValue(headers, "message-id"),
+      inReplyTo: headerValue(headers, "in-reply-to"),
+      references: headerValue(headers, "references"),
+      at: parsed.date || new Date(),
+      recipients,
     });
 
-    let threadId = match.thread?._id;
-    if (!threadId) {
-      // Nothing matched. Still stored — the footer of every follow-up promises
-      // a reply gets read, and an unplaceable reply is the one most likely to
-      // be somebody asking to be left alone.
-      const opened = await openThread(
-        {
-          kind: "inbound",
-          userEmail: fromEmail || "unknown@unknown.invalid",
-          userName: parsed.from?.value?.[0]?.name || "",
-        },
-        subject
-      );
-      threadId = opened._id;
+    if (result.outcome === "duplicate") {
+      // 200, not an error: SNS retries anything else, for hours.
+      res.json({ success: true, message: "Already stored" });
+      return;
     }
 
-    await appendMessage(threadId as never, {
-      direction: "inbound",
-      subject,
-      body: trimmedText,
-      rawBody: rawText,
-      html: "",
-      at: parsed.date || new Date(),
-      rfcMessageId,
-      // Read off a real message, so from here on the chain is exact.
-      rfcMessageIdSource: rfcMessageId ? "received" : "",
-      inReplyTo: parseMessageIds(inReplyTo)[0] || "",
-      references: parseMessageIds(references),
-      source: "inbound-ses",
-      trimmed: trimmedText !== rawText.trim(),
-    });
-
     console.log(
-      `Stored an inbound reply from ${fromEmail || "an unknown sender"} (matched by: ${match.rung})`
+      `Stored an inbound reply from ${fromEmail || "an unknown sender"} (route: ${result.route}, matched by: ${result.rung})`
     );
-    res.json({ success: true, message: "Stored", data: { matchedBy: match.rung } });
+    res.json({ success: true, message: "Stored", data: { matchedBy: result.rung, route: result.route } });
   } catch (error) {
     // A parse failure is ours, not Amazon's, and retrying will fail the same
     // way. 200 so SNS stops, with a loud log so it is not lost silently.
