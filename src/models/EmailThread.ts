@@ -82,13 +82,20 @@ export interface IEmailThread extends Document {
    * programme, keyed by their user id rather than a page. One open thread per
    * influencer — it is the chat on /admin/influencers/:id.
    */
-  kind: "draft" | "feedback" | "inbound" | "influencer";
+  kind: "draft" | "feedback" | "inbound" | "influencer" | "prospect";
   /**
    * A short opaque reference printed in the footer of influencer mail
    * (`Ref: INF-7K2Q9MXA`). Quoted history usually carries it back, so a reply
    * whose headers were stripped can still be placed. Empty on other kinds.
    */
   threadToken?: string;
+  /**
+   * "prospect" is outreach to a creator who has not joined
+   * (models/InfluencerProspect). When they join, the thread is converted in
+   * place to kind "influencer" with their new userId, so the history carries
+   * over to their influencer page. `prospectId` stays set as the link back.
+   */
+  prospectId?: mongoose.Types.ObjectId;
 
   userId?: mongoose.Types.ObjectId;
   userName: string;
@@ -152,8 +159,9 @@ const threadMessageSchema = new Schema<IThreadMessage>(
 const emailThreadSchema = new Schema<IEmailThread>(
   {
     threadKey: { type: String, required: true, unique: true, trim: true, maxlength: 200 },
-    kind: { type: String, enum: ["draft", "feedback", "inbound", "influencer"], default: "draft", index: true },
+    kind: { type: String, enum: ["draft", "feedback", "inbound", "influencer", "prospect"], default: "draft", index: true },
     threadToken: { type: String, trim: true, uppercase: true, maxlength: 24 },
+    prospectId: { type: Schema.Types.ObjectId, index: true, sparse: true },
 
     userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     userName: { type: String, default: "", trim: true, maxlength: 160 },

@@ -261,6 +261,31 @@ export const env = {
    */
   INFLUENCER_MAIL_STUB: process.env.INFLUENCER_MAIL_STUB === "1" && APP_ENV !== "production",
 
+  // ── Prospect outreach: first emails to creators who have not joined ────────
+  //
+  // Sent as INFLUENCER_FROM_EMAIL (no new sender — the IAM policy allows five),
+  // but under a person's name, because a first email from "SubhSandesh
+  // Creators" reads like a newsletter and one from a person reads like a note.
+  // See docs/influencer-prospects.md.
+  /** From display name on prospect mail. */
+  PROSPECT_FROM_NAME: process.env.PROSPECT_FROM_NAME || "Suyash from SubhSandesh",
+  /** Sign-off under every prospect email. `\n` becomes a line break. */
+  PROSPECT_SIGNATURE: (process.env.PROSPECT_SIGNATURE || "Suyash\\nSubhSandesh").replace(/\\n/g, "\n"),
+  /** The only link a prospect email may carry. */
+  PROSPECT_JOIN_URL: process.env.PROSPECT_JOIN_URL || "https://subhsandesh.in/influencer",
+  /** At most this many prospect emails in any rolling 24 hours (warm-up). */
+  PROSPECT_DAILY_CAP: Math.max(0, parseInt(process.env.PROSPECT_DAILY_CAP || "30", 10) || 0),
+  /** Minimum seconds between two prospect sends. */
+  PROSPECT_MIN_GAP_SECONDS: Math.max(5, parseInt(process.env.PROSPECT_MIN_GAP_SECONDS || "90", 10) || 90),
+  /** A follow-up is offered only this many days after the first email. */
+  PROSPECT_FOLLOWUP_DAYS: Math.max(1, parseInt(process.env.PROSPECT_FOLLOWUP_DAYS || "4", 10) || 4),
+  /**
+   * Public base of THIS API, for the unsubscribe link and List-Unsubscribe.
+   * Unset → derived from SHARE_BASE_URL (subhsandesh.in → api.subhsandesh.in,
+   * stag.subhsandesh.in → stag-api.subhsandesh.in, else localhost:PORT).
+   */
+  PUBLIC_API_URL: (process.env.PUBLIC_API_URL || "").replace(/\/+$/, ""),
+
   // Razorpay (payment gateway)
   // RAZORPAY_KEY_ID   — public key, safe to expose to client
   // RAZORPAY_KEY_SECRET — private key, NEVER send to client

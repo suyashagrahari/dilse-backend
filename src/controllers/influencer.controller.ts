@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { markProspectJoined } from "../services/prospect.service";
 import mongoose from "mongoose";
 import User from "../models/User";
 import InfluencerPayout from "../models/InfluencerPayout";
@@ -85,6 +86,9 @@ export const registerInfluencer = async (req: Request, res: Response): Promise<v
       }
       throw err;
     }
+    // A creator we had been emailing as a prospect: mark them joined and move
+    // the conversation onto their influencer page. Never fails the join.
+    await markProspectJoined({ _id: user._id, email: user.email, instagram });
     res.status(201).json({ success: true, data: { subdomain: user.subdomain, influencer: { status: "active" } } });
   } catch (error) {
     console.error("Register influencer error:", error);

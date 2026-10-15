@@ -4,6 +4,7 @@ import { connectDB } from "./config/db";
 import { rebuildBannedContent } from "./services/bannedContent";
 import { ensureSuperAdmin } from "./services/ensureSuperAdmin";
 import { startImapPoller } from "./services/imapPoller.service";
+import { startProspectQueue } from "./services/prospectQueue.service";
 import { ensureGeoLoaded } from "./services/geo.service";
 
 const startServer = async () => {
@@ -25,6 +26,8 @@ const startServer = async () => {
   // no-op with no IMAP credentials, which is the default — see the service
   // header. Started AFTER connectDB because its first pass writes.
   startImapPoller();
+  // Sends queued prospect outreach one email at a time, under the daily cap.
+  startProspectQueue();
 
   app.listen(env.PORT, () => {
     console.log(`

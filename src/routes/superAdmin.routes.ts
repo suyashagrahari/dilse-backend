@@ -35,6 +35,20 @@ import {
   getInfluencerMail,
   sendInfluencerMailHandler,
 } from "../controllers/influencerMail.controller";
+import {
+  bulkStatus,
+  cancelProspectMail,
+  checkProspect,
+  createProspect,
+  deleteProspects,
+  draftProspects,
+  getProspect,
+  importProspects,
+  listProspects,
+  previewProspectMail,
+  sendProspectMail,
+  updateProspect,
+} from "../controllers/prospect.controller";
 
 /**
  * Mounted at /api/admin/super behind `protect` + `requireSuperAdmin`.
@@ -99,6 +113,31 @@ router.post(
   perAdmin(40, 60, "Too many emails sent in the last hour. Please wait."),
   sendInfluencerMailHandler
 );
+
+// Prospects: creators we invite who have not joined. `draft` calls the model
+// and sends nothing; `send` only QUEUES — the worker sends one at a time under
+// the daily cap (services/prospectQueue.service). See docs/influencer-prospects.md.
+const perAdminKey = (scope: string, limit: number, windowMinutes: number, error: string) =>
+  rateLimit({
+    windowMs: windowMinutes * 60 * 1000,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `${scope}:${req.userId || req.ip}`,
+    message: { success: false, error },
+  });
+router.get("/prospects", listProspects);
+router.post("/prospects", perAdminKey("prospect-add", 150, 60, "Too many prospects added in an hour."), createProspect);
+router.post("/prospects/check", perAdminKey("prospect-check", 300, 10, "Slow down a little."), checkProspect);
+router.post("/prospects/import", perAdminKey("prospect-import", 20, 60, "Too many imports in an hour."), importProspects);
+router.post("/prospects/status", bulkStatus);
+router.post("/prospects/delete", deleteProspects);
+router.post("/prospects/draft", perAdminKey("prospect-draft", 30, 10, "Too many drafts in a short time. Please wait a few minutes."), draftProspects);
+router.post("/prospects/preview", perAdminKey("prospect-preview", 400, 10, "Too many previews. Please wait."), previewProspectMail);
+router.post("/prospects/send", perAdminKey("prospect-send", 20, 60, "Too many sends in the last hour. Please wait."), sendProspectMail);
+router.post("/prospects/cancel", cancelProspectMail);
+router.get("/prospects/:id", getProspect);
+router.patch("/prospects/:id", updateProspect);
 
 // Page actions
 router.put("/pages/:templateType/:pageId/password", setPagePassword);

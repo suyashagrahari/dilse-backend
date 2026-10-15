@@ -54,6 +54,8 @@ import {
 } from "../services/snsSignature";
 import { ingestInboundMail, inboundText, RECIPIENT_HEADERS } from "../services/inboundIngest.service";
 import { influencerInboundAddresses } from "../services/influencerMail.service";
+import { parseSesFeedback } from "../services/prospectMail.service";
+import { applySesFeedbackToProspects } from "../services/prospect.service";
 
 /** Constant-time compare, so the token cannot be found a character at a time. */
 function tokenMatches(given: string, expected: string): boolean {
@@ -233,6 +235,20 @@ export const sesInboundWebhook = async (req: Request, res: Response): Promise<vo
   // A configuration set's bounce/complaint events land on their own topic and
   // have `eventType`, not `notificationType: "Received"`. If both are wired to
   // one topic, this is what keeps them apart.
+  // Bounce / complaint feedback. Only prospect outreach acts on it: an
+  // address that hard-bounced or complained is never emailed again. Works only
+  // once SES feedback notifications (identity) or a configuration-set event
+  // destination publish to THIS topic — see docs/influencer-prospects.md.
+  const feedback = parseSesFeedback(payload);
+  if (feedback) {
+    const n = await applySesFeedbackToProspects(feedback).catch((err) => {
+      console.error("Applying SES feedback failed:", (err as Error)?.message);
+      return 0;
+    });
+    res.json({ success: true, message: `${feedback.type} feedback processed (${n} prospect(s) updated)` });
+    return;
+  }
+
   if (payload.notificationType !== "Received") {
     res.json({
       success: true,

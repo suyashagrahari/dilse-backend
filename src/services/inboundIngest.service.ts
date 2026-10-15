@@ -98,6 +98,8 @@ export async function ingestInboundMail(mail: InboundMail): Promise<IngestResult
 
   let threadId: mongoose.Types.ObjectId | undefined;
   let rung: MatchRung;
+  /** Set when the reply belongs to outreach to a not-yet-joined creator. */
+  let prospectThread = false;
 
   if (route === "influencer") {
     const match = await matchInfluencerInbound({
@@ -111,6 +113,22 @@ export async function ingestInboundMail(mail: InboundMail): Promise<IngestResult
     });
     rung = match.rung;
     threadId = match.thread?._id as mongoose.Types.ObjectId | undefined;
+    prospectThread = match.thread?.kind === "prospect";
+    if (!threadId && match.prospect) {
+      // A prospect writing in before (or apart from) our email reaching them.
+      const opened = await openThread(
+        {
+          kind: "prospect",
+          prospectId: String(match.prospect._id),
+          userName: match.prospect.name || mail.fromName || "",
+          userEmail: match.prospect.email,
+          threadToken: newThreadToken(),
+        },
+        subject
+      );
+      threadId = opened._id as mongoose.Types.ObjectId;
+      prospectThread = true;
+    }
     if (!threadId && match.influencerUser) {
       // A known influencer writing in before we ever wrote to them. Their
       // chat starts here, with their message.
@@ -166,6 +184,16 @@ export async function ingestInboundMail(mail: InboundMail): Promise<IngestResult
     source: "inbound-ses",
     trimmed: trimmed !== rawText.trim(),
   });
+
+  if (prospectThread) {
+    // Status → replied (or unsubscribed / not interested when that is all the
+    // reply says), and any queued follow-up is cancelled. Lazy import: the
+    // prospect service pulls in models this module's tests never load.
+    const { recordProspectReply } = await import("./prospect.service");
+    await recordProspectReply(String(threadId), subject, trimmed).catch((err) =>
+      console.error("recordProspectReply failed (reply is stored):", (err as Error)?.message)
+    );
+  }
 
   return { outcome: "stored", route, rung, threadId: String(threadId) };
 }

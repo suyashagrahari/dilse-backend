@@ -25,6 +25,7 @@
 
 import crypto from "node:crypto";
 import { env } from "../config/env";
+import { maskEmail } from "../config/influencerMath";
 import { rfcMessageIdFor } from "./emailThread.service";
 import { sendSesEmail, sesConfigured, type SesEmail, type SesSendResult } from "./ses.service";
 
@@ -216,7 +217,8 @@ export type MailTransport = (email: SesEmail) => Promise<SesSendResult>;
 
 /** A transport that records nothing and sends nothing. Local dev and tests. */
 export const stubTransport: MailTransport = async (email) => {
-  console.log(`[influencer mail — STUB, not sent] To: ${email.to} | Subject: ${email.subject}`);
+  // The address is masked: process logs are read more widely than the panel.
+  console.log(`[influencer mail — STUB, not sent] To: ${maskEmail(email.to)} | Subject: ${email.subject}`);
   return { outcome: "sent", messageId: `stub-${crypto.randomBytes(12).toString("hex")}` };
 };
 
@@ -235,6 +237,14 @@ export interface InfluencerSendInput {
   token: string;
   inReplyTo?: string;
   references?: string;
+  /**
+   * Prospect outreach supplies its own rendering (a plainer email with an
+   * unsubscribe footer), its own display name, and List-Unsubscribe headers.
+   * Unset → the influencer-chat email above, exactly as before.
+   */
+  render?: (c: { fromAddress: string; replyToAddress: string }) => { text: string; html: string };
+  fromName?: string;
+  extraHeaders?: Record<string, string>;
 }
 
 export interface InfluencerSendResult {
@@ -267,8 +277,11 @@ export async function sendInfluencerMail(
   const fromAddress = influencerFromAddress();
   const replyToAddress = influencerReplyToAddress();
   const content = { body: input.body, token: input.token, fromAddress, replyToAddress };
-  const text = influencerMailText(content);
-  const html = influencerMailHtml(content);
+  const rendered = input.render
+    ? input.render({ fromAddress, replyToAddress })
+    : { text: influencerMailText(content), html: influencerMailHtml(content) };
+  const { text, html } = rendered;
+  const fromName = input.fromName || env.INFLUENCER_FROM_NAME;
 
   const result = await send({
     to: input.to,
@@ -276,11 +289,12 @@ export async function sendInfluencerMail(
     text,
     html,
     from: fromAddress,
-    fromName: env.INFLUENCER_FROM_NAME,
-    replyTo: env.INFLUENCER_FROM_NAME
-      ? `${env.INFLUENCER_FROM_NAME.replace(/[\r\n"<>]+/g, " ").trim()} <${replyToAddress}>`
+    fromName,
+    replyTo: fromName
+      ? `${fromName.replace(/[\r\n"<>]+/g, " ").trim()} <${replyToAddress}>`
       : replyToAddress,
     headers: {
+      ...(input.extraHeaders || {}),
       "In-Reply-To": input.inReplyTo || "",
       References: input.references || "",
     },

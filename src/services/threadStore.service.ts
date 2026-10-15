@@ -63,7 +63,9 @@ const REPLY_PREFIX = /^\s*(?:re|aw|sv|antw|ref|res|r|fw|fwd|forward)\s*(?:\[\d+\
 export type MatchRung = "headers" | "token" | "subject" | "sender" | "recent" | "none";
 
 export interface ThreadIdentity {
-  kind: "draft" | "feedback" | "inbound" | "influencer";
+  kind: "draft" | "feedback" | "inbound" | "influencer" | "prospect";
+  /** Prospect threads only: the InfluencerProspect it belongs to. */
+  prospectId?: string;
   userId?: string;
   userName?: string;
   userEmail: string;
@@ -123,6 +125,10 @@ export async function openThread(
       .lean<{ seq: number }>();
     seq = (newest?.seq || 0) + 1;
     keyPrefix = `influencer:${identity.userId}`;
+  } else if (identity.kind === "prospect" && identity.prospectId && mongoose.Types.ObjectId.isValid(identity.prospectId)) {
+    // One conversation per prospect; the unique threadKey makes a second
+    // simultaneous open fail instead of splitting the conversation.
+    keyPrefix = `prospect:${identity.prospectId}`;
   } else if (identity.pageId && mongoose.Types.ObjectId.isValid(identity.pageId)) {
     const newest = await EmailThread.findOne({ pageId: new mongoose.Types.ObjectId(identity.pageId) })
       .sort({ seq: -1 })
@@ -153,6 +159,9 @@ export async function openThread(
     subjectKey: subjectKey(base),
     seq,
     ...(identity.threadToken ? { threadToken: identity.threadToken } : {}),
+    ...(identity.prospectId && mongoose.Types.ObjectId.isValid(identity.prospectId)
+      ? { prospectId: new mongoose.Types.ObjectId(identity.prospectId) }
+      : {}),
     messages: [],
     messageCount: 0,
     lastMessageAt: new Date(),
@@ -276,7 +285,7 @@ export async function matchInboundThread(ev: InboundEvidence): Promise<InboundMa
     // threads are out of reach here: mail to feedback@ / the general reply
     // inbox that merely comes from an influencer's address is about their
     // pages, not the programme. Influencer mail has its own ladder below.
-    const hit = await EmailThread.findOne({ userEmail: from, subjectKey: key, kind: { $ne: "influencer" } })
+    const hit = await EmailThread.findOne({ userEmail: from, subjectKey: key, kind: { $nin: ["influencer", "prospect"] } })
       .sort({ lastMessageAt: -1 })
       .lean<IEmailThread>();
     if (hit) return { thread: hit, rung: "subject" };
@@ -311,7 +320,7 @@ export async function matchInboundThread(ev: InboundEvidence): Promise<InboundMa
     const since = new Date(Date.now() - LOOSE_MATCH_WINDOW_DAYS * 86_400_000);
     const recent = await EmailThread.findOne({
       userEmail: from,
-      kind: { $ne: "influencer" },
+      kind: { $nin: ["influencer", "prospect"] },
       status: "open",
       lastMessageAt: { $gte: since },
     })
@@ -347,7 +356,13 @@ export async function inboundAlreadyStored(rfcMessageId: string): Promise<boolea
 //   3. sender  — the newest influencer thread for this address.
 //   4. sender  — no thread yet, but the address belongs to an influencer:
 //      `influencerUser` is returned and the caller opens their thread.
+//   4b. sender — no thread yet, but the address is a prospect we added:
+//      `prospect` is returned and the caller opens their prospect thread.
 //   5. none    — an unmatched inbound thread, as for any other mail.
+//
+// Prospect threads (outreach to creators who have not joined) share this
+// ladder: their replies come to the same Reply-To, carry the same INF- token,
+// and rung 3 looks at both kinds.
 //
 // The lookups are injected so the ladder is tested without Mongo.
 
@@ -356,6 +371,8 @@ export interface InfluencerMatchDeps {
   byToken(token: string): Promise<IEmailThread | null>;
   latestForEmail(email: string): Promise<IEmailThread | null>;
   influencerUserByEmail(email: string): Promise<{ _id: unknown; name?: string; email: string } | null>;
+  /** Optional so older callers/tests need not supply it. */
+  prospectByEmail?(email: string): Promise<{ _id: unknown; name?: string; email: string } | null>;
 }
 
 export interface InfluencerInboundEvidence extends InboundEvidence {
@@ -366,13 +383,15 @@ export interface InfluencerInboundEvidence extends InboundEvidence {
 export interface InfluencerMatch extends InboundMatch {
   /** Set on rung 4: the influencer whose first thread must be opened. */
   influencerUser?: { _id: unknown; name?: string; email: string } | null;
+  /** Set on rung 4b: the prospect whose first thread must be opened. */
+  prospect?: { _id: unknown; name?: string; email: string } | null;
 }
 
 export const mongoInfluencerMatchDeps: InfluencerMatchDeps = {
   byMessageId: (id) => EmailThread.findOne({ "messages.rfcMessageId": id }).lean<IEmailThread>(),
   byToken: (token) => EmailThread.findOne({ threadToken: token }).lean<IEmailThread>(),
   latestForEmail: (email) =>
-    EmailThread.findOne({ kind: "influencer", userEmail: email })
+    EmailThread.findOne({ kind: { $in: ["influencer", "prospect"] }, userEmail: email })
       .sort({ lastMessageAt: -1 })
       .lean<IEmailThread>(),
   influencerUserByEmail: async (email) => {
@@ -380,6 +399,12 @@ export const mongoInfluencerMatchDeps: InfluencerMatchDeps = {
     // pure parts of this module are imported by tests that never touch Mongo.
     const { default: User } = await import("../models/User");
     return User.findOne({ email, influencer: { $exists: true, $ne: null } })
+      .select("_id name email")
+      .lean<{ _id: unknown; name?: string; email: string }>();
+  },
+  prospectByEmail: async (email) => {
+    const { default: InfluencerProspect } = await import("../models/InfluencerProspect");
+    return InfluencerProspect.findOne({ email, deletedAt: null })
       .select("_id name email")
       .lean<{ _id: unknown; name?: string; email: string }>();
   },
@@ -411,6 +436,9 @@ export async function matchInfluencerInbound(
 
   const user = await deps.influencerUserByEmail(from);
   if (user) return { thread: null, rung: "sender", influencerUser: user };
+
+  const prospect = deps.prospectByEmail ? await deps.prospectByEmail(from) : null;
+  if (prospect) return { thread: null, rung: "sender", prospect };
 
   return { thread: null, rung: "none" };
 }

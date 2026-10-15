@@ -408,9 +408,13 @@ const responseSchema = {
 
 // ── Output guardrails ───────────────────────────────────────────────────────
 
-/** Promises specific to a partner programme, on top of `FORBIDDEN_PROMISE`. */
+/**
+ * Promises specific to a partner programme, on top of `FORBIDDEN_PROMISE`.
+ * "You can earn 30%" is a rate, not an amount, and is allowed — the
+ * percentage check below already pins it to the real commission.
+ */
 export const INFLUENCER_FORBIDDEN =
-  /\b(guarantee\w*|bonus(es)?|incentive|per[-\s]video\s+(fee|payment|rate)|fixed\s+(fee|payment|salary|amount)|increase\s+your\s+(commission|rate)|raise\s+your\s+(commission|rate)|higher\s+commission|(will\s+be|get)\s+(paid|transferred|credited|sent)\s+(by|on|within|before)|payout\s+(by|on|within|before)\s+\w+|you\s+(could|can|will)\s+(easily\s+)?(earn|make)\s+(₹|rs\.?|inr|\d))/i;
+  /\b(guarantee\w*|bonus(es)?|incentive|per[-\s]video\s+(fee|payment|rate)|fixed\s+(fee|payment|salary|amount)|increase\s+your\s+(commission|rate)|raise\s+your\s+(commission|rate)|higher\s+commission|(will\s+be|get)\s+(paid|transferred|credited|sent)\s+(by|on|within|before)|payout\s+(by|on|within|before)\s+\w+|you\s+(could|can|will)\s+(easily\s+)?(earn|make)\s+(₹|rs\.?|inr|\d(?![\d.]*\s*(%|per\s?cent|percent))))/i;
 
 export interface GuardrailContext {
   commissionPercent: number;

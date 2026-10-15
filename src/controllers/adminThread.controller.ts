@@ -62,7 +62,7 @@ export const getThreads = async (req: Request, res: Response): Promise<void> => 
     const filter: Record<string, unknown> = {};
     const sort = parseSortOrder(req.query.sort);
     const kind = String(req.query.kind || "").trim();
-    if (kind === "draft" || kind === "feedback" || kind === "inbound" || kind === "influencer") filter.kind = kind;
+    if (kind === "draft" || kind === "feedback" || kind === "inbound" || kind === "influencer" || kind === "prospect") filter.kind = kind;
     if (String(req.query.unread || "") === "1") filter.unread = true;
 
     const q = String(req.query.q || "").trim();
