@@ -7,9 +7,12 @@
 //   PATCH  /prospects/:id           edit details, or mark not interested / reopen
 //   POST   /prospects/status        bulk "not interested"
 //   POST   /prospects/delete        soft delete (suppression survives)
-//   POST   /prospects/draft         AI: 1 → personal, 2+ → template. Sends nothing.
-//   POST   /prospects/preview       render for one recipient + the spam check
+//   POST   /prospects/draft         AI: 1 → personal, 2+ → template; two angles. Sends nothing.
+//   POST   /prospects/preview       render for one recipient + the spam check + the plan
 //   POST   /prospects/send          queue one job per recipient. Never calls AI.
+//
+// draft / preview / send take an optional `intent` (initial | followup |
+// fresh | reply) and `allowNotInterested`; see planSelection.
 //   POST   /prospects/cancel        cancel queued jobs
 //
 // Plus the public unsubscribe (GET page + POST one-click), mounted outside
@@ -33,6 +36,9 @@ import {
   lintOutreach,
   parseProspectCsv,
   parseProspectInput,
+  planSelection,
+  priorFollowupsOf,
+  RECENT_SEND_HOURS,
   personalSender,
   personalSignature,
   prospectMailHtml,
@@ -55,7 +61,7 @@ import { kickProspectQueue, pacingNow, personalSenderStatus, prospectQueueHealth
 import {
   ThreadAiRefusedError,
   ThreadAiUnavailableError,
-  draftProspectMailWithRetry,
+  draftProspectAlternatives,
   type ProspectDraftContext,
 } from "../services/prospectAi.service";
 
@@ -94,6 +100,7 @@ function shapeProspect(
     lastContactedAt: p.lastContactedAt || null,
     initialSentAt: p.initialSentAt || null,
     followUpSentAt: p.followUpSentAt || null,
+    followUpCount: priorFollowupsOf(p),
     lastReplyAt: p.lastReplyAt || null,
     joinedUserId: p.joinedUserId ? String(p.joinedUserId) : null,
     createdAt: p.createdAt,
@@ -123,6 +130,11 @@ async function deploymentStatus() {
     fromName: env.PROSPECT_FROM_NAME,
     replyToAddress: influencerReplyToAddress(),
     defaultStyle: "personal" as OutreachStyle,
+    /** A send to someone emailed less than this many hours ago is warned about. */
+    recentHours: RECENT_SEND_HOURS,
+    /** Above this many recipients at once the dialog suggests spreading out. */
+    bulkWarnAbove: 10,
+    recommendedPerDay: 15,
     personal: {
       fromAddress: person.fromAddress,
       fromName: person.fromName,
@@ -350,27 +362,48 @@ export const deleteProspects = async (req: Request, res: Response): Promise<void
 };
 
 // ── Selection → who is eligible, for which kind of email ────────────────────
+//
+// One intent per send (first email / follow-up / new email / reply). The
+// admin may pick it; otherwise the most common default in the selection is
+// used. Everyone it fits is included, everyone else is listed with the reason
+// (planSelection) — a mixed selection is never refused and never silently
+// trimmed.
 
 interface Selection {
-  eligible: { p: IInfluencerProspect; kind: JobKind; thread: IEmailThread | null }[];
+  intent: JobKind | null;
+  eligible: { p: IInfluencerProspect; kind: JobKind; thread: IEmailThread | null; verdict: ContactVerdict }[];
   skipped: { id: string; name: string; reason: string }[];
+  reach: Record<JobKind, number>;
+  needsConfirm: { id: string; name: string }[];
 }
 
-async function resolveSelection(ids: mongoose.Types.ObjectId[]): Promise<Selection> {
+const INTENTS: JobKind[] = ["initial", "followup", "fresh", "reply"];
+const readIntent = (req: Request): JobKind | null => (INTENTS.includes(req.body?.intent) ? (req.body.intent as JobKind) : null);
+const readAllowNotInterested = (req: Request) => req.body?.allowNotInterested === true;
+
+async function resolveSelection(ids: mongoose.Types.ObjectId[], intent: JobKind | null, allowNotInterested: boolean): Promise<Selection> {
   const rows = await InfluencerProspect.find({ _id: { $in: ids }, deletedAt: null }).lean<IInfluencerProspect[]>();
   const threadIds = rows.map((r) => r.threadId).filter(Boolean);
   const threads = threadIds.length ? await EmailThread.find({ _id: { $in: threadIds } }).lean<IEmailThread[]>() : [];
   const T = new Map(threads.map((t) => [String(t._id), t]));
   const now = new Date();
-  const out: Selection = { eligible: [], skipped: [] };
   const found = new Set(rows.map((r) => String(r._id)));
-  for (const id of ids) if (!found.has(String(id))) out.skipped.push({ id: String(id), name: "", reason: "Not found." });
-  for (const p of rows) {
-    const v = canEmailProspect(p, now);
-    if (!v.ok) out.skipped.push({ id: String(p._id), name: p.name, reason: v.reason });
-    else out.eligible.push({ p, kind: v.kind, thread: p.threadId ? T.get(String(p.threadId)) || null : null });
-  }
-  return out;
+  const missing = ids.filter((id) => !found.has(String(id))).map((id) => ({ id: String(id), name: "", reason: "Not found." }));
+  const byId = new Map(rows.map((p) => [String(p._id), { p, verdict: canEmailProspect(p, now) }]));
+  const plan = planSelection(
+    rows.map((p) => ({ id: String(p._id), name: p.name, verdict: byId.get(String(p._id))!.verdict })),
+    { intent, allowNotInterested }
+  );
+  return {
+    intent: plan.intent,
+    eligible: plan.included.map(({ id }) => {
+      const { p, verdict } = byId.get(id)!;
+      return { p, kind: plan.intent as JobKind, thread: p.threadId ? T.get(String(p.threadId)) || null : null, verdict };
+    }),
+    skipped: [...missing, ...plan.excluded],
+    reach: plan.reach,
+    needsConfirm: plan.needsConfirm,
+  };
 }
 
 /** What the admin asked for. Personal is the default; anything else is classic only when said. */
@@ -378,38 +411,32 @@ const readStyle = (req: Request): OutreachStyle => (req.body?.style === "classic
 
 /**
  * The style one recipient actually gets. A first email takes the requested
- * style; a follow-up or reply keeps the style the conversation started in,
- * so it comes from the same sender and threads in their inbox. Prospects
- * emailed before personal mode existed were classic.
+ * style; anything later keeps the style the conversation started in, so it
+ * comes from the same sender. Prospects emailed before personal mode existed
+ * were classic.
  */
 function styleFor(e: { p: IInfluencerProspect; kind: JobKind }, requested: OutreachStyle): OutreachStyle {
   if (e.kind === "initial") return requested;
   return e.p.outreachStyle === "personal" ? "personal" : "classic";
 }
 
-function singleKind(sel: Selection, res: Response): JobKind | null {
+/** Nothing to send to, or a multi-person reply: answer with the reason. */
+function refuseSelection(sel: Selection, res: Response): boolean {
   if (sel.eligible.length === 0) {
-    res.status(400).json({
-      success: false,
-      error: sel.skipped.length === 1 ? sel.skipped[0].reason : "None of the selected prospects can be emailed right now.",
-      skipped: sel.skipped,
-    });
-    return null;
+    const why =
+      sel.needsConfirm.length && sel.needsConfirm.length === sel.skipped.length
+        ? "They said they're not interested — confirm to send anyway."
+        : sel.skipped.length === 1
+          ? sel.skipped[0].reason
+          : "None of the selected prospects fit this kind of email.";
+    res.status(400).json({ success: false, error: why, skipped: sel.skipped, reach: sel.reach, intent: sel.intent });
+    return true;
   }
-  const kinds = [...new Set(sel.eligible.map((e) => e.kind))];
-  if (kinds.length > 1) {
-    const n = (k: JobKind) => sel.eligible.filter((e) => e.kind === k).length;
-    res.status(400).json({
-      success: false,
-      error: `The selection mixes stages — ${n("initial")} need a first email, ${n("followup")} a follow-up, ${n("reply")} a reply. Use the status filter to pick one group.`,
-    });
-    return null;
+  if (sel.intent === "reply" && sel.eligible.length > 1) {
+    res.status(400).json({ success: false, error: "Replies are personal — open each conversation and answer one at a time.", skipped: sel.skipped, reach: sel.reach, intent: sel.intent });
+    return true;
   }
-  if (kinds[0] === "reply" && sel.eligible.length > 1) {
-    res.status(400).json({ success: false, error: "Replies are personal — open each conversation and answer one at a time." });
-    return null;
-  }
-  return kinds[0];
+  return false;
 }
 
 const forAi = (t: IEmailThread | null) =>
@@ -419,7 +446,24 @@ const forAi = (t: IEmailThread | null) =>
     at: m.at,
   }));
 
-/** POST /admin/super/prospects/draft — { ids, note? } */
+/** The subject a follow-up / reply threads under: the latest message's, as "Re: …". */
+function threadSubject(t: IEmailThread | null): string {
+  const msgs = t?.messages || [];
+  const last = [...msgs].reverse().find((m) => baseSubject(m.subject || ""));
+  return baseSubject(last?.subject || t?.subject || "");
+}
+
+/** How many emails went to them and when (for "already sent" in the dialog). */
+function sentSummary(p: IInfluencerProspect, t: IEmailThread | null) {
+  const out = (t?.messages || []).filter((m) => m.direction === "outbound").map((m) => m.at);
+  return {
+    sentCount: Math.max(p.contactCount || 0, out.length),
+    lastSentAt: p.lastContactedAt || out[out.length - 1] || null,
+    sentDates: out.slice(-6),
+  };
+}
+
+/** POST /admin/super/prospects/draft — { ids, intent?, note?, style?, allowNotInterested? } */
 export const draftProspects = async (req: Request, res: Response): Promise<void> => {
   try {
     const ids = idList(req.body?.ids);
@@ -427,42 +471,52 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
       res.status(400).json({ success: false, error: `Select between 1 and ${MAX_SELECTION} prospects.` });
       return;
     }
-    const sel = await resolveSelection(ids);
-    const kind = singleKind(sel, res);
-    if (!kind) return;
+    const sel = await resolveSelection(ids, readIntent(req), readAllowNotInterested(req));
+    if (refuseSelection(sel, res)) return;
+    const kind = sel.intent as JobKind;
     const programme = await programmeFacts();
     const one = sel.eligible.length === 1 ? sel.eligible[0] : null;
-    const person = one ? { name: one.p.name, instagram: one.p.instagram, niche: one.p.niche, note: one.p.note } : undefined;
+    const person = one
+      ? { name: one.p.name, instagram: one.p.instagram, niche: one.p.niche, note: one.p.note, followerRange: one.p.followerRange }
+      : undefined;
     const note = typeof req.body?.note === "string" ? req.body.note : "";
     const style = styleFor(sel.eligible[0], readStyle(req));
+    // A template follow-up may carry a link only if EVERY recipient is past
+    // their first follow-up.
+    const priorFollowups = Math.min(...sel.eligible.map((e) => priorFollowupsOf(e.p)));
+    const firstOut = sel.eligible[0].thread?.messages.find((m) => m.direction === "outbound")?.body || "";
 
     let ctx: ProspectDraftContext;
     if (kind === "initial") {
       ctx = one ? { mode: "personal", person, programme, adminNote: note } : { mode: "template", recipients: sel.eligible.length, programme, adminNote: note };
-    } else if (kind === "followup") {
-      const firstOut = sel.eligible[0].thread?.messages.find((m) => m.direction === "outbound")?.body || "";
+    } else if (kind === "followup" || kind === "fresh") {
       ctx = one
-        ? { mode: "followup", person, programme, messages: forAi(one.thread), adminNote: note }
-        : { mode: "followup", programme, firstEmail: firstOut, adminNote: note };
+        ? { mode: kind, person, programme, messages: forAi(one.thread), adminNote: note, priorFollowups }
+        : { mode: kind, recipients: sel.eligible.length, programme, firstEmail: firstOut, adminNote: note, priorFollowups };
     } else {
       ctx = { mode: "reply", person, programme, messages: forAi(one!.thread), adminNote: note };
     }
     ctx.style = style;
 
-    const draft = await draftProspectMailWithRetry(ctx);
+    const drafts = await draftProspectAlternatives(ctx);
     // Follow-ups and replies continue each person's own thread, so the subject
-    // is "Re: <their first subject>", set per recipient at send time.
-    const subject = kind === "initial" ? draft.subject : one?.thread?.subject ? replySubject(one.thread.subject) : "";
+    // is "Re: <their latest subject>", set per recipient at send time.
+    const threaded = kind === "followup" || kind === "reply";
+    const reSubject = one?.thread ? replySubject(threadSubject(one.thread)) : "";
+    const alternatives = drafts.map((d) => ({ subject: threaded ? reSubject : d.subject, body: d.body, reading: d.reading, angle: d.angle, subjectFallback: !!d.subjectFallback }));
     res.json({
       success: true,
       data: {
-        ...draft,
-        subject,
+        ...drafts[0],
+        subject: alternatives[0].subject,
+        alternatives,
         kind,
+        intent: kind,
         style,
-        subjectPerRecipient: kind !== "initial",
+        subjectPerRecipient: threaded,
         eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name })),
         skipped: sel.skipped,
+        reach: sel.reach,
       },
     });
   } catch (error) {
@@ -486,10 +540,13 @@ function readContent(req: Request) {
   };
 }
 
-const subjectFor = (kind: JobKind, typed: string, thread: IEmailThread | null) =>
-  kind === "initial" ? typed : thread?.subject ? replySubject(thread.subject) : typed || "Re: the creator programme";
+const subjectFor = (kind: JobKind, typed: string, thread: IEmailThread | null) => {
+  if (kind === "initial" || kind === "fresh") return typed;
+  const base = threadSubject(thread);
+  return base ? replySubject(base) : typed ? replySubject(typed) : "Re: A creator collab with SubhSandesh";
+};
 
-/** POST /admin/super/prospects/preview — { ids, prospectId?, subject, body } */
+/** POST /admin/super/prospects/preview — { ids, intent?, prospectId?, subject, body, style?, allowNotInterested? } */
 export const previewProspectMail = async (req: Request, res: Response): Promise<void> => {
   try {
     const ids = idList(req.body?.ids);
@@ -498,19 +555,21 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
       return;
     }
     const { subject, body } = readContent(req);
-    const sel = await resolveSelection(ids);
+    const sel = await resolveSelection(ids, readIntent(req), readAllowNotInterested(req));
     const pick =
       sel.eligible.find((e) => String(e.p._id) === String(req.body?.prospectId)) || sel.eligible[0];
     const { commissionPercent } = await programmeFacts();
+    const planOut = { intent: sel.intent, reach: sel.reach, needsConfirm: sel.needsConfirm, skipped: sel.skipped };
     if (!pick) {
-      res.json({ success: true, data: { lint: null, skipped: sel.skipped, eligible: [] } });
+      res.json({ success: true, data: { lint: null, eligible: [], ...planOut } });
       return;
     }
     const style = styleFor(pick, readStyle(req));
     const target = { name: pick.p.name, instagram: pick.p.instagram };
     const subj = renderMergeFields(subjectFor(pick.kind, subject, pick.thread), target);
     const text = renderMergeFields(body, target);
-    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style });
+    const priorFollowups = priorFollowupsOf(pick.p);
+    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style, priorFollowups });
     const person = personalSender();
     const sender =
       style === "personal"
@@ -523,6 +582,7 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
       unsubscribeUrl: unsubscribeUrl("preview-token-not-real"),
       token: pick.thread?.threadToken || "INF-XXXXXXXX",
     };
+    const threaded = pick.kind === "followup" || pick.kind === "reply";
     res.json({
       success: true,
       data: {
@@ -532,14 +592,26 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
         from: `${sender.fromName} <${sender.fromAddress}>`,
         replyTo: sender.replyToAddress,
         subject: subj,
+        threaded,
         text: style === "personal" ? prospectPersonalText({ body: text, signature: personalSignature() }) : prospectMailText(content),
         html: style === "personal" ? "" : prospectMailHtml(content),
-        headers: style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"],
+        headers: [...(style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"]), ...(threaded && pick.thread ? ["In-Reply-To", "References"] : [])],
         lint,
-        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender }),
+        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups }),
         personalBlocked: style === "personal" ? personalSenderStatus()?.message || "" : "",
-        eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name, kind: e.kind, hasNote: !!(e.p.note || "").trim() })),
-        skipped: sel.skipped,
+        eligible: sel.eligible.map((e) => {
+          const v = e.verdict.ok ? e.verdict : null;
+          return {
+            id: String(e.p._id),
+            name: e.p.name,
+            kind: e.kind,
+            hasNote: !!(e.p.note || "").trim(),
+            ...sentSummary(e.p, e.thread),
+            recent: v?.recent || "",
+            notInterested: !!v?.needsConfirm,
+          };
+        }),
+        ...planOut,
       },
     });
   } catch (error) {
@@ -548,7 +620,7 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
   }
 };
 
-/** POST /admin/super/prospects/send — { ids, subject, body, aiAssisted? } → queued, never sent inline. */
+/** POST /admin/super/prospects/send — { ids, intent?, subject, body, style?, aiAssisted?, allowNotInterested? } → queued, never sent inline. */
 export const sendProspectMail = async (req: Request, res: Response): Promise<void> => {
   try {
     const ids = idList(req.body?.ids);
@@ -557,10 +629,10 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
       return;
     }
     const { subject, body } = readContent(req);
-    const sel = await resolveSelection(ids);
-    const kind = singleKind(sel, res);
-    if (!kind) return;
-    if (kind === "initial" && !baseSubject(subject)) {
+    const sel = await resolveSelection(ids, readIntent(req), readAllowNotInterested(req));
+    if (refuseSelection(sel, res)) return;
+    const kind = sel.intent as JobKind;
+    if ((kind === "initial" || kind === "fresh") && !baseSubject(subject)) {
       res.status(400).json({ success: false, error: "Add a subject." });
       return;
     }
@@ -583,12 +655,13 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
         template: { subject: subj, body },
         kind,
         style,
+        priorFollowups: priorFollowupsOf(e.p),
       });
       if (!lint.ok) {
         res.status(422).json({ success: false, code: "LINT", error: lint.errors[0].message, lint, for: e.p.name });
         return;
       }
-      items.push({ prospectId: String(e.p._id), kind, subject: subj, body, style });
+      items.push({ prospectId: String(e.p._id), kind, subject: subj, body, style, override: !!(e.verdict.ok && e.verdict.needsConfirm) });
     }
 
     const aiAssisted = req.body?.aiAssisted === true;
@@ -597,9 +670,10 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     if (q.queued.length) kickProspectQueue();
     const pacing = await pacingNow();
     const totalQueued = await ProspectMailJob.countDocuments({ state: { $in: ["queued", "sending"] } });
+    const overrides = items.filter((i) => i.override).length;
     await audit(req, {
       action: "prospect.mail_queued",
-      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} skipped` : ""} [${q.batchId}]`,
+      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${overrides ? ` · ${overrides} marked not interested, confirmed` : ""}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} excluded` : ""} [${q.batchId}]`,
       ...(sel.eligible.length === 1 ? { targetUserEmail: sel.eligible[0].p.email } : {}),
     });
     res.json({

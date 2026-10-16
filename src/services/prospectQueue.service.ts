@@ -41,6 +41,7 @@ import {
   personalSenderBlockedMessage,
   personalSignature,
   pickGapMs,
+  priorFollowupsOf,
   prospectHeaders,
   prospectMailHtml,
   prospectMailText,
@@ -106,8 +107,9 @@ export async function pacingNow(now: Date = new Date()): Promise<PacingInput> {
  * rules are tested without Mongo:
  *
  *   personal  plain text (body + signature), NO html part, NO List-Unsubscribe,
- *             NO footer, NO visible Ref token; From = the person; Reply-To =
- *             the SES receiving address (else the person's address).
+ *             NO footer, NO visible Ref token; From = SubhSandesh Team
+ *             <team@subhsandesh.in>; Reply-To = the SES receiving address
+ *             (else the From address).
  *   classic   the original multipart email with footer + RFC 8058 headers.
  */
 export function buildProspectSendInput(
@@ -187,12 +189,20 @@ export async function processProspectQueueOnce(
     await finish("skipped", { error: "Prospect was removed." });
     return { did: "skipped", jobId, reason: "removed" };
   }
+  // Re-checked now: an unsubscribe, bounce, complaint or join that landed
+  // while this waited always wins; so does a "no" reply, unless the admin
+  // explicitly confirmed sending to someone marked not interested.
   const verdict = canEmailProspect(p, now);
-  if (!verdict.ok || verdict.kind !== job.kind) {
-    const reason = verdict.ok ? `They are now due a ${verdict.kind}, not a ${job.kind}.` : verdict.reason;
+  if (!verdict.ok || !verdict.kinds.includes(job.kind) || (verdict.needsConfirm && !job.override)) {
+    const reason = !verdict.ok
+      ? verdict.reason
+      : !verdict.kinds.includes(job.kind)
+        ? `A ${job.kind} no longer fits (they can get: ${verdict.kinds.join(", ")}).`
+        : "They said they're not interested since this was queued.";
     await finish("skipped", { error: reason });
     return { did: "skipped", jobId, reason };
   }
+  const priorFollowups = priorFollowupsOf(p);
 
   const style = job.style === "personal" ? "personal" : "classic";
   const settings = await getInfluencerSettings();
@@ -204,6 +214,7 @@ export async function processProspectQueueOnce(
     template: { subject: job.subject, body: job.body },
     kind: job.kind,
     style,
+    priorFollowups,
   });
   if (!lint.ok) {
     await finish("failed", { error: `Blocked by the spam check: ${lint.errors[0].message}` });
@@ -211,14 +222,20 @@ export async function processProspectQueueOnce(
   }
 
   const existing = p.threadId ? await EmailThread.findById(p.threadId).lean<IEmailThread>() : null;
-  const threading = threadingHeadersFor(
-    (existing?.messages || []).map((m) => ({
-      direction: m.direction,
-      rfcMessageId: m.rfcMessageId,
-      rfcMessageIdSource: m.rfcMessageIdSource,
-      references: m.references,
-    }))
-  );
+  // A follow-up / reply threads under the last message (In-Reply-To +
+  // References, "Re:" subject). A NEW email ("fresh") starts its own thread
+  // in their inbox — no In-Reply-To — but is still appended to the same
+  // conversation here, so their answer to either lands in one place.
+  const threading = job.kind === "fresh" || job.kind === "initial"
+    ? { inReplyTo: "", references: "" }
+    : threadingHeadersFor(
+        (existing?.messages || []).map((m) => ({
+          direction: m.direction,
+          rfcMessageId: m.rfcMessageId,
+          rfcMessageIdSource: m.rfcMessageIdSource,
+          references: m.references,
+        }))
+      );
   const token = existing?.threadToken || newThreadToken();
   const unsub = unsubscribeUrl(p.unsubscribeToken);
   const person = personalSender();
@@ -233,8 +250,8 @@ export async function processProspectQueueOnce(
         token,
         instagram: p.instagram,
         unsubscribeUrl: unsub,
-        inReplyTo: threading.inReplyTo,
-        references: threading.references,
+        inReplyTo: threading.inReplyTo || undefined,
+        references: threading.references || undefined,
       }),
       opts.transport
     );
@@ -292,7 +309,7 @@ export async function processProspectQueueOnce(
     providerMessageId: sent.providerMessageId,
     rfcMessageId: sent.rfcMessageId,
     rfcMessageIdSource: sent.rfcMessageId ? "reconstructed" : "",
-    inReplyTo: threading.inReplyTo,
+    inReplyTo: threading.inReplyTo || "",
     references: threading.references ? threading.references.split(/\s+/) : [],
     source: "ses",
   });
@@ -302,9 +319,15 @@ export async function processProspectQueueOnce(
     set.initialSentAt = now;
     set.outreachStyle = style;
   }
-  if (job.kind === "followup") set.followUpSentAt = now;
+  const inc: Record<string, number> = { contactCount: 1 };
+  if (job.kind === "followup") {
+    set.followUpSentAt = now;
+    // Rows from before the counter: count the dated follow-up too.
+    if (!p.followUpCount && p.followUpSentAt) set.followUpCount = 2;
+    else inc.followUpCount = 1;
+  }
   if (p.status === "new") set.status = "contacted";
-  await InfluencerProspect.updateOne({ _id: p._id }, { $set: set, $inc: { contactCount: 1 } });
+  await InfluencerProspect.updateOne({ _id: p._id }, { $set: set, $inc: inc });
   await finish("sent", {
     sentAt: now,
     providerMessageId: sent.providerMessageId,

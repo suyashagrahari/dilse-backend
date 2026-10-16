@@ -157,9 +157,9 @@ export async function recordProspectReply(threadId: string, subject: string, bod
   const set: Record<string, unknown> = { lastReplyAt: now };
   if (["new", "contacted"].includes(p.status)) set.status = "replied";
   await InfluencerProspect.updateOne({ _id: p._id }, { $set: set });
-  // A queued follow-up would now talk past their reply.
+  // A queued follow-up / new email would now talk past their reply.
   await ProspectMailJob.updateMany(
-    { prospectId: p._id, state: "queued", kind: "followup" },
+    { prospectId: p._id, state: "queued", kind: { $in: ["followup", "fresh"] } },
     { $set: { state: "cancelled", live: false, error: "Cancelled: they replied." } }
   );
 }
@@ -267,6 +267,8 @@ export interface EnqueueItem {
   subject: string;
   body: string;
   style: OutreachStyle;
+  /** The admin confirmed sending to someone marked not interested. */
+  override?: boolean;
 }
 
 /**
@@ -290,6 +292,7 @@ export async function enqueueJobs(
         subject: it.subject,
         body: it.body,
         aiAssisted: meta.aiAssisted,
+        override: !!it.override,
         state: "queued",
         live: true,
         notBefore: new Date(),

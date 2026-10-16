@@ -14,7 +14,15 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export const JOB_STATES = ["queued", "sending", "sent", "failed", "cancelled", "skipped"] as const;
 export type JobState = (typeof JOB_STATES)[number];
-export const JOB_KINDS = ["initial", "followup", "reply"] as const;
+/**
+ * initial   the first email to someone we have never written to.
+ * followup  a nudge in the SAME thread ("Re: <subject>", In-Reply-To/References).
+ * fresh     "New email": a new subject to someone already emailed. Its own
+ *           thread in their inbox (no In-Reply-To), the same conversation in
+ *           the admin (appended to the prospect's EmailThread).
+ * reply     an answer after they wrote back.
+ */
+export const JOB_KINDS = ["initial", "followup", "fresh", "reply"] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 /**
  * How the email is dressed. "personal" — plain text from a person's address,
@@ -48,6 +56,11 @@ export interface IProspectMailJob extends Document {
   via: "" | "ses" | "stub";
   /** Drawn at send time: how long the queue waits after THIS send (jitter). */
   gapAfterMs?: number;
+  /**
+   * The admin confirmed sending to someone marked "not interested". Without
+   * it the worker skips them (their "no" may have landed after queueing).
+   */
+  override?: boolean;
   byEmail: string;
   createdAt: Date;
   updatedAt: Date;
@@ -72,6 +85,7 @@ const jobSchema = new Schema<IProspectMailJob>(
     providerMessageId: { type: String, default: "" },
     via: { type: String, enum: ["", "ses", "stub"], default: "" },
     gapAfterMs: { type: Number },
+    override: { type: Boolean, default: false },
     byEmail: { type: String, default: "", lowercase: true, trim: true },
   },
   { timestamps: true }

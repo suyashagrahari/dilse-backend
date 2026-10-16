@@ -3,51 +3,105 @@
 Super admin → **Influencers → Prospects** (`/admin/influencers/prospects`).
 
 Add a creator (name, email, Instagram, optional note), tick one or many, press
-**Generate**, review, **Send**. One selected → a personal email written from
+**Generate**, review, **Send**. One selected → an email written for them from
 what you typed about them. Several → one template with `{{firstName}}` /
 `{{instagram}}`, rendered and sent separately to each person.
 
 It is built on the influencer-mail system (see `influencer-mail-setup.md`):
-same SES sender, same Reply-To, same inbound pipeline, same `EmailThread`
-store and `INF-` reference tokens. Classic style uses the influencer sender;
-Personal style (the default) sends as a person — see below.
+same SES, same Reply-To, same inbound pipeline, same `EmailThread` store and
+`INF-` reference tokens.
 
-## Two styles: Personal (default) and Classic
+## Who it comes from: the team
 
-The Generate dialog has a **Personal (recommended) / Classic** toggle. The
+Every prospect email comes from **SubhSandesh Team &lt;team@subhsandesh.in&gt;**
+and is signed **Team SubhSandesh** (one plain line). The AI writes as the team
+— "we", "our team" — never as one named person. Defaults are in
+`config/env.ts` (`PROSPECT_TEAM_DEFAULTS`); the box env can still override
+them. The dialog and the list header show the From line exactly as the server
+reports it (status endpoint → `personal.fromName/fromAddress`), never a
+hard-coded string.
+
+## Kinds of email (intents) — send again any time
+
+| Intent | When | Subject | Threading | Link (team note) |
+|---|---|---|---|---|
+| **First email** | never emailed | its own, 4–8 words | new thread | none |
+| **Follow-up** | already emailed | `Re: <their last subject>` | same thread: In-Reply-To + References | none in follow-up #1; one subhsandesh.in link allowed from #2 |
+| **New email** (`fresh`) | already emailed | a new meaningful subject | **a new thread in their inbox** (no In-Reply-To), appended to the same conversation in the admin | one allowed |
+| **Reply** | they wrote back | `Re: …` | same thread | the join link + the real % |
+
+*Why New email starts a new inbox thread:* Gmail threads by subject as well as
+headers, so a new subject under In-Reply-To would split anyway; a clean new
+email is honest about being one. In the admin it stays in the prospect's one
+conversation, and their answer to either email lands there (matched by
+In-Reply-To/References, then by sender address).
+
+There is **no cap** after the first email. `canEmailProspect` returns every
+intent allowed now:
+
+- **Hard blocks** (with the reason shown): unsubscribed, complained (stored as
+  unsubscribed + `complainedAt`), bounced, joined, deleted, dead address.
+- **Not interested**: allowed only after an explicit confirm (the sheet asks;
+  the dialog has a checkbox). The job carries `override: true`; without it the
+  worker skips them — so a "no" that lands after queueing still wins.
+- **Within 48 h of the last email**: a warning, never a block.
+- **Follow-up due**: a contacted prospect quiet for `PROSPECT_FOLLOWUP_DAYS`
+  gets the "Follow-up due" chip/filter. Advice only.
+
+**Mixed selections** (`planSelection`): one intent per send. The dialog shows
+an intent picker with how many of the selection each intent reaches (default:
+the most common stage). Everyone the intent doesn't fit is listed under
+"Not included" with the reason ("Already emailed — use Follow-up or New
+email", "Not emailed yet — needs a first email", "Unsubscribed…"). Nobody is
+dropped silently. Replies stay one at a time.
+
+The dialog also shows, per person, how many emails were already sent and when,
+and warns above 10 recipients at once (≈15/day keeps a young domain healthy).
+
+## Two styles: Team note (default) and Classic
+
+The Generate dialog has a **Team note (recommended) / Classic** toggle. The
 style is stored on each job and, once the first email goes, on the prospect
-(`outreachStyle`): a follow-up or reply keeps the style — and so the sender —
-the conversation started with.
+(`outreachStyle`): later emails keep the style — and so the sender — the
+conversation started with.
 
-**Why Personal exists.** Classic first emails landed in Gmail **Promotions**.
+**Why the team note.** Classic first emails landed in Gmail **Promotions**.
 The signals responsible, strongest first: the `List-Unsubscribe` /
-`-Post` headers (Gmail's bulk-mail marker), the newsletter footer (why-line,
-unsubscribe link, business address, `Ref:` token), sales copy in a cold first
-email (percentages, "free", a sign-up link), a role sender
-(`influencer-support@`) under a brand-ish name, and the HTML part. Personal
-style removes every one of them:
+`-Post` headers (Gmail's bulk-mail marker), the newsletter footer, sales copy
+in a cold first email (percentages, "free", a sign-up link), and the HTML
+part. A team address is a little less "personal" than a named person, so the
+team note compensates on every other signal:
 
-| | Personal | Classic |
+| | Team note | Classic |
 |---|---|---|
-| From | `PROSPECT_PERSONAL_FROM_NAME <PROSPECT_PERSONAL_FROM_EMAIL>` — Suyash Agrahari &lt;suyashagrahari@subhsandesh.in&gt; | `PROSPECT_FROM_NAME <INFLUENCER_FROM_EMAIL>` |
+| From | `PROSPECT_PERSONAL_FROM_NAME <PROSPECT_PERSONAL_FROM_EMAIL>` — SubhSandesh Team &lt;team@subhsandesh.in&gt; | `PROSPECT_FROM_NAME <INFLUENCER_FROM_EMAIL>` |
 | Reply-To | `INFLUENCER_REPLY_TO_EMAIL` (the SES receiving address), else the From | same |
-| Parts | text/plain only | text + HTML |
+| Parts | text/plain only — no HTML, images or tracking | text + HTML |
 | Headers | none extra (threading only) | `List-Unsubscribe`, `List-Unsubscribe-Post` |
-| Footer | none — just the signature `PROSPECT_PERSONAL_SIGNATURE` | why-line, unsubscribe link, address, `Ref:` |
-| First email | 40–90 words, no links, no digits/₹/%, no pitch words, one question, ends with the opt-out line | 60–180 words, one subhsandesh.in link, the real % |
-| Follow-up | 8–45 words, same thread (`Re:` + In-Reply-To/References), no link | 25–140 words |
-| Reply (after they wrote) | may include the join link and the real commission % | same |
+| Footer | none — just `Team SubhSandesh` | why-line, unsubscribe link, address, `Ref:` |
+| Subject (first / new email) | 4–8 words, specific, sentence case, no `Re:`, no emoji / `!` / ALL CAPS, no ad words (free, earn, offer, opportunity, guaranteed, money, %, ₹), not generic ("quick question", "hi", "collab") | same rules |
+| First email | 50–110 words, no links, no digits/₹/%, no pitch words, one soft question, **no "reply no" line** | 60–180 words, one subhsandesh.in link, the real % |
+| Follow-up | 25–60 words, same thread; no link in #1, one allowed from #2 | 25–140 words |
+| New email | 40–100 words, new subject, ≤1 link | 40–160 words |
+| Reply (after they wrote) | answers their questions, then the join link + the real % | same |
 
-The linter has a personal profile (`lintOutreach(..., { style: "personal" })`)
-that enforces the first-email rules on the server at send time and in the
-worker; the dialog shows the same verdict plus an **Inbox check** list.
+**Subjects.** The model is asked for a specific 4–8 word subject naming the
+collaboration and, when we can, the creator ("Collab idea for @theecouple__",
+"SubhSandesh x Om & Diya — a paid collab?", "A creator collab with
+SubhSandesh"). If what comes back fails `subjectIssues`, `fallbackSubject`
+replaces it deterministically (no retry).
 
-**Opt-out without a footer.** Every personal first email ends with one human
-line — *If it's not for you, just reply "no" and I won't email again.* — and
-`classifyProspectReply` turns a short "no", "nope", "no thanks", "not
-interested", "not for me", "I'll pass" into `not_interested`, and "stop",
-"remove me", "unsubscribe", "don't email me" into `unsubscribed`. Both are
-suppressed for every future send. The public unsubscribe endpoint and SES
+**Two drafts.** Generate asks the model for two angles in parallel (A: the
+specific line about them first; B: a concrete reel idea first) and the dialog
+switches between them; Regenerate draws a new pair.
+
+**Opt-out without a footer — silent.** The team note carries no "reply no /
+I won't email again / unsubscribe" line (the owner's call: it reads like a
+mass mailing). The linter refuses one (`opt_out_line`) and the parser strips
+one the model adds. The protection stays: `classifyProspectReply` turns a
+short "no", "nope", "no thanks", "not interested", "not for me", "I'll pass"
+into `not_interested`, and "stop", "remove me", "unsubscribe", "don't email
+me" into `unsubscribed`. The public unsubscribe endpoint and SES
 bounce/complaint suppression are unchanged.
 
 **Matching replies without the `Ref:` token.** The thread still has its token
@@ -57,15 +111,12 @@ reconstructed Message-ID), then on the sender address — see
 stripped lands in Unmatched; reassign it from there.
 
 **The sender must be allowed by IAM.** The prod SES user's policy
-(`SubhSandeshSesSendOnly`) restricts `ses:FromAddress`. Until the personal
-address is on that list, SES refuses: the job waits in the queue (retried
-hourly, never re-sent from another address), and the dialog and job show
-"Personal sender isn't allowed yet". Fix: run
-`/private/tmp/claude-501/sesfix/add-personal-sender.sh` (re-runnable; keeps
-the existing five addresses, simulates all six at the end) — or switch to
-Classic.
+(`SubhSandeshSesSendOnly`) restricts `ses:FromAddress`; team@ is on it. If the
+address is ever changed to one that isn't, SES refuses: the job waits in the
+queue (retried hourly, never re-sent from another address), and the dialog
+and job show "Sender isn't allowed yet".
 
-**Compliance.** Personal style drops the postal-address footer. India has no
+**Compliance.** The team note drops the postal-address footer. India has no
 equivalent rule for a one-to-one business note, but **CAN-SPAM requires a
 valid physical postal address in commercial email to US recipients**. Set
 `PROSPECT_PERSONAL_INCLUDE_ADDRESS=1` to append one plain line
@@ -78,8 +129,8 @@ Reply-to-opt-out and suppression stay in force either way.
 |---|---|
 | `models/InfluencerProspect.ts` | the person + status ladder (`new → contacted → replied → joined`, or `not_interested / bounced / unsubscribed`) |
 | `models/ProspectMailJob.ts` | one queued email to one person; at most one live job per prospect (unique partial index) |
-| `services/prospectMail.service.ts` | pure rules: input parsing, merge fields, **the spam linter**, the email (text + HTML + headers), contact limits, pacing, bounce parsing |
-| `services/prospectAi.service.ts` | drafts (personal / template / follow-up / reply), reusing `influencerMailAi` guardrails |
+| `services/prospectMail.service.ts` | pure rules: input parsing, merge fields, **the spam linter**, subjects (`subjectIssues`, `fallbackSubject`), the email (text + HTML + headers), contact rules (`canEmailProspect`, `planSelection`), pacing, bounce parsing |
+| `services/prospectAi.service.ts` | drafts (personal / template / follow-up / new email / reply, two angles), reusing `influencerMailAi` guardrails |
 | `services/prospect.service.ts` | DB transitions: add + duplicate check, reply / unsubscribe / bounce / join |
 | `services/prospectQueue.service.ts` | the background sender (started in `server.ts`) |
 | `controllers/prospect.controller.ts` | `/api/admin/super/prospects/*` + the public unsubscribe |
@@ -95,7 +146,7 @@ Reply-to-opt-out and suppression stay in force either way.
   first email, unknown `{{fields}}`, long subjects. It runs on every
   recipient's rendered email at send time AND again in the worker — the UI
   shows the same verdict live, but cannot skip it.
-- **AI**: the prompt describes a plain first-person voice and never names the
+- **AI**: the prompt describes a plain team voice ("we") and never names the
   banned phrases (naming them makes them likelier). Output is checked by the
   influencer guardrail (no invented ₹, only the commission %, only our links,
   no money/date promises) and by the linter; a failing draft is regenerated up
@@ -110,12 +161,13 @@ Reply-to-opt-out and suppression stay in force either way.
   shows a confirm button (link scanners prefetch GETs); POST unsubscribes.
   A reply whose subject is "unsubscribe", or that is only "stop / remove me",
   also unsubscribes; "no thanks / not interested" marks not interested.
-- **Never again**: `unsubscribed`, `bounced`, `not_interested`, `joined` are
+- **Never again**: `unsubscribed` (incl. complaints), `bounced`, `joined` are
   refused server-side for every send, checked when queueing and again right
-  before each send. Deleting a prospect is a soft delete, so re-adding an
-  unsubscribed address is refused.
-- **Contact limits**: one first email, one follow-up after
-  `PROSPECT_FOLLOWUP_DAYS` days of silence, nothing more unless they reply.
+  before each send; `not_interested` only with an explicit confirm. Deleting a
+  prospect is a soft delete, so re-adding an unsubscribed address is refused.
+- **Contact limits**: none after the first email — see "Kinds of email".
+  Under 48 h since the last email is a warning; above 10 recipients at once
+  the dialog recommends ≤15/day.
 - **Warm-up**: the worker sends one email at a time, a random
   `PROSPECT_MIN_GAP_SECONDS`–`PROSPECT_MAX_GAP_SECONDS` apart (2–6 min, drawn
   once per send and stored on the job as `gapAfterMs`), only between
@@ -149,19 +201,21 @@ user — the conversation appears on their influencer page.
 
 | Variable | Default |
 |---|---|
-| `PROSPECT_FROM_NAME` | `Suyash from SubhSandesh` |
-| `PROSPECT_SIGNATURE` | `Suyash\nSubhSandesh` |
+| `PROSPECT_FROM_NAME` | `SubhSandesh Team` (classic) |
+| `PROSPECT_SIGNATURE` | `Team SubhSandesh` (classic) |
 | `PROSPECT_JOIN_URL` | `https://subhsandesh.in/influencer` |
 | `PROSPECT_DAILY_CAP` | `30` (0 pauses sending) |
 | `PROSPECT_MIN_GAP_SECONDS` / `PROSPECT_MAX_GAP_SECONDS` | `120` / `360` (random gap per send) |
 | `PROSPECT_SEND_START_HOUR` / `PROSPECT_SEND_END_HOUR` | `9` / `21` (equal = any time) |
 | `PROSPECT_SEND_TZ_OFFSET_MINUTES` | `330` (IST) |
-| `PROSPECT_PERSONAL_FROM_EMAIL` | `suyashagrahari@subhsandesh.in` (must be in the IAM `ses:FromAddress` list) |
-| `PROSPECT_PERSONAL_FROM_NAME` | `Suyash Agrahari` |
-| `PROSPECT_PERSONAL_SIGNATURE` | `Suyash\nSubhSandesh · subhsandesh.in` |
+| `PROSPECT_PERSONAL_FROM_EMAIL` | `team@subhsandesh.in` (must be in the IAM `ses:FromAddress` list) |
+| `PROSPECT_PERSONAL_FROM_NAME` | `SubhSandesh Team` |
+| `PROSPECT_PERSONAL_SIGNATURE` | `Team SubhSandesh` |
+| `PROSPECT_SIGNATURE_SITE_LINE` | off; `1` adds a plain `subhsandesh.in` line under the signature (mail clients linkify it) |
 | `PROSPECT_PERSONAL_INCLUDE_ADDRESS` | off; `1` appends the postal line (CAN-SPAM, US recipients) |
-| `PROSPECT_FOLLOWUP_DAYS` | `4` |
+| `PROSPECT_FOLLOWUP_DAYS` | `4` — when "Follow-up due" shows; advice only |
+| `PROSPECT_INSTANT` | on — Send goes out immediately; `0` brings back the paced queue |
 | `PUBLIC_API_URL` | derived: `api.subhsandesh.in` / `stag-api.subhsandesh.in` |
 
-From and Reply-To are the influencer ones (`INFLUENCER_FROM_EMAIL`,
-`INFLUENCER_REPLY_TO_EMAIL`).
+Classic From is `INFLUENCER_FROM_EMAIL`; Reply-To is `INFLUENCER_REPLY_TO_EMAIL`
+for both styles.

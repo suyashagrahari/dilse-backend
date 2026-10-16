@@ -80,6 +80,16 @@ if (APP_ENV === "production") {
 }
 
 // ── Exported config (use this everywhere, never read process.env directly) ──
+/**
+ * Who prospect outreach comes from when the box sets nothing: the team, not a
+ * person. Exported so the tests pin the defaults.
+ */
+export const PROSPECT_TEAM_DEFAULTS = {
+  fromAddress: "team@subhsandesh.in",
+  fromName: "SubhSandesh Team",
+  signature: "Team SubhSandesh",
+} as const;
+
 export const env = {
   APP_ENV,
   PORT: resolved.port,
@@ -263,14 +273,12 @@ export const env = {
 
   // ── Prospect outreach: first emails to creators who have not joined ────────
   //
-  // Sent as INFLUENCER_FROM_EMAIL (no new sender — the IAM policy allows five),
-  // but under a person's name, because a first email from "SubhSandesh
-  // Creators" reads like a newsletter and one from a person reads like a note.
+  // Classic style is sent as INFLUENCER_FROM_EMAIL under the team's name.
   // See docs/influencer-prospects.md.
-  /** From display name on prospect mail. */
-  PROSPECT_FROM_NAME: process.env.PROSPECT_FROM_NAME || "Suyash from SubhSandesh",
-  /** Sign-off under every prospect email. `\n` becomes a line break. */
-  PROSPECT_SIGNATURE: (process.env.PROSPECT_SIGNATURE || "Suyash\\nSubhSandesh").replace(/\\n/g, "\n"),
+  /** From display name on classic prospect mail. */
+  PROSPECT_FROM_NAME: process.env.PROSPECT_FROM_NAME || PROSPECT_TEAM_DEFAULTS.fromName,
+  /** Sign-off under classic prospect mail. `\n` becomes a line break. */
+  PROSPECT_SIGNATURE: (process.env.PROSPECT_SIGNATURE || PROSPECT_TEAM_DEFAULTS.signature).replace(/\\n/g, "\n"),
   /** The only link a prospect email may carry. */
   PROSPECT_JOIN_URL: process.env.PROSPECT_JOIN_URL || "https://subhsandesh.in/influencer",
   /** At most this many prospect emails in any rolling 24 hours (warm-up). */
@@ -298,24 +306,34 @@ export const env = {
   PROSPECT_SEND_END_HOUR: Math.min(24, Math.max(0, Number.parseInt(process.env.PROSPECT_SEND_END_HOUR ?? "21", 10) || 0)),
   PROSPECT_SEND_TZ_OFFSET_MINUTES: Number.parseInt(process.env.PROSPECT_SEND_TZ_OFFSET_MINUTES ?? "330", 10) || 0,
 
-  // ── Personal invite mode (the default style) ────────────────────────────
+  // ── Personal / team invite mode (the default style) ──────────────────────
   //
-  // A plain-text note from a real person's address, with no List-Unsubscribe
+  // A plain-text note from the team's own address, with no List-Unsubscribe
   // header and no footer — what lands in Gmail's Primary tab. The address
   // must be allowed by the SES IAM policy (ses:FromAddress); until it is, SES
   // refuses and the panel says so. It NEVER silently falls back to another
   // sender. Reply-To stays INFLUENCER_REPLY_TO_EMAIL so replies reach the app.
-  PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || "suyashagrahari@subhsandesh.in").trim().toLowerCase(),
-  PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || "Suyash Agrahari",
-  /** Signature under personal mail. `\n` becomes a line break. Plain text. */
-  PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || "Suyash\\nSubhSandesh · subhsandesh.in").replace(/\\n/g, "\n"),
+  // (The env names keep "PERSONAL" — the style is still the personal one;
+  // only the voice is the team's.)
+  PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || PROSPECT_TEAM_DEFAULTS.fromAddress).trim().toLowerCase(),
+  PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || PROSPECT_TEAM_DEFAULTS.fromName,
+  /** Signature under personal/team mail. `\n` becomes a line break. Plain text. */
+  PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || PROSPECT_TEAM_DEFAULTS.signature).replace(/\\n/g, "\n"),
+  /**
+   * "1" adds a second plain line "subhsandesh.in" under the signature. Off by
+   * default: mail clients turn it into a link, and a first email carries none.
+   */
+  PROSPECT_SIGNATURE_SITE_LINE: ["1", "true"].includes(String(process.env.PROSPECT_SIGNATURE_SITE_LINE || "").toLowerCase()),
   /**
    * CAN-SPAM wants a postal address on commercial mail to US recipients.
    * "1" appends one plain line — "SubhSandesh, <postal address>" — to the
    * personal signature. Off by default (Primary-tab first).
    */
   PROSPECT_PERSONAL_INCLUDE_ADDRESS: ["1", "true"].includes(String(process.env.PROSPECT_PERSONAL_INCLUDE_ADDRESS || "").toLowerCase()),
-  /** A follow-up is offered only this many days after the first email. */
+  /**
+   * After this many days without a reply a contacted prospect shows
+   * "Follow-up due". Advice only — a follow-up can be sent any time.
+   */
   PROSPECT_FOLLOWUP_DAYS: Math.max(1, parseInt(process.env.PROSPECT_FOLLOWUP_DAYS || "4", 10) || 4),
   /**
    * Public base of THIS API, for the unsubscribe link and List-Unsubscribe.

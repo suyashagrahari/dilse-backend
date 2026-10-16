@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   canEmailProspect,
   classifyProspectReply,
+  planSelection,
   estimateFinish,
   lintOutreach,
   nextSendDecision,
@@ -151,11 +152,11 @@ describe("the outreach linter", () => {
 });
 
 describe("the rendered email", () => {
-  const content = { body: renderMergeFields(GOOD_TEMPLATE, { name: "Priya", instagram: "priya.reels" }), signature: "Suyash\nSubhSandesh", instagram: "priya.reels", unsubscribeUrl: "https://api.subhsandesh.in/api/public/prospects/unsubscribe/tok", token: "INF-7K2Q9MXA" };
+  const content = { body: renderMergeFields(GOOD_TEMPLATE, { name: "Priya", instagram: "priya.reels" }), signature: "Team SubhSandesh", instagram: "priya.reels", unsubscribeUrl: "https://api.subhsandesh.in/api/public/prospects/unsubscribe/tok", token: "INF-7K2Q9MXA" };
   it("text: signature, why-line, unsubscribe, business address, ref", () => {
     const t = prospectMailText(content);
-    assert.match(t, /Suyash\nSubhSandesh/);
-    assert.match(t, /came across your Instagram \(@priya\.reels\)/);
+    assert.match(t, /Team SubhSandesh/);
+    assert.match(t, /we came across your Instagram \(@priya\.reels\)/);
     assert.match(t, /Unsubscribe: https:\/\/api\.subhsandesh\.in\/api\/public\/prospects\/unsubscribe\/tok/);
     assert.match(t, /Ward No\. 06, Indira Nagar, Dumariyaganj/);
     assert.match(t, /Ref: INF-7K2Q9MXA/);
@@ -189,40 +190,109 @@ describe("the rendered email", () => {
         body: content.body,
         token: content.token,
         render: () => ({ text: prospectMailText(content), html: prospectMailHtml(content) }),
-        fromName: "Suyash from SubhSandesh",
+        fromName: "SubhSandesh Team",
         extraHeaders: prospectHeaders(content.unsubscribeUrl, "influencer@reply.subhsandesh.in"),
       },
       async (e) => { seen.push(e); return { outcome: "sent", messageId: "m-1" }; }
     );
     assert.equal(seen.length, 1);
     assert.equal(seen[0].to, "priya@x.in");
-    assert.equal(seen[0].fromName, "Suyash from SubhSandesh");
-    assert.match(String(seen[0].replyTo), /^Suyash from SubhSandesh </);
+    assert.equal(seen[0].fromName, "SubhSandesh Team");
+    assert.match(String(seen[0].replyTo), /^SubhSandesh Team </);
     assert.equal(seen[0].headers?.["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
     assert.ok(seen[0].text.includes("Unsubscribe:"));
     assert.equal(r.providerMessageId, "m-1");
   });
 });
 
-describe("contact rules", () => {
+describe("contact rules: send again any time", () => {
   const now = new Date("2026-10-16T10:00:00Z");
   const day = 86_400_000;
-  it("one first email, one follow-up after N days, then nothing until they reply", () => {
-    assert.deepEqual(canEmailProspect({ status: "new" }, now, 4), { ok: true, kind: "initial" });
-    const sent = { status: "contacted" as const, initialSentAt: new Date(now.getTime() - day), lastContactedAt: new Date(now.getTime() - day) };
-    const early = canEmailProspect(sent, now, 4);
-    assert.ok(!early.ok && /in 3 days/.test(early.reason));
-    const due = { ...sent, lastContactedAt: new Date(now.getTime() - 5 * day) };
-    assert.deepEqual(canEmailProspect(due, now, 4), { ok: true, kind: "followup" });
-    const both = { ...due, followUpSentAt: new Date(now.getTime() - 5 * day) };
-    assert.ok(!canEmailProspect(both, now, 4).ok);
-    assert.equal(prospectJobKind({ ...both, status: "replied" }), "reply");
+  const hour = 3_600_000;
+  it("never emailed → a first email only", () => {
+    const v = canEmailProspect({ status: "new" }, now, 4);
+    assert.ok(v.ok && v.kind === "initial");
+    assert.deepEqual(v.ok && v.kinds, ["initial"]);
   });
-  it("never: unsubscribed, bounced, not interested, joined, deleted", () => {
-    for (const status of ["unsubscribed", "bounced", "not_interested", "joined"] as const) {
-      assert.ok(!canEmailProspect({ status }, now).ok, status);
+  it("emailed → a follow-up or a new email, any time — no cap after one follow-up", () => {
+    const sent = { status: "contacted" as const, initialSentAt: new Date(now.getTime() - 3 * day), lastContactedAt: new Date(now.getTime() - 3 * day) };
+    const v = canEmailProspect(sent, now, 4);
+    assert.ok(v.ok && v.kind === "followup");
+    assert.deepEqual(v.ok && v.kinds, ["followup", "fresh"]);
+    assert.ok(v.ok && !v.followupDue && !v.recent, "3 days in: allowed, not yet 'due', no warning");
+    const many = { ...sent, followUpSentAt: new Date(now.getTime() - 5 * day), followUpCount: 4, contactCount: 5, lastContactedAt: new Date(now.getTime() - 5 * day) };
+    const again = canEmailProspect(many, now, 4);
+    assert.ok(again.ok && again.kinds.includes("followup") && again.followupDue, "after 4 follow-ups, still allowed");
+  });
+  it("warns, never blocks, when the last email went under 48 h ago", () => {
+    const v = canEmailProspect({ status: "contacted", initialSentAt: new Date(now.getTime() - 5 * hour), lastContactedAt: new Date(now.getTime() - 5 * hour) }, now);
+    assert.ok(v.ok);
+    assert.match((v.ok && v.recent) || "", /5 hours ago/);
+    const w = canEmailProspect({ status: "contacted", initialSentAt: new Date(now.getTime() - 50 * hour), lastContactedAt: new Date(now.getTime() - 50 * hour) }, now);
+    assert.ok(w.ok && !w.recent);
+  });
+  it("replied → reply first, follow-up and new email still possible", () => {
+    const v = canEmailProspect({ status: "replied", initialSentAt: new Date(now.getTime() - day), lastReplyAt: now }, now);
+    assert.ok(v.ok && v.kind === "reply");
+    assert.deepEqual(v.ok && v.kinds, ["reply", "followup", "fresh"]);
+    assert.equal(prospectJobKind({ status: "replied", initialSentAt: now }), "reply");
+  });
+  it("not interested → allowed only with an explicit confirm", () => {
+    const v = canEmailProspect({ status: "not_interested", initialSentAt: new Date(now.getTime() - 9 * day), lastReplyAt: new Date(now.getTime() - 8 * day) }, now);
+    assert.ok(v.ok && !!v.needsConfirm);
+  });
+  it("hard blocks: unsubscribed, complained, bounced, joined, deleted, dead address — each says why", () => {
+    const cases: [Parameters<typeof canEmailProspect>[0], RegExp][] = [
+      [{ status: "unsubscribed" }, /Unsubscribed/],
+      [{ status: "unsubscribed", complainedAt: now }, /spam/],
+      [{ status: "bounced" }, /bounced/],
+      [{ status: "joined" }, /joined/],
+      [{ status: "new", deletedAt: now }, /Deleted/],
+      [{ status: "new", email: "x@gone.invalid" }, /usable/],
+    ];
+    for (const [p, why] of cases) {
+      const v = canEmailProspect(p, now);
+      assert.ok(!v.ok, JSON.stringify(p));
+      assert.match(!v.ok ? v.reason : "", why);
     }
-    assert.ok(!canEmailProspect({ status: "new", deletedAt: now }, now).ok);
+  });
+});
+
+describe("mixed selections are planned, never silently trimmed", () => {
+  const now = new Date("2026-10-16T10:00:00Z");
+  const row = (id: string, p: Parameters<typeof canEmailProspect>[0]) => ({ id, name: id, verdict: canEmailProspect(p, now) });
+  const sent = { initialSentAt: new Date(now.getTime() - 5 * 86_400_000), lastContactedAt: new Date(now.getTime() - 5 * 86_400_000) };
+  const rows = [
+    row("new1", { status: "new" }),
+    row("new2", { status: "new" }),
+    row("new3", { status: "new" }),
+    row("cont1", { status: "contacted", ...sent }),
+    row("cont2", { status: "contacted", ...sent }),
+    row("rep1", { status: "replied", ...sent, lastReplyAt: now }),
+    row("ni1", { status: "not_interested", ...sent }),
+    row("unsub", { status: "unsubscribed", ...sent }),
+  ];
+  it("no intent → the most common stage; everyone else is listed with a reason", () => {
+    const p = planSelection(rows);
+    assert.equal(p.intent, "initial");
+    assert.deepEqual(p.included.map((r) => r.id), ["new1", "new2", "new3"]);
+    const ex = Object.fromEntries(p.excluded.map((e) => [e.id, e.reason]));
+    assert.match(ex.cont1, /Already emailed/);
+    assert.match(ex.unsub, /Unsubscribed/);
+    assert.equal(p.included.length + p.excluded.length, rows.length, "nobody disappears");
+    assert.deepEqual(p.reach, { initial: 3, followup: 4, fresh: 4, reply: 1 });
+  });
+  it("picking Follow-up takes the contacted and the replied; new ones say they need a first email", () => {
+    const p = planSelection(rows, { intent: "followup" });
+    assert.deepEqual(p.included.map((r) => r.id), ["cont1", "cont2", "rep1"]);
+    assert.match(p.excluded.find((e) => e.id === "new1")!.reason, /needs a first email/);
+    assert.match(p.excluded.find((e) => e.id === "ni1")!.reason, /confirm/);
+    assert.deepEqual(p.needsConfirm.map((r) => r.id), ["ni1"]);
+  });
+  it("not interested is included once confirmed", () => {
+    const p = planSelection(rows, { intent: "fresh", allowNotInterested: true });
+    assert.ok(p.included.some((r) => r.id === "ni1"));
+    assert.ok(!p.included.some((r) => r.id === "unsub"));
   });
 });
 
@@ -289,6 +359,8 @@ describe("drafting (stubbed model)", () => {
   it("strips a sign-off the model added (the signature is automatic)", async () => {
     const d = await draftProspectMail(personal, reply({ body: personalBody + "\n\nBest,\nSuyash" }));
     assert.ok(!/Suyash\s*$/.test(d.body));
+    const t = await draftProspectMail(personal, reply({ body: personalBody + "\n\nWarm regards,\nTeam SubhSandesh" }));
+    assert.ok(!/SubhSandesh\s*$/.test(t.body), t.body);
   });
   it("rejects invented money, other percentages, foreign links and spam wording", async () => {
     for (const bad of [
@@ -302,7 +374,9 @@ describe("drafting (stubbed model)", () => {
   });
   it("a template must greet by {{firstName}}; a personal one must not contain {{ }}", async () => {
     const tpl: ProspectDraftContext = { mode: "template", recipients: 5, programme };
-    await assert.rejects(draftProspectMail(tpl, reply({ body: personalBody })), /firstName/);
+    const fixed = await draftProspectMail(tpl, reply({ body: personalBody }));
+    assert.ok(fixed.body.startsWith("Hi {{firstName}},"), "one person's name is put back to {{firstName}}");
+    await assert.rejects(draftProspectMail(tpl, reply({ body: personalBody.replace("Hi Priya,", "So,") })), /firstName/);
     const ok = await draftProspectMail(tpl, reply({ body: GOOD_TEMPLATE }));
     assert.match(ok.body, /\{\{firstName\}\}/);
     await assert.rejects(draftProspectMail(personal, reply({ body: GOOD_TEMPLATE })), /merge fields/);

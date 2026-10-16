@@ -19,9 +19,12 @@
 //
 // ── CONTACT LIMITS ─────────────────────────────────────────────────────────
 //
-// One first email and at most one follow-up, unless they reply. Tracked by
-// `initialSentAt` / `followUpSentAt` rather than inferred from the thread, so
-// a pasted or mis-threaded message can never reset the count.
+// No fixed cap: after the first email the admin may always send another — a
+// follow-up in the same thread, a new email, or a reply. Hard blocks are only
+// unsubscribed / bounced / complained / joined; "not interested" needs an
+// explicit confirm. The counts (`contactCount`, `followUpCount`) and dates
+// are tracked here rather than inferred from the thread, so a pasted or
+// mis-threaded message can never reset them. See canEmailProspect.
 
 import mongoose, { Document, Schema } from "mongoose";
 
@@ -65,6 +68,8 @@ export interface IInfluencerProspect extends Document {
   lastContactedAt?: Date;
   initialSentAt?: Date;
   followUpSentAt?: Date;
+  /** Follow-ups sent so far. The first carries no link; later ones may. */
+  followUpCount?: number;
   lastReplyAt?: Date;
 
   threadId?: mongoose.Types.ObjectId;
@@ -115,6 +120,7 @@ const prospectSchema = new Schema<IInfluencerProspect>(
     lastContactedAt: { type: Date },
     initialSentAt: { type: Date },
     followUpSentAt: { type: Date },
+    followUpCount: { type: Number, default: 0, min: 0 },
     lastReplyAt: { type: Date },
 
     threadId: { type: Schema.Types.ObjectId, ref: "EmailThread" },

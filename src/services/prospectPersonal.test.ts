@@ -1,4 +1,4 @@
-// ─── Personal invite mode: what makes a first email land in Gmail Primary ───
+// ─── Personal (team-note) mode: what makes a first email land in Primary ────
 //
 // No Mongo, no SES, no OpenAI: the model is a stub, the transport records what
 // it was given. Real email is never sent from here.
@@ -6,15 +6,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  PERSONAL_OPT_OUT_LINE,
   classifyProspectReply,
   estimateFinish,
+  fallbackSubject,
   hasOptOutLine,
   inboxCheck,
   isRoleAddress,
   isSenderNotAllowedError,
+  isTrustworthySender,
   lintOutreach,
   nextSendDecision,
+  personalLinkAllowed,
   personalSender,
   personalSenderBlockedMessage,
   personalSignature,
@@ -22,12 +24,15 @@ import {
   prospectPersonalText,
   renderMergeFields,
   sendWindowState,
-  withOptOutLine,
+  stripOptOutLines,
+  subjectIssues,
   type SendWindow,
 } from "./prospectMail.service";
 import {
   PERSONAL_SYSTEM_PROMPT,
+  PROSPECT_SYSTEM_PROMPT,
   buildProspectPrompt,
+  draftProspectAlternatives,
   draftProspectMail,
   draftProspectMailWithRetry,
   ThreadAiRefusedError,
@@ -38,53 +43,67 @@ import { buildProspectSendInput } from "./prospectQueue.service";
 import { matchInfluencerInbound, type InfluencerMatchDeps } from "./threadStore.service";
 import { replySubject, threadingHeadersFor, rfcMessageIdFor } from "./emailThread.service";
 import { SesSendError, type SesEmail } from "./ses.service";
+import { PROSPECT_TEAM_DEFAULTS, env } from "../config/env";
 import type { IEmailThread } from "../models/EmailThread";
 
 const JOIN = "https://subhsandesh.in/influencer";
 const PRIYA = { name: "Priya Sharma", instagram: "priya.reels" };
+const TEAM = { fromAddress: "team@subhsandesh.in", fromName: "SubhSandesh Team", replyToAddress: "influencer@reply.subhsandesh.in" };
+const SUBJ = "Collab idea for {{instagram}}";
 
 const FIRST_NOTE = `Hi {{firstName}},
 
-I'm Suyash, I run SubhSandesh, a small site where people make personalised pages for birthdays, anniversaries and festivals.
+We came across {{instagram}} on Instagram and really liked how you tell stories with your couple videos.
 
-I came across {{instagram}} on Instagram and really liked how you tell stories with your couple videos.
+We're the team behind SubhSandesh, a small site where people make interactive greeting and love pages and send them as a link, for birthdays, anniversaries and proposals.
 
-Would you be open to a paid collab? Happy to share details.
+Would you be open to a paid collab? It could be a reel with one of our pages. Happy to share details.`;
 
-${PERSONAL_OPT_OUT_LINE}`;
+const NUDGE = "Hi {{firstName}}, we know inboxes get busy, so just floating our note back up. We'd still love to make a reel together with one of our pages. Would a paid collab interest you?";
 
-const plint = (s: string, b: string, kind: "initial" | "followup" | "reply" = "initial") =>
+const plint = (s: string, b: string, kind: "initial" | "followup" | "fresh" | "reply" = "initial", priorFollowups = 0) =>
   lintOutreach(renderMergeFields(s, PRIYA), renderMergeFields(b, PRIYA), {
     commissionPercent: 30,
     template: { subject: s, body: b },
     kind,
     style: "personal",
+    priorFollowups,
   });
 
 const codes = (r: { errors: { code: string }[] }) => r.errors.map((e) => e.code);
 
-describe("personal: the rendered email", () => {
-  const sender = { fromAddress: "suyashagrahari@subhsandesh.in", fromName: "Suyash Agrahari", replyToAddress: "influencer@reply.subhsandesh.in" };
+describe("team sender: SubhSandesh Team <team@subhsandesh.in>", () => {
   const body = renderMergeFields(FIRST_NOTE, PRIYA);
 
+  it("defaults: the team's address, name and one-line signature — no person", () => {
+    assert.deepEqual(PROSPECT_TEAM_DEFAULTS, { fromAddress: "team@subhsandesh.in", fromName: "SubhSandesh Team", signature: "Team SubhSandesh" });
+    if (!process.env.PROSPECT_PERSONAL_FROM_EMAIL) assert.equal(env.PROSPECT_PERSONAL_FROM_EMAIL, "team@subhsandesh.in");
+    if (!process.env.PROSPECT_PERSONAL_FROM_NAME) assert.equal(env.PROSPECT_PERSONAL_FROM_NAME, "SubhSandesh Team");
+    if (!process.env.PROSPECT_PERSONAL_SIGNATURE) assert.equal(env.PROSPECT_PERSONAL_SIGNATURE, "Team SubhSandesh");
+    if (!process.env.PROSPECT_FROM_NAME) assert.equal(env.PROSPECT_FROM_NAME, "SubhSandesh Team");
+    if (!process.env.PROSPECT_SIGNATURE_SITE_LINE) assert.equal(env.PROSPECT_SIGNATURE_SITE_LINE, false);
+    assert.ok(!/suyash/i.test(JSON.stringify(PROSPECT_TEAM_DEFAULTS)));
+  });
+
+  it("the signature is one line; the site line and postal line only when asked", () => {
+    assert.equal(personalSignature("Team SubhSandesh", false, false), "Team SubhSandesh");
+    assert.equal(personalSignature("Team SubhSandesh", false, true), "Team SubhSandesh\nsubhsandesh.in");
+    assert.match(personalSignature("Team SubhSandesh", true, false), /^Team SubhSandesh\nSubhSandesh, Ward No\. 06/);
+  });
+
   it("text = body + signature, nothing else (no footer, no unsubscribe, no address, no Ref)", () => {
-    const t = prospectPersonalText({ body, signature: "Suyash\nSubhSandesh · subhsandesh.in" });
+    const t = prospectPersonalText({ body, signature: "Team SubhSandesh" });
     assert.ok(t.startsWith("Hi Priya,"));
-    assert.ok(t.endsWith("Suyash\nSubhSandesh · subhsandesh.in"));
-    assert.ok(!/unsubscribe|Ref:|INF-|Ward No|You're receiving/i.test(t), t);
+    assert.ok(t.endsWith("\n\nTeam SubhSandesh"));
+    assert.ok(!/unsubscribe|Ref:|INF-|Ward No|You're receiving|reply\s+"?no/i.test(t), t);
   });
 
-  it("the signature takes the postal line only when asked", () => {
-    assert.equal(personalSignature("Suyash", false), "Suyash");
-    assert.match(personalSignature("Suyash", true), /^Suyash\nSubhSandesh, Ward No\. 06/);
-  });
-
-  it("sends as the person, plain text only, no List-Unsubscribe, Reply-To = the SES receiving address", async () => {
+  it("sends as the team, plain text only, no List-Unsubscribe, Reply-To = the SES receiving address", async () => {
     const seen: SesEmail[] = [];
     const input = buildProspectSendInput(
       "personal",
-      { to: "priya@x.in", subject: "quick question", body, token: "INF-7K2Q9MXA", instagram: "priya.reels", unsubscribeUrl: "https://api.subhsandesh.in/u/tok" },
-      sender
+      { to: "priya@x.in", subject: "Collab idea for @priya.reels", body, token: "INF-7K2Q9MXA", instagram: "priya.reels", unsubscribeUrl: "https://api.subhsandesh.in/u/tok" },
+      TEAM
     );
     const r = await sendInfluencerMail(input, async (e) => {
       seen.push(e);
@@ -92,16 +111,16 @@ describe("personal: the rendered email", () => {
     });
     assert.equal(seen.length, 1);
     const e = seen[0];
-    assert.equal(e.from, "suyashagrahari@subhsandesh.in");
-    assert.equal(e.fromName, "Suyash Agrahari");
-    assert.equal(e.replyTo, "Suyash Agrahari <influencer@reply.subhsandesh.in>");
+    assert.equal(e.from, "team@subhsandesh.in");
+    assert.equal(e.fromName, "SubhSandesh Team");
+    assert.equal(e.replyTo, "SubhSandesh Team <influencer@reply.subhsandesh.in>");
     assert.equal(e.html, "", "no HTML part");
     assert.ok(!Object.keys(e.headers || {}).some((h) => /list-unsubscribe/i.test(h)), JSON.stringify(e.headers));
-    assert.ok(!/INF-7K2Q9MXA|unsubscribe|Ref:/i.test(e.text), "no visible token / footer");
-    assert.equal(r.fromAddress, "suyashagrahari@subhsandesh.in");
+    assert.ok(!/INF-7K2Q9MXA|unsubscribe|Ref:|<img|https?:\/\//i.test(e.text), "no visible token / footer / image / link");
+    assert.equal(r.fromAddress, "team@subhsandesh.in");
   });
 
-  it("classic is untouched: footer, html, RFC 8058 headers, team sender", async () => {
+  it("classic is untouched: footer, html, RFC 8058 headers", async () => {
     const seen: SesEmail[] = [];
     await sendInfluencerMail(
       buildProspectSendInput("classic", { to: "priya@x.in", subject: "x", body, token: "INF-7K2Q9MXA", instagram: "priya.reels", unsubscribeUrl: "https://api.subhsandesh.in/u/tok" }),
@@ -116,80 +135,168 @@ describe("personal: the rendered email", () => {
   });
 
   it("Reply-To falls back to the From address when no receiving address is set", () => {
-    const s = personalSender("suyashagrahari@subhsandesh.in", "Suyash Agrahari", "");
-    assert.equal(s.replyToAddress, "suyashagrahari@subhsandesh.in");
+    assert.equal(personalSender("team@subhsandesh.in", "SubhSandesh Team", "").replyToAddress, "team@subhsandesh.in");
     assert.equal(personalSender("a@b.in", "A", "r@reply.b.in").replyToAddress, "r@reply.b.in");
   });
 
-  it("a person's address is not a role address", () => {
-    assert.ok(!isRoleAddress("suyashagrahari@subhsandesh.in"));
-    for (const a of ["influencer-support@subhsandesh.in", "support@x.in", "noreply@x.in", "feedback@x.in"]) assert.ok(isRoleAddress(a), a);
+  it("team@ is a trustworthy sender; no-reply and foreign domains are not", () => {
+    assert.ok(isTrustworthySender(TEAM));
+    assert.ok(!isTrustworthySender({ fromAddress: "noreply@subhsandesh.in", fromName: "SubhSandesh" }));
+    assert.ok(!isTrustworthySender({ fromAddress: "team@gmail.com", fromName: "SubhSandesh Team" }));
+    assert.ok(!isTrustworthySender({ fromAddress: "team@subhsandesh.in", fromName: "" }));
+    assert.ok(isRoleAddress("noreply@x.in"));
   });
 });
 
-describe("personal: the follow-up continues the same thread", () => {
+describe("follow-ups stay in the same thread", () => {
   it("In-Reply-To / References point at the first email and the subject is “Re: <original>”", async () => {
     const firstId = rfcMessageIdFor("0100018f-first", "us-east-1");
     const threading = threadingHeadersFor([{ direction: "outbound", rfcMessageId: firstId, rfcMessageIdSource: "reconstructed", references: [] }]);
     assert.equal(threading.inReplyTo, firstId);
     assert.match(threading.references, new RegExp(firstId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    const subject = replySubject("collab idea, Priya");
-    assert.equal(subject, "Re: collab idea, Priya");
+    const subject = replySubject("Collab idea for @priya.reels");
+    assert.equal(subject, "Re: Collab idea for @priya.reels");
 
     const seen: SesEmail[] = [];
     await sendInfluencerMail(
       buildProspectSendInput(
         "personal",
-        { to: "priya@x.in", subject, body: "Hi Priya, just bumping this up in case it got buried. Would a paid collab interest you?", token: "INF-7K2Q9MXA", instagram: "", unsubscribeUrl: "", inReplyTo: threading.inReplyTo, references: threading.references },
-        { fromAddress: "suyashagrahari@subhsandesh.in", fromName: "Suyash Agrahari", replyToAddress: "influencer@reply.subhsandesh.in" }
+        { to: "priya@x.in", subject, body: renderMergeFields(NUDGE, PRIYA), token: "INF-7K2Q9MXA", instagram: "", unsubscribeUrl: "", inReplyTo: threading.inReplyTo, references: threading.references },
+        TEAM
       ),
       async (e) => {
         seen.push(e);
         return { outcome: "sent", messageId: "m-3" };
       }
     );
-    assert.equal(seen[0].subject, "Re: collab idea, Priya");
+    assert.equal(seen[0].subject, "Re: Collab idea for @priya.reels");
     assert.equal(seen[0].headers?.["In-Reply-To"], firstId);
     assert.ok(String(seen[0].headers?.References).includes(firstId));
   });
 
-  it("a 1–2 line nudge without link or numbers passes; with a link it is blocked", () => {
-    const ok = plint("Re: collab idea", "Hi {{firstName}}, just bumping this up in case it got buried. Would a paid collab interest you?", "followup");
+  it("follow-up #1: a 25–60 word nudge, no link; from #2 on one subhsandesh.in link is fine", () => {
+    const ok = plint("Re: Collab idea", NUDGE, "followup");
     assert.deepEqual(ok.errors, [], JSON.stringify(ok.errors));
-    const bad = plint("Re: collab idea", `Hi {{firstName}}, just bumping this up. Details here: ${JOIN}`, "followup");
-    assert.ok(codes(bad).includes("personal_link"));
+    assert.ok(ok.words >= 25 && ok.words <= 60, `words ${ok.words}`);
+    const withLink = NUDGE.replace("Would a paid collab", `Here's our creator page:\n${JOIN}\n\nWould a paid collab`);
+    assert.ok(codes(plint("Re: Collab idea", withLink, "followup", 0)).includes("personal_link"), "first follow-up: no link");
+    assert.deepEqual(plint("Re: Collab idea", withLink, "followup", 1).errors, [], "second follow-up: one link ok");
+    assert.ok(codes(plint("Re: Collab idea", withLink.replace(JOIN, "https://example.com/x"), "followup", 1)).includes("foreign_link"));
+    assert.ok(codes(plint("Re: Collab idea", `${withLink}\nhttps://subhsandesh.in/templates`, "followup", 1)).includes("too_many_links"));
+    assert.equal(personalLinkAllowed("initial"), false);
+    assert.equal(personalLinkAllowed("followup", 0), false);
+    assert.equal(personalLinkAllowed("followup", 2), true);
+    assert.equal(personalLinkAllowed("fresh"), true);
+  });
+
+  it("a new email (fresh) needs its own meaningful subject — never “Re:”", () => {
+    const body = "Hi {{firstName}},\n\nWe wrote a little while back about a collab. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be open to a paid collab like that?";
+    assert.deepEqual(plint("Another collab idea for {{instagram}}", body, "fresh").errors, []);
+    assert.ok(codes(plint("Re: Collab idea", body, "fresh")).includes("subject_fake_reply"));
+  });
+});
+
+describe("meaningful subjects", () => {
+  it("4–8 specific words pass", () => {
+    for (const s of ["Collab idea for @theecouple__", "SubhSandesh x Om & Diya — a paid collab?", "A creator collab with SubhSandesh"]) {
+      assert.deepEqual(subjectIssues(s), [], s);
+    }
+  });
+  const bad: [string, string][] = [
+    ["quick question", "subject_generic"],
+    ["Quick question about a collab", "subject_generic"],
+    ["hi", "subject_generic"],
+    ["Hello", "subject_generic"],
+    ["collab", "subject_generic"],
+    ["Collab idea", "subject_words"],
+    ["A very long subject line that goes on about our collab", "subject_words"],
+    ["Earn with a creator collab", "subject_spam"],
+    ["A free creator collab for you", "subject_spam"],
+    ["An offer for a creator collab", "subject_spam"],
+    ["Paid collab — 30% for you", "subject_spam"],
+    ["A ₹500 creator collab idea", "subject_spam"],
+    ["Big opportunity with SubhSandesh today", "subject_spam"],
+    ["Guaranteed money from your reels", "subject_spam"],
+    ["Collab idea for you today!", "subject_bang"],
+    ["Collab idea for you today 🙂", "subject_emoji"],
+    ["Re: collab idea for you", "subject_fake_reply"],
+  ];
+  for (const [s, code] of bad) {
+    it(`refuses “${s}” (${code})`, () => {
+      assert.ok(subjectIssues(s).some((i) => i.code === code), `${s}: ${JSON.stringify(subjectIssues(s))}`);
+    });
+  }
+  it("ALL CAPS in the subject is refused by the linter", () => {
+    assert.ok(codes(plint("A CREATOR collab with SubhSandesh", FIRST_NOTE)).includes("all_caps"));
+  });
+  it("the fallback names the creator when it can, and always passes", () => {
+    assert.equal(fallbackSubject({ kind: "initial", person: { name: "Om & Diya", instagram: "theecouple__" } }), "Collab idea for @theecouple__");
+    assert.equal(fallbackSubject({ kind: "initial", person: { name: "Om & Diya", instagram: "" } }), "SubhSandesh x Om & Diya — a paid collab?");
+    assert.equal(fallbackSubject({ kind: "initial", person: { name: "Om & Diya", instagram: "theecouple__" }, variant: 1 }), "SubhSandesh x Om & Diya — a paid collab?");
+    assert.equal(fallbackSubject({ kind: "initial" }), "A creator collab with SubhSandesh");
+    assert.equal(fallbackSubject({ kind: "fresh", person: { name: "Priya", instagram: "priya.reels" } }), "Another collab idea for @priya.reels");
+    for (const s of [
+      fallbackSubject({ kind: "initial", person: { name: "A Very Long Name Of Several Words", instagram: "" } }),
+      fallbackSubject({ kind: "fresh" }),
+      fallbackSubject({ kind: "initial", person: { name: "Ravi 2", instagram: "" } }),
+    ]) {
+      assert.deepEqual(subjectIssues(s), [], s);
+    }
+  });
+});
+
+describe("no “reply no” opt-out line", () => {
+  it("a first note passes WITHOUT any opt-out line", () => {
+    const r = plint(SUBJ, FIRST_NOTE);
+    assert.deepEqual(r.errors, [], JSON.stringify(r.errors));
+    assert.equal(r.style, "personal");
+    assert.ok(r.words >= 50 && r.words <= 110, `words ${r.words}`);
+    assert.ok(!hasOptOutLine(FIRST_NOTE));
+  });
+  it("an opt-out line is refused in team notes", () => {
+    for (const line of [
+      "If it's not for you, just reply \"no\" and I won't email again.",
+      "Just reply stop and we won't contact you again.",
+      "You can unsubscribe any time.",
+      "If not, simply reply no.",
+    ]) {
+      const r = plint(SUBJ, `${FIRST_NOTE}\n\n${line}`);
+      assert.ok(codes(r).includes("opt_out_line"), `${line}: ${codes(r).join(",")}`);
+    }
+  });
+  it("stripOptOutLines drops only that line", () => {
+    const b = `${FIRST_NOTE}\n\nIf it's not for you, just reply "no" and we won't email again.`;
+    assert.equal(stripOptOutLines(b), FIRST_NOTE);
+    assert.equal(stripOptOutLines(FIRST_NOTE), FIRST_NOTE);
+  });
+  it("a “no” reply still suppresses silently", () => {
+    assert.equal(classifyProspectReply("Re: Collab idea for @priya.reels", "No thanks"), "not_interested");
+    assert.equal(classifyProspectReply("Re: Collab idea for @priya.reels", "Please stop emailing me"), "unsubscribe");
   });
 });
 
 describe("personal: the linter profile", () => {
-  it("passes a short DM-like first note", () => {
-    const r = plint("collab idea, {{firstName}}", FIRST_NOTE);
-    assert.deepEqual(r.errors, [], JSON.stringify(r.errors));
-    assert.equal(r.style, "personal");
-    assert.ok(r.words >= 40 && r.words <= 90, `words ${r.words}`);
-  });
-
   const blocked: [string, string, string, string][] = [
-    ["a link", "quick question", FIRST_NOTE.replace("Happy to share details.", `Details: ${JOIN}`), "personal_link"],
-    ["a bare domain", "quick question", FIRST_NOTE.replace("a small site", "subhsandesh.in, a small site"), "personal_link"],
-    ["a percentage", "quick question", FIRST_NOTE.replace("a paid collab", "a 30% collab"), "personal_number"],
-    ["rupees", "quick question", FIRST_NOTE.replace("a paid collab", "a ₹500 collab"), "personal_number"],
-    ["any digit", "quick question", FIRST_NOTE.replace("a small site", "a site with 2 founders"), "personal_number"],
-    ["“free”", "quick question", FIRST_NOTE.replace("a small site", "a free site"), "pitch_word"],
-    ["“earn”", "quick question", FIRST_NOTE.replace("Happy to share details.", "You could earn well."), "pitch_word"],
-    ["“commission”", "quick question", FIRST_NOTE.replace("a paid collab", "a commission collab"), "pitch_word"],
-    ["“sign up”", "quick question", FIRST_NOTE.replace("Happy to share details.", "You can sign up quickly."), "pitch_word"],
-    ["“opportunity”", "quick question", FIRST_NOTE.replace("a paid collab", "a paid opportunity"), "pitch_word"],
-    ["“programme”", "quick question", FIRST_NOTE.replace("a paid collab", "our creator programme"), "pitch_word"],
-    ["no question", "quick question", FIRST_NOTE.replace("Would you be open to a paid collab?", "I would love to do a paid collab with you."), "no_question"],
-    ["no opt-out line", "quick question", FIRST_NOTE.replace(`\n\n${PERSONAL_OPT_OUT_LINE}`, ""), "no_opt_out"],
-    ["too long", "quick question", FIRST_NOTE.replace("Happy to share details.", "Happy to share details. ".repeat(12)), "too_long"],
-    ["no greeting", "quick question", FIRST_NOTE.replace("Hi {{firstName}},", "So,"), "greeting"],
+    ["a link", SUBJ, FIRST_NOTE.replace("Happy to share details.", `Details: ${JOIN}`), "personal_link"],
+    ["a bare domain", SUBJ, FIRST_NOTE.replace("a small site", "subhsandesh.in, a small site"), "personal_link"],
+    ["a percentage", SUBJ, FIRST_NOTE.replace("a paid collab", "a 30% collab"), "personal_number"],
+    ["rupees", SUBJ, FIRST_NOTE.replace("a paid collab", "a ₹500 collab"), "personal_number"],
+    ["any digit", SUBJ, FIRST_NOTE.replace("a small site", "a site with 2 founders"), "personal_number"],
+    ["“free”", SUBJ, FIRST_NOTE.replace("a small site", "a free site"), "pitch_word"],
+    ["“earn”", SUBJ, FIRST_NOTE.replace("Happy to share details.", "You could earn well."), "pitch_word"],
+    ["“commission”", SUBJ, FIRST_NOTE.replace("a paid collab", "a commission collab"), "pitch_word"],
+    ["“sign up”", SUBJ, FIRST_NOTE.replace("Happy to share details.", "You can sign up quickly."), "pitch_word"],
+    ["“opportunity”", SUBJ, FIRST_NOTE.replace("a paid collab", "a paid opportunity"), "pitch_word"],
+    ["“programme”", SUBJ, FIRST_NOTE.replace("a paid collab", "our creator programme"), "pitch_word"],
+    ["no question", SUBJ, FIRST_NOTE.replace("Would you be open to a paid collab?", "We would love to do a paid collab with you."), "no_question"],
+    ["too long", SUBJ, FIRST_NOTE.replace("Happy to share details.", "Happy to share details. ".repeat(20)), "too_long"],
+    ["no greeting", SUBJ, FIRST_NOTE.replace("Hi {{firstName}},", "So,"), "greeting"],
+    ["a generic subject", "quick question", FIRST_NOTE, "subject_generic"],
     ["a one-word subject", "hello", FIRST_NOTE, "subject_words"],
-    ["a long subject", "a really quick question about a paid collab", FIRST_NOTE, "subject_words"],
-    ["an emoji subject", "quick question 🙂", FIRST_NOTE, "subject_emoji"],
-    ["a fake Re:", "Re: quick question", FIRST_NOTE, "subject_fake_reply"],
-    ["a number in the subject", "quick question 2", FIRST_NOTE, "personal_number"],
+    ["a long subject", "a really long subject line about a paid collab with you", FIRST_NOTE, "subject_words"],
+    ["an emoji subject", "Collab idea for you 🙂 today", FIRST_NOTE, "subject_emoji"],
+    ["a fake Re:", "Re: collab idea for you", FIRST_NOTE, "subject_fake_reply"],
+    ["a number in the subject", "Collab idea number 2 for you", FIRST_NOTE, "personal_number"],
   ];
   for (const [name, s, b, code] of blocked) {
     it(`blocks ${name}`, () => {
@@ -199,20 +306,23 @@ describe("personal: the linter profile", () => {
     });
   }
 
-  it("an @handle with digits is not a number", () => {
-    const r = lintOutreach(renderMergeFields("quick question", { name: "Ravi", instagram: "ravi_99" }), renderMergeFields(FIRST_NOTE, { name: "Ravi", instagram: "ravi_99" }), {
-      commissionPercent: 30,
-      template: { subject: "quick question", body: FIRST_NOTE },
-      style: "personal",
-    });
-    assert.deepEqual(r.errors, [], JSON.stringify(r.errors));
+  it("an @handle with digits or a dot-domain is neither a number nor a link", () => {
+    for (const ig of ["ravi_99", "theecouple.in"]) {
+      const t = { name: "Ravi", instagram: ig };
+      const r = lintOutreach(renderMergeFields(SUBJ, t), renderMergeFields(FIRST_NOTE, t), {
+        commissionPercent: 30,
+        template: { subject: SUBJ, body: FIRST_NOTE },
+        style: "personal",
+      });
+      assert.deepEqual(r.errors, [], `${ig}: ${JSON.stringify(r.errors)}`);
+    }
   });
 
   it("after they reply, the link and the REAL % are allowed — a wrong % is not", () => {
     const reply = `Hi Priya,\n\nThanks for writing back. Here's how it works: you get your own link, and you earn 30% of every payment from people who sign up through it, paid to your UPI.\n\nYou can join here:\n${JOIN}\n\nAny questions, just reply.`;
-    const ok = plint("Re: quick question", reply, "reply");
+    const ok = plint("Re: Collab idea for @priya.reels", reply, "reply");
     assert.deepEqual(ok.errors, [], JSON.stringify(ok.errors));
-    const wrong = plint("Re: quick question", reply.replace("30%", "40%"), "reply");
+    const wrong = plint("Re: Collab idea for @priya.reels", reply.replace("30%", "40%"), "reply");
     assert.ok(codes(wrong).includes("wrong_percent"));
   });
 
@@ -222,46 +332,68 @@ describe("personal: the linter profile", () => {
     assert.equal(r.style, "classic");
   });
 
-  it("the inbox check lists what makes it personal, and flags an edited-in link", () => {
-    const sender = { fromAddress: "suyashagrahari@subhsandesh.in", fromName: "Suyash Agrahari" };
-    const good = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint("quick question", FIRST_NOTE), sender });
+  it("the inbox check states the real rules, and flags what breaks them", () => {
+    const good = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: TEAM, subject: "Collab idea for @priya.reels" });
     assert.ok(good.every((i) => i.ok), JSON.stringify(good));
-    assert.ok(good.some((i) => /From a person: Suyash Agrahari <suyashagrahari@subhsandesh\.in>/.test(i.label)));
-    assert.ok(good.some((i) => /Plain text only/.test(i.label)));
-    assert.ok(good.some((i) => /No unsubscribe header/.test(i.label)));
+    const labels = good.map((i) => i.label).join(" | ");
+    for (const want of ["From SubhSandesh Team <team@subhsandesh.in>", "Plain text", "No unsubscribe header", "No links in the first email", "Meaningful subject"]) {
+      assert.ok(labels.includes(want), `${want} in ${labels}`);
+    }
+    assert.ok(!/person/i.test(labels), "no 'from a person' claim");
     const withLink = FIRST_NOTE.replace("Happy to share details.", `Details: ${JOIN}`);
-    const bad = inboxCheck({ style: "personal", kind: "initial", body: withLink, lint: plint("quick question", withLink), sender });
+    const bad = inboxCheck({ style: "personal", kind: "initial", body: withLink, lint: plint("quick question", withLink), sender: TEAM });
     assert.equal(bad.find((i) => /No links/.test(i.label))?.ok, false);
-    const role = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint("quick question", FIRST_NOTE), sender: { fromAddress: "influencer-support@subhsandesh.in", fromName: "SubhSandesh Creators" } });
-    assert.equal(role[0].ok, false);
+    assert.equal(bad.find((i) => /Meaningful subject/.test(i.label))?.ok, false);
+    const fu = inboxCheck({ style: "personal", kind: "followup", body: NUDGE, lint: plint("Re: Collab idea", NUDGE, "followup"), sender: TEAM, subject: "Re: Collab idea" });
+    assert.ok(fu.find((i) => /same thread/.test(i.label))?.ok);
+    const noreply = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: { fromAddress: "noreply@subhsandesh.in", fromName: "SubhSandesh" } });
+    assert.equal(noreply[0].ok, false);
   });
 });
 
-describe("personal: drafting guardrails (stubbed model)", () => {
+describe("drafting as the team (stubbed model)", () => {
   const programme = { commissionPercent: 30, attributionDays: 60, joinUrl: JOIN, today: "2026-10-16" };
   const person = { name: "Priya Sharma", instagram: "priya.reels", niche: "couple comedy reels", note: "" };
   const ctx: ProspectDraftContext = { mode: "personal", style: "personal", person, programme };
-  const stub = (body: string, subject = "quick question") => async () => JSON.stringify({ reading: "r", subject, body });
+  const stub = (body: string, subject = "Collab idea for @priya.reels") => async () => JSON.stringify({ reading: "r", subject, body });
   const NOTE = renderMergeFields(FIRST_NOTE, PRIYA);
 
-  it("accepts a grounded first note and uses the personal system prompt", async () => {
+  it("accepts a grounded first note and uses the team system prompt", async () => {
     let sys = "";
     const d = await draftProspectMail(ctx, async (s) => {
       sys = s;
-      return JSON.stringify({ reading: "r", subject: "quick question", body: NOTE });
+      return JSON.stringify({ reading: "r", subject: "Collab idea for @priya.reels", body: NOTE });
     });
     assert.equal(sys, PERSONAL_SYSTEM_PROMPT);
     assert.ok(d.body.startsWith("Hi Priya"));
-    assert.equal(d.subject, "quick question");
+    assert.equal(d.subject, "Collab idea for @priya.reels");
+    assert.ok(!d.subjectFallback);
   });
 
-  it("adds the opt-out line if the model left it out", async () => {
-    const d = await draftProspectMail(ctx, stub(NOTE.replace(`\n\n${PERSONAL_OPT_OUT_LINE}`, "")));
-    assert.ok(d.body.endsWith(PERSONAL_OPT_OUT_LINE));
-    assert.ok(hasOptOutLine(withOptOutLine("Hi")));
+  it("both prompts write as the team, never as Suyash or “I”", () => {
+    for (const p of [PERSONAL_SYSTEM_PROMPT, PROSPECT_SYSTEM_PROMPT]) {
+      assert.match(p, /as the team — "we", "our team"/);
+      assert.ok(!/suyash/i.test(p), "no person named");
+      assert.match(p, /Team SubhSandesh/);
+    }
+    assert.ok(!/suyash/i.test(buildProspectPrompt({ ...ctx, adminNote: "mention Diwali" }, "english")));
   });
 
-  it("throws away a first note with a link, a number, a pitch word or a sign-off-only body", async () => {
+  it("drops an opt-out line the model added, keeps the rest", async () => {
+    const d = await draftProspectMail(ctx, stub(`${NOTE}\n\nIf it's not for you, just reply "no" and we won't email again.`));
+    assert.equal(d.body, NOTE);
+    assert.ok(!hasOptOutLine(d.body));
+  });
+
+  it("replaces a weak subject with the deterministic one", async () => {
+    for (const weak of ["quick question", "collab idea", "Hi!", "Earn with SubhSandesh now", ""]) {
+      const d = await draftProspectMail(ctx, stub(NOTE, weak));
+      assert.equal(d.subject, "Collab idea for @priya.reels", weak);
+      assert.equal(d.subjectFallback, true);
+    }
+  });
+
+  it("throws away a first note with a link, a number, a pitch word", async () => {
     for (const bad of [
       NOTE.replace("Happy to share details.", `Details: ${JOIN}`),
       NOTE.replace("a paid collab", "a 30% collab"),
@@ -274,20 +406,48 @@ describe("personal: drafting guardrails (stubbed model)", () => {
 
   it("retries and keeps the clean draft", async () => {
     let n = 0;
-    const flaky = async () => JSON.stringify({ reading: "r", subject: "quick question", body: n++ === 0 ? NOTE.replace("a small site", "a free site") : NOTE });
+    const flaky = async () => JSON.stringify({ reading: "r", subject: "Collab idea for @priya.reels", body: n++ === 0 ? NOTE.replace("a small site", "a free site") : NOTE });
     const d = await draftProspectMailWithRetry(ctx, flaky);
     assert.equal(n, 2);
     assert.ok(!/free/.test(d.body));
   });
 
-  it("the first-touch prompt is not given the %, the link or any scheme name", () => {
+  it("two angles in one Generate", async () => {
+    const prompts: string[] = [];
+    const ds = await draftProspectAlternatives(ctx, async (_s, u) => {
+      prompts.push(u);
+      return JSON.stringify({ reading: "r", subject: "Collab idea for @priya.reels", body: NOTE });
+    });
+    assert.deepEqual(ds.map((d) => d.angle).sort(), ["a", "b"]);
+    assert.ok(prompts.some((p) => /ANGLE A/.test(p)) && prompts.some((p) => /ANGLE B/.test(p)));
+    let k = 0;
+    const oneBad = await draftProspectAlternatives(ctx, async () => JSON.stringify({ reading: "r", subject: "x", body: k++ % 2 ? NOTE : NOTE.replace("a small site", "a free site") }));
+    assert.ok(oneBad.length >= 1, "one good draft is enough");
+  });
+
+  it("the first-touch prompt is not given the %, the link or any scheme name — and asks for 50–110 words", () => {
     const p = buildProspectPrompt(ctx, "english");
     assert.ok(!p.includes("30%") && !p.includes(JOIN) && !/programme/i.test(p), p);
     assert.match(p, /couple comedy reels/);
     assert.match(p, /came across their page on Instagram/);
-    for (const banned of ["free", "earn", "commission", "sign up", "opportunity", "guaranteed", "click here"]) {
+    assert.match(p, /50 to 110 words/);
+    assert.match(p, /interactive greeting and love pages/);
+    for (const banned of ["free", "earn", "commission", "sign up", "opportunity", "guaranteed", "click here", "unsubscribe", "reply no"]) {
       assert.ok(!new RegExp(`\\b${banned}\\b`, "i").test(PERSONAL_SYSTEM_PROMPT), `system prompt names “${banned}”`);
     }
+  });
+
+  it("a note in Hindi content asks for a light Hinglish touch; a couple is greeted together", () => {
+    const p = buildProspectPrompt({ ...ctx, person: { name: "Om & Diya", instagram: "theecouple__", niche: "", note: "Hindi couple reels, 40k followers" } }, "english");
+    assert.match(p, /Hinglish/);
+    assert.match(p, /Hi Om and Diya,/);
+  });
+
+  it("follow-up #1 gets no link in its facts; #2 may", () => {
+    const fu = (n: number): ProspectDraftContext => ({ mode: "followup", style: "personal", person, programme, priorFollowups: n, messages: [{ direction: "outbound", body: NOTE, at: new Date() }] });
+    assert.ok(!buildProspectPrompt(fu(0), "english").includes(JOIN));
+    assert.ok(buildProspectPrompt(fu(1), "english").includes(JOIN));
+    assert.match(buildProspectPrompt(fu(0), "english"), /25 to 60 words/);
   });
 
   it("the reply prompt does carry the real % and the join link", () => {
@@ -305,16 +465,18 @@ describe("personal: drafting guardrails (stubbed model)", () => {
     assert.ok(d.body.includes(JOIN));
   });
 
-  it("a personal follow-up is short and has no link", async () => {
-    const d = await draftProspectMail(
-      { mode: "followup", style: "personal", person, programme, messages: [{ direction: "outbound", body: NOTE, at: new Date() }] },
-      stub("Hi Priya, just bumping this up in case it got buried. Would a paid collab interest you?", "")
-    );
+  it("a personal follow-up is short; #1 without a link, #2 may have one; a new email keeps its subject", async () => {
+    const msgs = [{ direction: "outbound" as const, body: NOTE, at: new Date() }];
+    const nudge = renderMergeFields(NUDGE, PRIYA);
+    const d = await draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: msgs }, stub(nudge, ""));
     assert.equal(d.subject, "");
-    await assert.rejects(
-      draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: [{ direction: "outbound", body: NOTE, at: new Date() }] }, stub(`Hi Priya, bumping this. Join here: ${JOIN}`, "")),
-      ThreadAiRefusedError
-    );
+    const linked = nudge.replace("Would a paid collab", `Our creator page:\n${JOIN}\n\nWould a paid collab`);
+    await assert.rejects(draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: msgs }, stub(linked, "")), ThreadAiRefusedError);
+    const ok2 = await draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: msgs, priorFollowups: 1 }, stub(linked, ""));
+    assert.ok(ok2.body.includes(JOIN));
+    const freshBody = "Hi Priya,\n\nWe wrote a little while back about a collab. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be open to a paid collab like that?";
+    const fr = await draftProspectMail({ mode: "fresh", style: "personal", person, programme, messages: msgs }, stub(freshBody, "A reel idea for Priya Sharma"));
+    assert.equal(fr.subject, "A reel idea for Priya Sharma");
   });
 });
 
@@ -328,7 +490,7 @@ describe("personal: replies without the footer token still find their thread", (
     influencerUserByEmail: async () => null,
     prospectByEmail: async () => null,
   });
-  const ev = (o: Record<string, string>) => ({ fromEmail: "", subject: "Re: quick question", inReplyTo: "", references: "", messageId: "", token: "", ...o });
+  const ev = (o: Record<string, string>) => ({ fromEmail: "", subject: "Re: Collab idea for @priya.reels", inReplyTo: "", references: "", messageId: "", token: "", ...o });
 
   it("by In-Reply-To, with no token anywhere", async () => {
     const m = await matchInfluencerInbound(ev({ fromEmail: "priya@x.in", inReplyTo: firstId }), deps());
@@ -347,7 +509,7 @@ describe("personal: replies without the footer token still find their thread", (
   });
 });
 
-describe("personal: “reply no” opt-out", () => {
+describe("silent opt-out: a short “no” / “stop” reply suppresses", () => {
   it("a bare no, and the usual ways of saying it, suppress", () => {
     for (const [body, want] of [
       ["no", "not_interested"],
@@ -367,12 +529,12 @@ describe("personal: “reply no” opt-out", () => {
       ["Don't email me again", "unsubscribe"],
       ["unsubscribe", "unsubscribe"],
     ] as const) {
-      assert.equal(classifyProspectReply("Re: quick question", body), want, body);
+      assert.equal(classifyProspectReply("Re: Collab idea for @priya.reels", body), want, body);
     }
   });
   it("a conversation is left for a human", () => {
     for (const body of ["No problem, tell me more!", "Yes, sounds good. What's the pay?", "Not sure — how does it work?", "Nope, I haven't heard of you. What is it?"]) {
-      assert.equal(classifyProspectReply("Re: quick question", body), "reply", body);
+      assert.equal(classifyProspectReply("Re: Collab idea for @priya.reels", body), "reply", body);
     }
   });
 });
@@ -466,17 +628,27 @@ describe("personal: SES refusing the sender is said plainly", () => {
       sendInfluencerMail(
         buildProspectSendInput(
           "personal",
-          { to: "priya@x.in", subject: "quick question", body: "Hi", token: "INF-7K2Q9MXA", instagram: "", unsubscribeUrl: "" },
-          { fromAddress: "suyashagrahari@subhsandesh.in", fromName: "Suyash Agrahari", replyToAddress: "influencer@reply.subhsandesh.in" }
+          { to: "priya@x.in", subject: "Collab idea for @priya.reels", body: "Hi", token: "INF-7K2Q9MXA", instagram: "", unsubscribeUrl: "" },
+          TEAM
         ),
         refuse
       ),
       (err: unknown) => err instanceof SesSendError && isSenderNotAllowedError((err as Error).message)
     );
-    assert.deepEqual(tried, ["suyashagrahari@subhsandesh.in"], "exactly one attempt, from the person");
-    const msg = personalSenderBlockedMessage("suyashagrahari@subhsandesh.in");
-    assert.match(msg, /Personal sender isn't allowed yet/);
+    assert.deepEqual(tried, ["team@subhsandesh.in"], "exactly one attempt, from the team address");
+    const msg = personalSenderBlockedMessage("team@subhsandesh.in");
+    assert.match(msg, /Sender isn't allowed yet: SES refused to send as team@subhsandesh\.in/);
     assert.match(msg, /add-personal-sender\.sh/);
     assert.match(msg, /Nothing was sent from another address/);
+  });
+});
+
+describe("template follow-ups greet by {{firstName}}", () => {
+  const programme = { commissionPercent: 30, attributionDays: 60, joinUrl: JOIN, today: "2026-10-16" };
+  it("a name copied from the quoted email is turned back into {{firstName}}; the prompt quotes it neutrally", async () => {
+    const ctx: ProspectDraftContext = { mode: "followup", style: "personal", recipients: 3, programme, firstEmail: renderMergeFields(FIRST_NOTE, PRIYA) };
+    assert.ok(!buildProspectPrompt(ctx, "english").includes("Hi Priya,"));
+    const d = await draftProspectMail(ctx, async () => JSON.stringify({ reading: "r", subject: "", body: renderMergeFields(NUDGE, PRIYA).replace("Hi Priya, we", "Hi Priya,\n\nWe") }));
+    assert.ok(d.body.startsWith("Hi {{firstName}},"), d.body);
   });
 });
