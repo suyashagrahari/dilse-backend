@@ -41,6 +41,7 @@ import {
   RECENT_SEND_HOURS,
   personalSender,
   personalSignature,
+  personalWriterName,
   prospectMailHtml,
   prospectMailText,
   prospectPersonalText,
@@ -57,7 +58,7 @@ import {
   setSuppressed,
   unsubscribeByToken,
 } from "../services/prospect.service";
-import { kickProspectQueue, pacingNow, personalSenderStatus, prospectQueueHealth } from "../services/prospectQueue.service";
+import { kickProspectQueue, pacingNow, personalSenderStatus, prospectQueueHealth, quietLaneStatus } from "../services/prospectQueue.service";
 import {
   ThreadAiRefusedError,
   ThreadAiUnavailableError,
@@ -140,7 +141,13 @@ async function deploymentStatus() {
       fromName: person.fromName,
       replyToAddress: person.replyToAddress,
       blocked: blocked ? { message: blocked.message, at: blocked.at } : null,
+      /** The signature exactly as it is appended ("Yash\nSubhSandesh"). */
+      signature: personalSignature(),
+      /** Who writes in the first person ("Yash"); "" for a team signature. */
+      writer: personalWriterName(),
     },
+    /** The quiet SES lane prospect mail goes out on (no open tracking). */
+    quietLane: quietLaneStatus(),
     sendWindow: w.startHour === w.endHour ? null : { startHour: w.startHour, endHour: w.endHour, tzOffsetMinutes: w.tzOffsetMinutes },
     maxGapSeconds: Math.max(env.PROSPECT_MIN_GAP_SECONDS, env.PROSPECT_MAX_GAP_SECONDS),
     aiConfigured: !!env.OPENAI_API_KEY,
@@ -597,7 +604,7 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
         html: style === "personal" ? "" : prospectMailHtml(content),
         headers: [...(style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"]), ...(threaded && pick.thread ? ["In-Reply-To", "References"] : [])],
         lint,
-        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups }),
+        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups, quietLane: quietLaneStatus() }),
         personalBlocked: style === "personal" ? personalSenderStatus()?.message || "" : "",
         eligible: sel.eligible.map((e) => {
           const v = e.verdict.ok ? e.verdict : null;

@@ -90,6 +90,20 @@ export const PROSPECT_TEAM_DEFAULTS = {
   signature: "Team SubhSandesh",
 } as const;
 
+/**
+ * Who a personal-style invite (the default) comes from when the box sets
+ * nothing: Yash, one real person, writing in the first person. The second
+ * signature line is plain text — a person signing with their company — never
+ * a URL. Exported so the tests pin the defaults.
+ */
+export const PROSPECT_PERSONAL_DEFAULTS = {
+  fromAddress: "yash@subhsandesh.in",
+  fromName: "Yash from SubhSandesh",
+  signature: "Yash",
+  companyLine: "SubhSandesh",
+  configurationSet: "outreach",
+} as const;
+
 export const env = {
   APP_ENV,
   PORT: resolved.port,
@@ -306,24 +320,40 @@ export const env = {
   PROSPECT_SEND_END_HOUR: Math.min(24, Math.max(0, Number.parseInt(process.env.PROSPECT_SEND_END_HOUR ?? "21", 10) || 0)),
   PROSPECT_SEND_TZ_OFFSET_MINUTES: Number.parseInt(process.env.PROSPECT_SEND_TZ_OFFSET_MINUTES ?? "330", 10) || 0,
 
-  // ── Personal / team invite mode (the default style) ──────────────────────
+  // ── Personal invite mode (the default style): a note from Yash ───────────
   //
-  // A plain-text note from the team's own address, with no List-Unsubscribe
+  // A plain-text note from Yash's own address, with no List-Unsubscribe
   // header and no footer — what lands in Gmail's Primary tab. The address
   // must be allowed by the SES IAM policy (ses:FromAddress); until it is, SES
   // refuses and the panel says so. It NEVER silently falls back to another
   // sender. Reply-To stays INFLUENCER_REPLY_TO_EMAIL so replies reach the app.
-  // (The env names keep "PERSONAL" — the style is still the personal one;
-  // only the voice is the team's.)
-  PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || PROSPECT_TEAM_DEFAULTS.fromAddress).trim().toLowerCase(),
-  PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || PROSPECT_TEAM_DEFAULTS.fromName,
-  /** Signature under personal/team mail. `\n` becomes a line break. Plain text. */
-  PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || PROSPECT_TEAM_DEFAULTS.signature).replace(/\\n/g, "\n"),
+  PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || PROSPECT_PERSONAL_DEFAULTS.fromAddress).trim().toLowerCase(),
+  PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || PROSPECT_PERSONAL_DEFAULTS.fromName,
+  /** Signature under personal mail ("Yash"). `\n` becomes a line break. Plain text. */
+  PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || PROSPECT_PERSONAL_DEFAULTS.signature).replace(/\\n/g, "\n"),
   /**
-   * "1" adds a second plain line "subhsandesh.in" under the signature. Off by
+   * A second plain line under the personal signature — "SubhSandesh", the
+   * company, not a web address. On by default; "0" leaves it off.
+   */
+  PROSPECT_SIGNATURE_COMPANY_LINE: !/^(0|false|no|off)$/i.test(process.env.PROSPECT_SIGNATURE_COMPANY_LINE || "1"),
+  /**
+   * "1" adds a further plain line "subhsandesh.in" under the signature. Off by
    * default: mail clients turn it into a link, and a first email carries none.
    */
   PROSPECT_SIGNATURE_SITE_LINE: ["1", "true"].includes(String(process.env.PROSPECT_SIGNATURE_SITE_LINE || "").toLowerCase()),
+  /**
+   * The quiet sending lane: the SES configuration set every prospect email is
+   * sent with, instead of the domain's default set (which has an open-tracking
+   * event destination, and the account has VDM engagement metrics on). The
+   * set must exist with no event destination and VDM engagement metrics
+   * DISABLED — see docs/influencer-prospects.md. If SES says it does not
+   * exist (or the IAM policy does not cover it), the send is retried ONCE on
+   * the default lane and the panel shows "Quiet lane not set up yet".
+   * "off" sends on the default lane on purpose.
+   */
+  PROSPECT_SES_CONFIGURATION_SET: /^(off|none|0|false)$/i.test((process.env.PROSPECT_SES_CONFIGURATION_SET || "").trim())
+    ? ""
+    : (process.env.PROSPECT_SES_CONFIGURATION_SET || PROSPECT_PERSONAL_DEFAULTS.configurationSet).trim(),
   /**
    * CAN-SPAM wants a postal address on commercial mail to US recipients.
    * "1" appends one plain line — "SubhSandesh, <postal address>" — to the

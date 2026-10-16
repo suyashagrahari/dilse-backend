@@ -50,6 +50,7 @@ import {
   unsubscribeUrl,
   type PacingInput,
   type PersonalSender,
+  type QuietLaneState,
 } from "./prospectMail.service";
 import { getInfluencerSettings } from "./influencer.service";
 
@@ -73,10 +74,32 @@ export function personalSenderStatus(now: Date = new Date()): { message: string;
   return personalBlocked;
 }
 
+/**
+ * The quiet sending lane (PROSPECT_SES_CONFIGURATION_SET) as the last send
+ * found it. In memory, like personalBlocked: a restart forgets a "missing"
+ * verdict and the next send finds out again (one extra SES call).
+ */
+let quietLane: { state: "unknown" | "ready" | "missing"; message: string; at: Date | null } = { state: "unknown", message: "", at: null };
+
+export function quietLaneStatus(configurationSet: string = env.PROSPECT_SES_CONFIGURATION_SET): QuietLaneState {
+  if (!configurationSet) return { configurationSet: "", state: "off", message: "PROSPECT_SES_CONFIGURATION_SET is off — prospect mail goes on the default configuration set (open tracking on)." };
+  if (quietLane.state === "missing") {
+    return { configurationSet, state: "missing", message: `Quiet lane not set up yet: ${quietLane.message} Sends fall back to the default configuration set (open tracking on) until it exists.` };
+  }
+  return { configurationSet, state: quietLane.state, message: "" };
+}
+
+/** Record what a send found out about the quiet lane. Exported for tests. */
+export function noteQuietLane(result: { quietLane: "used" | "fallback" | "none"; quietLaneError?: string }, now: Date = new Date()): void {
+  if (result.quietLane === "used") quietLane = { state: "ready", message: "", at: now };
+  else if (result.quietLane === "fallback") quietLane = { state: "missing", message: result.quietLaneError || "SES refused the configuration set.", at: now };
+}
+
 /** Tests only. */
 export function _resetQueueStateForTests(): void {
   personalBlocked = null;
   lastError = "";
+  quietLane = { state: "unknown", message: "", at: null };
 }
 
 export async function pacingNow(now: Date = new Date()): Promise<PacingInput> {
@@ -107,10 +130,13 @@ export async function pacingNow(now: Date = new Date()): Promise<PacingInput> {
  * rules are tested without Mongo:
  *
  *   personal  plain text (body + signature), NO html part, NO List-Unsubscribe,
- *             NO footer, NO visible Ref token; From = SubhSandesh Team
- *             <team@subhsandesh.in>; Reply-To = the SES receiving address
+ *             NO footer, NO visible Ref token; From = Yash from SubhSandesh
+ *             <yash@subhsandesh.in>; Reply-To = the SES receiving address
  *             (else the From address).
  *   classic   the original multipart email with footer + RFC 8058 headers.
+ *
+ * Both go out on the quiet lane (PROSPECT_SES_CONFIGURATION_SET), never the
+ * domain's default configuration set with its open tracking.
  */
 export function buildProspectSendInput(
   style: OutreachStyle,
@@ -124,9 +150,18 @@ export function buildProspectSendInput(
     inReplyTo?: string;
     references?: string;
   },
-  sender: PersonalSender = personalSender()
+  sender: PersonalSender = personalSender(),
+  configurationSet: string = env.PROSPECT_SES_CONFIGURATION_SET
 ): InfluencerSendInput {
-  const base = { to: m.to, subject: m.subject, body: m.body, token: m.token, inReplyTo: m.inReplyTo, references: m.references };
+  const base = {
+    to: m.to,
+    subject: m.subject,
+    body: m.body,
+    token: m.token,
+    inReplyTo: m.inReplyTo,
+    references: m.references,
+    ...(configurationSet ? { configurationSet } : {}),
+  };
   if (style === "personal") {
     return {
       ...base,
@@ -288,6 +323,7 @@ export async function processProspectQueueOnce(
   }
   lastError = "";
   if (style === "personal") personalBlocked = null;
+  if (sent.via === "ses") noteQuietLane(sent, now);
 
   // Thread opened only after SES accepted, so a refused send leaves nothing.
   let threadId = existing?._id as mongoose.Types.ObjectId | undefined;

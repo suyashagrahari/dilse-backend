@@ -174,18 +174,21 @@ const RANGES: Record<JobKind, { min: number; max: number; ideal: readonly [numbe
   reply: { min: 10, max: 220, ideal: [30, 160] },
 };
 /**
- * Personal (team-note) style: a first note is 50–110 words, a follow-up is a
- * 25–60 word nudge, a new email sits in between, a reply is a conversation.
+ * Personal (a note from Yash) style: a first note is 50–100 words, a
+ * follow-up is a 20–60 word nudge, a new email sits in between, a reply is a
+ * conversation.
  */
 const PERSONAL_RANGES: Record<JobKind, { min: number; max: number; ideal: readonly [number, number] }> = {
-  initial: { min: 40, max: 125, ideal: [50, 110] },
-  followup: { min: 15, max: 75, ideal: [25, 60] },
+  initial: { min: 45, max: 110, ideal: [50, 100] },
+  followup: { min: 15, max: 70, ideal: [20, 60] },
   fresh: { min: 30, max: 125, ideal: [40, 100] },
   reply: { min: 10, max: 160, ideal: [25, 130] },
 };
 export const SUBJECT_LINT_MAX = 70;
-/** A first email's / new email's subject: 4–8 words, specific and honest. */
+/** Classic: a first email's / new email's subject is 4–8 words, specific and honest. */
 export const SUBJECT_WORDS = [4, 8] as const;
+/** Personal: 2–6 words, the way a person titles a note ("Hey Om and Diya"). */
+export const PERSONAL_SUBJECT_WORDS = [2, 6] as const;
 
 /**
  * Subjects that say nothing about the email. A note from a team to someone
@@ -220,20 +223,42 @@ export function stripOptOutLines(body: string): string {
     .trim();
 }
 
-/** Problems with a first / new email's subject — empty when it is fine. Pure. */
-export function subjectIssues(subject: string): LintIssue[] {
+/**
+ * Problems with a first / new email's subject — empty when it is fine. Pure.
+ * Classic: 4–8 words naming the collaboration. Personal: 2–6 words, like a
+ * person writes one ("Hey Om and Diya", "Loved your couple reels"), with no
+ * pitch words at all.
+ */
+export function subjectIssues(subject: string, style: OutreachStyle = "classic"): LintIssue[] {
   const s = String(subject || "").replace(/\s+/g, " ").trim();
   const out: LintIssue[] = [];
+  const personal = style === "personal";
   if (!s) return [{ code: "subject_empty", message: "Add a subject." }];
   const key = s.toLowerCase().replace(/[^\p{L}\p{N}@ ]+/gu, " ").replace(/\s+/g, " ").trim();
   if (GENERIC_SUBJECTS.includes(key) || /\bquick question\b/.test(key)) {
-    out.push({ code: "subject_generic", message: "Say what the email is about — e.g. “Collab idea for @handle” — not “quick question” or “hi”." });
+    out.push({
+      code: "subject_generic",
+      message: personal
+        ? "Say something real — e.g. “Hey Priya” or “Loved your couple reels” — not “quick question” or “hi” on its own."
+        : "Say what the email is about — e.g. “Collab idea for @handle” — not “quick question” or “hi”.",
+    });
   }
   const n = countWords(s);
-  const [lo, hi] = SUBJECT_WORDS;
-  if (n < lo || n > hi) out.push({ code: "subject_words", message: `Keep the subject to ${lo}–${hi} words, specific and honest, e.g. “A creator collab with SubhSandesh” (it is ${n}).` });
+  const [lo, hi] = personal ? PERSONAL_SUBJECT_WORDS : SUBJECT_WORDS;
+  if (n < lo || n > hi) {
+    out.push({
+      code: "subject_words",
+      message: personal
+        ? `Keep the subject to ${lo}–${hi} words, the way a person writes one — e.g. “Hey Om and Diya” or “A reel idea for you two” (it is ${n}).`
+        : `Keep the subject to ${lo}–${hi} words, specific and honest, e.g. “A creator collab with SubhSandesh” (it is ${n}).`,
+    });
+  }
   const spam = s.match(SUBJECT_SPAM_RE);
-  if (spam) out.push({ code: "subject_spam", message: `“${(spam[1] || spam[0]).trim()}” in a subject reads like an ad — name the collaboration instead.` });
+  if (spam) out.push({ code: "subject_spam", message: `“${(spam[1] || spam[0]).trim()}” in a subject reads like an ad — ${personal ? "write it like a note to a friend" : "name the collaboration instead"}.` });
+  else if (personal) {
+    const pitch = s.match(PITCH_RE);
+    if (pitch) out.push({ code: "subject_pitch", message: `“${pitch[1]}” makes the subject a pitch — try “Hey <name>” or “A reel idea for you two”.` });
+  }
   if (/!/.test(s)) out.push({ code: "subject_bang", message: "No “!” in the subject." });
   if ((s.match(EMOJI_RE) || []).length > 0) out.push({ code: "subject_emoji", message: "No emoji in the subject — it's a promotional signal." });
   if (/^\s*(re|fwd?)\s*:/i.test(s)) out.push({ code: "subject_fake_reply", message: "Don't start a new email with “Re:” or “Fwd:” — it pretends to be a reply, and filters punish that." });
@@ -242,10 +267,17 @@ export function subjectIssues(subject: string): LintIssue[] {
 
 /**
  * A subject that always passes subjectIssues, for when the model's is weak.
- * Names the creator when we can: "Collab idea for @handle",
- * "SubhSandesh x Om & Diya — a paid collab?", else a plain one.
+ * Classic names the collaboration: "Collab idea for @handle",
+ * "SubhSandesh x Om & Diya — a paid collab?". Personal reads like a person
+ * wrote it: "Hey Om and Diya", "A reel idea for you two".
  */
-export function fallbackSubject(o: { kind: "initial" | "fresh"; person?: { name?: string; instagram?: string } | null; variant?: number }): string {
+export function fallbackSubject(o: {
+  kind: "initial" | "fresh";
+  person?: { name?: string; instagram?: string } | null;
+  variant?: number;
+  style?: OutreachStyle;
+}): string {
+  if (o.style === "personal") return personalFallbackSubject(o);
   const handle = String(o.person?.instagram || "").replace(/^@+/, "").trim();
   const name = String(o.person?.name || "").replace(/[\r\n"<>]+/g, " ").replace(/\s+/g, " ").trim();
   const shortName = name && countWords(name) <= 3 && !/\d/.test(name) ? name : prospectFirstName(name);
@@ -264,16 +296,69 @@ export function fallbackSubject(o: { kind: "initial" | "fresh"; person?: { name?
   return o.kind === "fresh" ? "Another collab idea from SubhSandesh" : "A creator collab with SubhSandesh";
 }
 
+/** "Om & Diya" → "Om and Diya"; one person → their first name. */
+export function greetingNames(full: string): string {
+  const name = String(full || "").replace(/[\r\n"<>]+/g, " ").replace(/\s+/g, " ").trim();
+  const couple = name.match(/^(\S+)(?:\s+\S+)?\s*(?:&|\+|\band\b)\s*(\S+)/i);
+  if (couple) return `${prospectFirstName(couple[1])} and ${prospectFirstName(couple[2])}`;
+  return prospectFirstName(name);
+}
+
+const isCouple = (name: string) => /\s(&|and|\+)\s/i.test(String(name || ""));
+
+function personalFallbackSubject(o: { kind: "initial" | "fresh"; person?: { name?: string; instagram?: string } | null; variant?: number }): string {
+  const name = o.person?.name ? greetingNames(o.person.name) : "";
+  const two = isCouple(o.person?.name || "");
+  const idea = two ? "A reel idea for you two" : "A reel idea for you";
+  const v = Math.abs(o.variant || 0) % 2;
+  const candidates: string[] =
+    o.kind === "fresh"
+      ? [name ? `One more idea, ${name}` : "", "One more reel idea", "From Yash at SubhSandesh"]
+      : v === 0
+        ? [name ? `Hey ${name}` : "", idea, "From Yash at SubhSandesh"]
+        : [idea, name ? `Hey ${name}` : "", "From Yash at SubhSandesh"];
+  for (const c of candidates) if (c && !/\d/.test(c) && subjectIssues(c, "personal").length === 0 && c.length <= SUBJECT_LINT_MAX) return c;
+  return o.kind === "fresh" ? "One more reel idea" : "A reel idea for you";
+}
+
 /**
- * Words that turn a first note into a pitch. Personal first touches and
- * follow-ups carry none of them — the details come after they reply. Kept in
- * code, never in the AI prompt (naming a word to a model invites it).
+ * Words that turn a note from Yash into a promotion. Personal first emails,
+ * follow-ups and new emails carry none of them (a reply, once they wrote
+ * back, may) — the details come after they reply. Kept in code, never in the
+ * AI prompt (naming a word to a model invites it). "partner" alone is fine —
+ * people send these pages to their partner; "partnership" is a pitch.
  */
 export const PERSONAL_PITCH_WORDS = [
-  "free", "earn", "earns", "earning", "earnings", "commission", "commissions", "sign up", "sign-up", "signup",
-  "join now", "opportunity", "opportunities", "program", "programme", "programs", "programmes", "affiliate",
+  "collab", "collabs", "collaboration", "collaborations", "collaborate", "collaborating",
+  "partnership", "partnerships", "opportunity", "opportunities", "brand", "brands", "branded",
+  "promote", "promotes", "promoting", "promotion", "promotions", "promotional", "offer", "offers", "deal", "deals",
+  "sponsor", "sponsors", "sponsored", "sponsorship", "campaign", "campaigns", "website", "websites", "platform", "platforms",
+  "exclusive", "limited", "free", "earn", "earns", "earning", "earnings", "commission", "commissions",
+  "sign up", "sign-up", "signup", "join now", "program", "programme", "programs", "programmes", "affiliate",
   "referral", "payout", "payouts", "income", "profit", "discount",
 ];
+
+/**
+ * The first name the personal emails are written and signed by — the first
+ * word of the signature ("Yash"). Empty when the signature is a team's
+ * ("Team SubhSandesh"), which switches the "I'm <name>" check off.
+ */
+export function personalWriterName(signature: string = env.PROSPECT_PERSONAL_SIGNATURE): string {
+  const first = String(signature || "").trim().split(/\s+/)[0] || "";
+  const word = first.replace(/[^\p{L}'-]+/gu, "");
+  if (!word || /^(team|the|subhsandesh)$/i.test(word)) return "";
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** Does the note introduce its writer — "I'm Yash", "Yash here", "this is Yash"? */
+export function introducesWriter(body: string, writer: string): boolean {
+  if (!writer) return true;
+  const w = escRe(writer);
+  return new RegExp(`\\b(i['’]?m|i am|this is|it['’]?s|me)\\s+${w}\\b|\\b${w}\\s+(here|from|this side)\\b`, "i").test(String(body || ""));
+}
+
+/** A team sign-off in a note that is meant to come from one person. */
+const TEAM_SIGNOFF_RE = /\b(team\s+subhsandesh|subhsandesh\s+team|the\s+subhsandesh\s+team)\b/i;
 
 export interface LintIssue {
   code: string;
@@ -340,6 +425,8 @@ export interface LintOptions {
   style?: OutreachStyle;
   /** Follow-ups already sent to this person. The first carries no link; later ones may. */
   priorFollowups?: number;
+  /** Personal: who writes it ("Yash"). Defaults to personalWriterName(). */
+  writer?: string;
 }
 
 /**
@@ -381,7 +468,7 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
   // A first email and a new email carry their own subject, which must say
   // what the email is about. Follow-ups and replies are "Re: <subject>".
   if (kind === "initial" || kind === "fresh") {
-    for (const i of subjectIssues(s)) err(i.code, i.message);
+    for (const i of subjectIssues(s, style)) err(i.code, i.message);
     if (s && /^(?:[A-Z][a-z']+\s+){3,}[A-Z][a-z']+$/.test(s)) warn("subject_title_case", "Title Case Subjects Look Like Marketing — use sentence case.");
   } else {
     if (!s) err("subject_empty", "Add a subject.");
@@ -430,8 +517,9 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
 
   const caps = (all.replace(URL_RE, "").match(/\b[A-Z]{4,}\b/g) || []).filter((w) => !["SUBHSANDESH"].includes(w));
   if (caps.length) err("all_caps", `No ALL-CAPS words (${[...new Set(caps)].slice(0, 3).join(", ")}).`);
+  const bangCount = (all.match(/!/g) || []).length;
   if (/!{2,}/.test(all)) err("bangs", "No “!!” — one exclamation mark at most, anywhere.");
-  else if ((all.match(/!/g) || []).length > 2) err("bangs", "Too many exclamation marks — keep it to one or two.");
+  else if (bangCount > (coldPersonal ? 1 : 2)) err("bangs", coldPersonal ? "One exclamation mark at most — a calm note reads like a person." : "Too many exclamation marks — keep it to one or two.");
   if (/\?{2,}/.test(all)) err("questions", "No “??”.");
   const money = (all.match(/₹|\$|\brs\.?(?=\s*\d)|\binr\b/gi) || []).length;
   if (money > 1) err("money_symbols", "Mention money at most once — repeated ₹/$ amounts are a spam signal.");
@@ -446,21 +534,34 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
     const label = kind === "initial" ? "first email" : kind === "fresh" ? "new email" : "follow-up";
     const num = scrubbed.match(/₹|\$|\brs\.?(?=\s*\d)|\binr\b|%|\d/i);
     if (num) err("personal_number", `No numbers, ₹ or % in a ${label} (found “${num[0]}”) — the details come after they reply.`);
-    const pitch = all.replace(URL_RE, " ").match(PITCH_RE);
-    if (pitch) err("pitch_word", `“${pitch[1]}” turns a note into a pitch. Keep it a plain question — details after they reply.`);
+    // A follow-up's subject is "Re: <the first email's subject>" — inherited,
+    // not written now — so only its body is held to the pitch-word list.
+    const pitch = (kind === "followup" ? b : all).replace(URL_RE, " ").match(PITCH_RE);
+    if (pitch) err("pitch_word", `“${pitch[1]}” turns a note into a pitch. Say it the way you'd tell a friend — e.g. “make a reel together” — details after they reply.`);
+    const pays = (b.match(/\b(paid|pay|paying|payment|payments)\b/gi) || []).length;
+    if (pays > 1) err("pay_twice", "Mention paying once, casually (“happy to pay for it, of course”) — more reads like an offer.");
+    if ((all.match(EMOJI_RE) || []).length > 0) err("emoji", "No emoji in a note from one person to another stranger — it reads promotional.");
     if (hasOptOutLine(b)) err("opt_out_line", "Leave out “reply no / I won't email again / unsubscribe” lines — they read like a mass mailing. A “no” reply still stops all future emails automatically.");
     if (kind === "initial" || kind === "fresh") {
-      if (!/\?/.test(b)) (kind === "initial" ? err : warn)("no_question", "Ask one soft question, e.g. “Would you be open to a paid collab?” — a reply is what moves you to Primary.");
+      if (!/\?/.test(b)) (kind === "initial" ? err : warn)("no_question", personal ? "Ask one soft question with a question mark, e.g. “Would you be up for making a reel together?” — a reply is what moves you to Primary." : "Ask one soft question, e.g. “Would you be open to a paid collab?” — a reply is what moves you to Primary.");
       else if ((b.match(/\?/g) || []).length > 2) warn("many_questions", "One question is easier to answer than three.");
     }
   }
   const emoji = (b.match(EMOJI_RE) || []).length;
-  if (emoji > 1) err("emoji", "One emoji at most — several read as promotional.");
+  if (emoji > 1 && !coldPersonal) err("emoji", "One emoji at most — several read as promotional.");
 
   // ── Shape ──────────────────────────────────────────────────────────────
   if (!/^(hi|hey|hello|namaste|dear)\b/i.test(b)) {
-    if (personal && (kind === "initial" || kind === "fresh")) err("greeting", "Open with “Hi {{firstName}},” — it's a note to one person.");
-    else warn("greeting", "Open with “Hi {{firstName}},” — a personal greeting matters.");
+    if (personal && (kind === "initial" || kind === "fresh")) err("greeting", "Open with “Hey {{firstName}},” — it's a note to one person.");
+    else warn("greeting", `Open with “${personal ? "Hey" : "Hi"} {{firstName}},” — a personal greeting matters.`);
+  }
+  if (personal) {
+    const writer = o.writer ?? personalWriterName();
+    if (TEAM_SIGNOFF_RE.test(b)) err("team_signoff", `It comes from ${writer || "one person"} — drop the “Team SubhSandesh” line; the signature${writer ? ` “${writer}”` : ""} is added automatically.`);
+    if (writer && !introducesWriter(b, writer)) {
+      if (kind === "initial") err("no_intro", `Introduce yourself in the first person — e.g. “I'm ${writer} from SubhSandesh.”`);
+      else if (kind === "fresh") warn("no_intro", `A line like “${writer} here again” reminds them who's writing.`);
+    }
   }
   if (!personal && /unsubscribe/i.test(b)) warn("unsubscribe_in_body", "No need to mention unsubscribing — the footer has the link.");
 
@@ -572,27 +673,32 @@ export function prospectHeaders(unsubUrl: string, replyTo: string): Record<strin
   };
 }
 
-// ── Personal style: a plain note from the team ──────────────────────────────
+// ── Personal style: a plain note from Yash ──────────────────────────────────
 //
 // What Gmail files as Promotions is mostly decided by signals a one-to-one
 // email never has: a List-Unsubscribe header, a newsletter footer, an HTML
-// part, a no-reply sender, links and sales numbers in a cold email. Personal
-// style removes every one of them. It is written by "SubhSandesh Team"
-// <team@subhsandesh.in> in the team's voice ("we"). Opt-out is silent: a
-// short "no" / "stop" reply is read by classifyProspectReply and suppresses
-// them for good — no "reply no" line in the email itself.
+// part, a brand or no-reply sender, sales vocabulary, links and numbers in a
+// cold email, and open tracking. Personal style removes every one of them.
+// It is written by Yash — "Yash from SubhSandesh" <yash@subhsandesh.in> — in
+// the first person ("I'm Yash"; "we" only for the company), and goes out on
+// the quiet SES lane (PROSPECT_SES_CONFIGURATION_SET: no open tracking).
+// Opt-out is silent: a short "no" / "stop" reply is read by
+// classifyProspectReply and suppresses them for good — no "reply no" line.
 
 /**
- * The signature under personal mail: "Team SubhSandesh", optionally a plain
- * "subhsandesh.in" line (PROSPECT_SIGNATURE_SITE_LINE) and the postal line.
+ * The signature under personal mail: "Yash", then a plain "SubhSandesh" line
+ * (the company, on by default — PROSPECT_SIGNATURE_COMPANY_LINE), optionally
+ * "subhsandesh.in" (PROSPECT_SIGNATURE_SITE_LINE, off) and the postal line.
  */
 export function personalSignature(
   signature: string = env.PROSPECT_PERSONAL_SIGNATURE,
   includeAddress: boolean = env.PROSPECT_PERSONAL_INCLUDE_ADDRESS,
-  siteLine: boolean = env.PROSPECT_SIGNATURE_SITE_LINE
+  siteLine: boolean = env.PROSPECT_SIGNATURE_SITE_LINE,
+  companyLine: boolean = env.PROSPECT_SIGNATURE_COMPANY_LINE
 ): string {
   const sig = String(signature || "").replace(/\r\n/g, "\n").trim();
   const lines = [sig];
+  if (companyLine && !/subhsandesh/i.test(sig)) lines.push("SubhSandesh");
   if (siteLine && !/subhsandesh\.in/i.test(sig)) lines.push("subhsandesh.in");
   if (includeAddress) lines.push(businessLine());
   return lines.join("\n");
@@ -639,7 +745,7 @@ export function isRoleAddress(addr: string): boolean {
 /**
  * Is this a sender someone can write back to and trust? Our own domain, a
  * display name, and not a no-reply / notifications / marketing mailbox.
- * team@subhsandesh.in "SubhSandesh Team" is fine; noreply@ is not.
+ * yash@subhsandesh.in "Yash from SubhSandesh" is fine; noreply@ is not.
  */
 export function isTrustworthySender(s: { fromAddress: string; fromName: string }): boolean {
   const addr = String(s.fromAddress || "").toLowerCase();
@@ -670,6 +776,26 @@ export function personalSenderBlockedMessage(address: string): string {
 export interface InboxCheckItem {
   ok: boolean;
   label: string;
+  /** Not a blocker — shown with ⚠ (e.g. the quiet lane is not set up yet). */
+  warn?: boolean;
+}
+
+/**
+ * The quiet sending lane, as the server last saw it. "unknown": configured
+ * but no send has used it yet. "ready": SES accepted a send on it.
+ * "missing": SES said it does not exist / is not allowed, so sends fell back
+ * to the default lane. "off": PROSPECT_SES_CONFIGURATION_SET is off.
+ */
+export interface QuietLaneState {
+  configurationSet: string;
+  state: "unknown" | "ready" | "missing" | "off";
+  message: string;
+}
+
+export function quietLaneItem(q?: QuietLaneState | null): InboxCheckItem {
+  if (!q || q.state === "unknown" || q.state === "ready") return { ok: true, label: "Quiet sending lane (no open tracking)" };
+  if (q.state === "off") return { ok: false, warn: true, label: "Quiet lane switched off — sent on the default lane (open tracking on)" };
+  return { ok: false, warn: true, label: `Quiet lane not set up yet — sending on the default lane (open tracking on) until SES has “${q.configurationSet}”` };
 }
 
 /**
@@ -685,6 +811,9 @@ export function inboxCheck(o: {
   sender: { fromAddress: string; fromName: string };
   subject?: string;
   priorFollowups?: number;
+  quietLane?: QuietLaneState | null;
+  /** Personal: who writes it. Defaults to personalWriterName(). */
+  writer?: string;
 }): InboxCheckItem[] {
   const codes = new Set(o.lint.errors.map((e) => e.code));
   const from = `${o.sender.fromName} <${o.sender.fromAddress}>`;
@@ -694,18 +823,23 @@ export function inboxCheck(o: {
       { ok: false, label: "HTML + text, with an unsubscribe footer" },
       { ok: false, label: "List-Unsubscribe header (Gmail reads it as bulk mail)" },
       { ok: o.lint.links.length <= 1, label: "One link to subhsandesh.in" },
+      quietLaneItem(o.quietLane),
     ];
   }
+  const writer = o.writer ?? personalWriterName();
   const items: InboxCheckItem[] = [
     { ok: isTrustworthySender(o.sender), label: `From ${from}` },
-    { ok: true, label: "Plain text — no HTML, images or tracking" },
+    { ok: !codes.has("no_intro") && !codes.has("team_signoff"), label: writer ? `Written by ${writer}, first person` : "Written by one person" },
+    { ok: true, label: "Plain text — no HTML or images" },
     { ok: true, label: "No unsubscribe header or newsletter footer" },
+    quietLaneItem(o.quietLane),
   ];
   const subjectBad = [...codes].some((c) => c.startsWith("subject_"));
+  const noPitch = !codes.has("personal_number") && !codes.has("pitch_word") && !codes.has("pay_twice") && !codes.has("emoji");
   if (o.kind === "initial") {
     items.push({ ok: !codes.has("personal_link"), label: "No links in the first email" });
-    items.push({ ok: !subjectBad, label: "Meaningful subject" });
-    items.push({ ok: !codes.has("personal_number") && !codes.has("pitch_word"), label: "No numbers, ₹, % or sales words" });
+    items.push({ ok: !subjectBad, label: "Short, human subject" });
+    items.push({ ok: noPitch, label: "No pitch words in the first email" });
     items.push({ ok: !codes.has("no_question"), label: "Asks one easy question" });
     items.push({ ok: !codes.has("opt_out_line"), label: "No “reply no / unsubscribe” line (a “no” reply still stops future emails)" });
     return items;
@@ -717,13 +851,13 @@ export function inboxCheck(o: {
         ? { ok: o.lint.links.length <= 1 && !codes.has("foreign_link"), label: "At most one link, to subhsandesh.in" }
         : { ok: !codes.has("personal_link"), label: "No link in the first follow-up" }
     );
-    items.push({ ok: !codes.has("personal_number") && !codes.has("pitch_word"), label: "No numbers, ₹, % or sales words" });
+    items.push({ ok: noPitch, label: "No pitch words or numbers" });
     return items;
   }
   if (o.kind === "fresh") {
-    items.push({ ok: !subjectBad, label: "Meaningful new subject" });
+    items.push({ ok: !subjectBad, label: "Short, human new subject" });
     items.push({ ok: o.lint.links.length <= 1 && !codes.has("foreign_link"), label: "At most one link, to subhsandesh.in" });
-    items.push({ ok: !codes.has("personal_number") && !codes.has("pitch_word"), label: "No numbers, ₹, % or sales words" });
+    items.push({ ok: noPitch, label: "No pitch words or numbers" });
     return items;
   }
   items.push({ ok: /^re:/i.test(String(o.subject || "Re:").trim()), label: "Continues their thread (Re: + In-Reply-To)" });

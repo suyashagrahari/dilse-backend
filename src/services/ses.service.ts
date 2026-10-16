@@ -56,11 +56,43 @@ export class SesSendError extends Error {
   constructor(
     message: string,
     /** True when retrying the identical send might work. */
-    readonly retryable: boolean = false
+    readonly retryable: boolean = false,
+    /**
+     * Set when the refusal was about the configuration set the caller asked
+     * for — it does not exist, or the IAM policy does not cover it. The caller
+     * may retry once WITHOUT the override (prospect outreach's quiet lane).
+     */
+    readonly code: "" | "configuration_set_missing" | "configuration_set_denied" = ""
   ) {
     super(message);
     this.name = "SesSendError";
   }
+}
+
+/**
+ * Was this SES failure about the configuration set we explicitly named, and
+ * not about anything else? Pure, so the quiet-lane fallback is tested without
+ * AWS. SESv2 answers a missing set with NotFoundException ("Configuration set
+ * <name> does not exist"); SESv1 calls it ConfigurationSetDoesNotExist. An
+ * IAM refusal names the resource: ".../configuration-set/<name>".
+ */
+export function configurationSetErrorCode(
+  errorName: string,
+  message: string,
+  requestedSet: string
+): "" | "configuration_set_missing" | "configuration_set_denied" {
+  const set = String(requestedSet || "").trim();
+  if (!set) return "";
+  const m = String(message || "");
+  if (/^ConfigurationSetDoesNotExist(Exception)?$/.test(errorName)) return "configuration_set_missing";
+  if (errorName === "NotFoundException" && /configuration[ -_]?set/i.test(m)) return "configuration_set_missing";
+  if (errorName === "AccessDeniedException" && m.includes(`configuration-set/${set}`)) return "configuration_set_denied";
+  return "";
+}
+
+/** May the caller retry this send once without its configuration-set override? */
+export function isConfigurationSetUnavailable(error: unknown): boolean {
+  return error instanceof SesSendError && error.code !== "";
 }
 
 const isConfigured =
@@ -327,6 +359,19 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
     }
 
     const name = (error as { name?: string })?.name || "";
+
+    // The configuration set the caller named is missing or not allowed: said
+    // apart, so a caller that asked for its own lane can fall back once.
+    const setCode = email.configurationSet ? configurationSetErrorCode(name, (error as Error)?.message || "", email.configurationSet) : "";
+    if (setCode) {
+      throw new SesSendError(
+        setCode === "configuration_set_missing"
+          ? `SES has no configuration set "${email.configurationSet}". AWS said: ${(error as Error)?.message || name}`
+          : `The IAM policy does not allow sending with configuration set "${email.configurationSet}". AWS said: ${(error as Error)?.message || name}`,
+        false,
+        setCode
+      );
+    }
 
     // ── Pass AWS's own text through ────────────────────────────────────────
     //

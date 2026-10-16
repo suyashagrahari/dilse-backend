@@ -27,7 +27,7 @@ import crypto from "node:crypto";
 import { env } from "../config/env";
 import { maskEmail } from "../config/influencerMath";
 import { rfcMessageIdFor } from "./emailThread.service";
-import { SesSendError, sendSesEmail, sesConfigured, type SesEmail, type SesSendResult } from "./ses.service";
+import { SesSendError, isConfigurationSetUnavailable, sendSesEmail, sesConfigured, type SesEmail, type SesSendResult } from "./ses.service";
 
 const ADDRESS_RE = /[^\s<>,;"()]+@[^\s<>,;"()]+\.[^\s<>,;"()]+/g;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -252,6 +252,13 @@ export interface InfluencerSendInput {
    */
   fromAddress?: string;
   replyToAddress?: string;
+  /**
+   * Send with this SES configuration set instead of the default one (prospect
+   * outreach's quiet lane: no open tracking). If SES says it does not exist
+   * or is not allowed, the send is retried ONCE without it and the result
+   * says so (`quietLane: "fallback"`).
+   */
+  configurationSet?: string;
 }
 
 export interface InfluencerSendResult {
@@ -262,6 +269,13 @@ export interface InfluencerSendResult {
   text: string;
   html: string;
   via: "ses" | "stub";
+  /**
+   * "used": sent with the requested configuration set. "fallback": that set
+   * was missing / not allowed, so it went on the default lane
+   * (`quietLaneError` says why). "none": no set was requested.
+   */
+  quietLane: "used" | "fallback" | "none";
+  quietLaneError?: string;
 }
 
 /**
@@ -291,7 +305,7 @@ export async function sendInfluencerMail(
   const { text, html } = rendered;
   const fromName = input.fromName || env.INFLUENCER_FROM_NAME;
 
-  const result = await send({
+  const email: SesEmail = {
     to: input.to,
     subject: input.subject,
     text,
@@ -306,7 +320,22 @@ export async function sendInfluencerMail(
       "In-Reply-To": input.inReplyTo || "",
       References: input.references || "",
     },
-  });
+  };
+  const lane = String(input.configurationSet || "").trim();
+  let quietLane: InfluencerSendResult["quietLane"] = lane ? "used" : "none";
+  let quietLaneError = "";
+  let result: SesSendResult;
+  try {
+    result = await send(lane ? { ...email, configurationSet: lane } : email);
+  } catch (error) {
+    if (!lane || !isConfigurationSetUnavailable(error)) throw error;
+    // The quiet lane is not set up (or not allowed). Nothing was sent; send
+    // ONCE more without the override, on the default lane, and say so.
+    quietLaneError = (error as Error).message;
+    quietLane = "fallback";
+    console.warn(`[mail] Quiet lane not set up yet — configuration set "${lane}" unusable (${quietLaneError}). Retrying once on the default configuration set (open tracking applies).`);
+    result = await send(email);
+  }
 
   if (result.outcome !== "sent") {
     // sendSesEmail answers "skipped" when credentials vanished between the
@@ -324,5 +353,7 @@ export async function sendInfluencerMail(
     text,
     html,
     via: mode === "stub" ? "stub" : "ses",
+    quietLane,
+    ...(quietLaneError ? { quietLaneError } : {}),
   };
 }
