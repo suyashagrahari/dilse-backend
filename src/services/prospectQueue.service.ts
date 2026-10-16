@@ -403,9 +403,32 @@ async function drainProspectQueue(): Promise<void> {
   }
 }
 
-/** Send now instead of waiting for the next tick — called right after Send. */
+/**
+ * Send now instead of waiting for the next tick — called right after Send.
+ *
+ * An admin pressing Send is also the moment to re-test the sender. The
+ * "sender isn't allowed" pause (and the jobs it pushed back an hour) stops the
+ * queue hammering SES, but once the IAM policy is fixed it would otherwise hold
+ * every invite for up to an hour. Lift it; if SES still refuses, the first job
+ * puts the pause straight back.
+ */
 export function kickProspectQueue(): void {
-  void drainProspectQueue();
+  void releasePersonalHoldThenDrain();
+}
+
+async function releasePersonalHoldThenDrain(): Promise<void> {
+  if (personalBlocked) {
+    personalBlocked = null;
+    try {
+      await ProspectMailJob.updateMany(
+        { state: "queued", style: "personal", notBefore: { $gt: new Date() }, error: { $regex: "^Sender isn't allowed yet" } },
+        { $set: { notBefore: new Date() } }
+      );
+    } catch (err) {
+      console.error("Prospect queue: could not release held invites:", (err as Error)?.message);
+    }
+  }
+  await drainProspectQueue();
 }
 
 export function startProspectQueue(): void {
