@@ -317,8 +317,8 @@ describe("follow-ups stay in the same thread", () => {
 });
 
 describe("subjects: short and human (personal), specific (classic)", () => {
-  it("personal: 2–6 words, the way a person writes one", () => {
-    for (const s of ["Hey Om and Diya", "Loved your couple reels", "A reel idea for you two", "From Yash at SubhSandesh", "Hey Priya"]) {
+  it("personal: 3–8 words that name them and the idea", () => {
+    for (const s of ["Om & Diya, a reel idea from SubhSandesh", "A little reel idea for Om & Diya", "One more reel idea for Priya", "Loved your couple reels", "A reel idea for you two"]) {
       assert.deepEqual(subjectIssues(s, "personal"), [], s);
     }
   });
@@ -359,12 +359,13 @@ describe("subjects: short and human (personal), specific (classic)", () => {
     assert.ok(codes(plint("LOVED your couple reels", FIRST_NOTE)).includes("all_caps"));
     assert.ok(codes(plint("Reel idea number 2", FIRST_NOTE)).includes("personal_number"));
   });
-  it("the personal fallback greets them, or offers a reel idea — and always passes", () => {
-    assert.equal(fallbackSubject({ kind: "initial", style: "personal", person: { name: "Om & Diya", instagram: "theecouple__" } }), "Hey Om and Diya");
-    assert.equal(fallbackSubject({ kind: "initial", style: "personal", person: { name: "Om & Diya", instagram: "" }, variant: 1 }), "A reel idea for you two");
-    assert.equal(fallbackSubject({ kind: "initial", style: "personal", person: { name: "Priya Sharma", instagram: "priya.reels" } }), "Hey Priya");
-    assert.equal(fallbackSubject({ kind: "initial", style: "personal" }), "A reel idea for you");
-    assert.equal(fallbackSubject({ kind: "fresh", style: "personal", person: { name: "Priya", instagram: "priya.reels" } }), "One more idea, Priya");
+  it("the personal subject names them and the idea — and always passes", () => {
+    assert.equal(fallbackSubject({ kind: "initial", style: "personal", person: { name: "Om & Diya", instagram: "theecouple__" } }), "Om & Diya, a reel idea from SubhSandesh");
+    assert.equal(fallbackSubject({ kind: "initial", style: "personal", person: { name: "Om and Diya Sharma", instagram: "" }, variant: 1 }), "A little reel idea for Om & Diya");
+    assert.equal(fallbackSubject({ kind: "initial", style: "personal", person: { name: "Priya Sharma", instagram: "priya.reels" } }), "Priya, a reel idea from SubhSandesh");
+    assert.equal(fallbackSubject({ kind: "initial", style: "personal" }), "A reel idea from SubhSandesh");
+    assert.equal(fallbackSubject({ kind: "initial", style: "personal", template: true }), "{{firstName}}, a reel idea from SubhSandesh");
+    assert.equal(fallbackSubject({ kind: "fresh", style: "personal", person: { name: "Priya", instagram: "priya.reels" } }), "One more reel idea for Priya");
     assert.equal(greetingNames("Om Sharma & Diya Rao"), "Om and Diya");
     for (const s of [
       fallbackSubject({ kind: "initial", style: "personal", person: { name: "A Very Long Name Of Several Words", instagram: "" } }),
@@ -538,8 +539,8 @@ describe("drafting as Yash (stubbed model)", () => {
     });
     assert.equal(sys, personalSystemPrompt());
     assert.ok(d.body.startsWith("Hey Priya"));
-    assert.equal(d.subject, SUBJ);
-    assert.ok(!d.subjectFallback);
+    // A personal first email always carries the subject that names them and the idea.
+    assert.equal(d.subject, "Priya, a reel idea from SubhSandesh");
   });
 
   it("the personal prompt writes as Yash in the first person; classic stays the team", () => {
@@ -563,18 +564,13 @@ describe("drafting as Yash (stubbed model)", () => {
     }
   });
 
-  it("replaces a weak subject with the personal fallback", async () => {
-    for (const weak of ["quick question", "collab idea for you", "Hi!", "Earn with SubhSandesh now", "Reel number 2", ""]) {
-      const d = await draftProspectMail(ctx, stub(NOTE, weak));
-      assert.equal(d.subject, "Hey Priya", weak);
-      assert.equal(d.subjectFallback, true);
+  it("whatever the model suggests, a personal first email gets the named subject (A and B)", async () => {
+    for (const any of ["quick question", "collab idea for you", "Hi!", "Hey Priya,", "Loved your couple reels", ""]) {
+      const d = await draftProspectMail(ctx, stub(NOTE, any));
+      assert.equal(d.subject, "Priya, a reel idea from SubhSandesh", any);
     }
-  });
-
-  it("a subject written like a greeting loses its trailing comma, not its words", async () => {
-    const d = await draftProspectMail(ctx, stub(NOTE, "Hey Priya,"));
-    assert.equal(d.subject, "Hey Priya");
-    assert.ok(!d.subjectFallback);
+    const b = await draftProspectMail({ ...ctx, angle: "b" }, stub(NOTE, "Hey Priya"));
+    assert.equal(b.subject, "A little reel idea for Priya");
   });
 
   it("throws away a first note with a link, a number, a pitch word", async () => {
@@ -656,7 +652,7 @@ describe("drafting as Yash (stubbed model)", () => {
     assert.ok(d.body.includes(JOIN));
   });
 
-  it("a personal follow-up is short; #1 without a link, #2 may have one; a new email keeps its subject", async () => {
+  it("a personal follow-up is short; #1 without a link, #2 may have one; a new email gets its named subject", async () => {
     const msgs = [{ direction: "outbound" as const, body: NOTE, at: new Date() }];
     const nudge = renderMergeFields(NUDGE, PRIYA);
     const d = await draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: msgs }, stub(nudge, ""));
@@ -667,7 +663,7 @@ describe("drafting as Yash (stubbed model)", () => {
     assert.ok(ok2.body.includes(JOIN));
     const freshBody = "Hey Priya,\n\nYash here again — I wrote a little while back. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be up for making that together?";
     const fr = await draftProspectMail({ mode: "fresh", style: "personal", person, programme, messages: msgs }, stub(freshBody, "One more reel idea"));
-    assert.equal(fr.subject, "One more reel idea");
+    assert.equal(fr.subject, "One more reel idea for Priya");
   });
 });
 

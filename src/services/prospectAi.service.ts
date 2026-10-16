@@ -449,7 +449,12 @@ export function parseProspectDraft(raw: string, ctx: ProspectDraftContext, langu
   // Subject: a first / new email needs a meaningful one. A weak one from the
   // model is replaced by the deterministic builder, not retried.
   let subjectFallback = false;
-  if (kind === "initial" || kind === "fresh") {
+  if (personal && (kind === "initial" || kind === "fresh")) {
+    // Personal first / new emails always carry the deterministic subject that
+    // names them and the idea ("Om & Diya, a reel idea from SubhSandesh") —
+    // the model's own attempts were too uneven ("Hey Om and Diya").
+    subject = fallbackSubject({ kind, person: ctx.person, variant: angle === "b" ? 1 : 0, style: "personal", template: isTemplateCtx(ctx) });
+  } else if (kind === "initial" || kind === "fresh") {
     const probe = renderMergeFields(subject, ctx.person || { name: "Asha Verma", instagram: "asha.makes" });
     const style: OutreachStyle = personal ? "personal" : "classic";
     if (subjectIssues(probe, style).length || /\{\{(?!\s*(firstName|instagram|name)\s*\}\})/.test(subject) || probe.length > 70 || (personal && /\d/.test(probe))) {

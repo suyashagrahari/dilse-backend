@@ -188,7 +188,7 @@ export const SUBJECT_LINT_MAX = 70;
 /** Classic: a first email's / new email's subject is 4–8 words, specific and honest. */
 export const SUBJECT_WORDS = [4, 8] as const;
 /** Personal: 2–6 words, the way a person titles a note ("Hey Om and Diya"). */
-export const PERSONAL_SUBJECT_WORDS = [2, 6] as const;
+export const PERSONAL_SUBJECT_WORDS = [3, 8] as const;
 
 /**
  * Subjects that say nothing about the email. A note from a team to someone
@@ -268,14 +268,15 @@ export function subjectIssues(subject: string, style: OutreachStyle = "classic")
 /**
  * A subject that always passes subjectIssues, for when the model's is weak.
  * Classic names the collaboration: "Collab idea for @handle",
- * "SubhSandesh x Om & Diya — a paid collab?". Personal reads like a person
- * wrote it: "Hey Om and Diya", "A reel idea for you two".
+ * "SubhSandesh x Om & Diya — a paid collab?". Personal names them and the
+ * idea: "Om & Diya, a reel idea from SubhSandesh".
  */
 export function fallbackSubject(o: {
   kind: "initial" | "fresh";
   person?: { name?: string; instagram?: string } | null;
   variant?: number;
   style?: OutreachStyle;
+  template?: boolean;
 }): string {
   if (o.style === "personal") return personalFallbackSubject(o);
   const handle = String(o.person?.instagram || "").replace(/^@+/, "").trim();
@@ -306,19 +307,36 @@ export function greetingNames(full: string): string {
 
 const isCouple = (name: string) => /\s(&|and|\+)\s/i.test(String(name || ""));
 
-function personalFallbackSubject(o: { kind: "initial" | "fresh"; person?: { name?: string; instagram?: string } | null; variant?: number }): string {
-  const name = o.person?.name ? greetingNames(o.person.name) : "";
-  const two = isCouple(o.person?.name || "");
-  const idea = two ? "A reel idea for you two" : "A reel idea for you";
+/** "Om & Diya" / "Om and Diya Sharma" → "Om & Diya"; one person → their first name. */
+export function subjectNames(full: string): string {
+  const name = String(full || "").replace(/[\r\n"<>]+/g, " ").replace(/\s+/g, " ").trim();
+  const couple = name.match(/^(\S+)(?:\s+\S+)?\s*(?:&|\+|\band\b)\s*(\S+)/i);
+  if (couple) return `${prospectFirstName(couple[1])} & ${prospectFirstName(couple[2])}`;
+  return prospectFirstName(name);
+}
+
+/**
+ * The personal style's subject for a first / new email. Deterministic on
+ * purpose: it always names them and says what the note is about, so every
+ * invite carries a proper subject instead of whatever the model tried
+ * ("Hey Om and Diya", "Loved your couple reels"):
+ *   A: "Om & Diya, a reel idea from SubhSandesh"
+ *   B: "A little reel idea for Om & Diya"
+ *   new email: "One more reel idea for Om & Diya"
+ * A template (several recipients) uses {{firstName}} in place of the name.
+ */
+function personalFallbackSubject(o: { kind: "initial" | "fresh"; person?: { name?: string; instagram?: string } | null; variant?: number; template?: boolean }): string {
+  const names = o.template ? "{{firstName}}" : o.person?.name ? subjectNames(o.person.name) : "";
   const v = Math.abs(o.variant || 0) % 2;
   const candidates: string[] =
     o.kind === "fresh"
-      ? [name ? `One more idea, ${name}` : "", "One more reel idea", "From Yash at SubhSandesh"]
+      ? [names ? `One more reel idea for ${names}` : "", "One more reel idea from SubhSandesh"]
       : v === 0
-        ? [name ? `Hey ${name}` : "", idea, "From Yash at SubhSandesh"]
-        : [idea, name ? `Hey ${name}` : "", "From Yash at SubhSandesh"];
-  for (const c of candidates) if (c && !/\d/.test(c) && subjectIssues(c, "personal").length === 0 && c.length <= SUBJECT_LINT_MAX) return c;
-  return o.kind === "fresh" ? "One more reel idea" : "A reel idea for you";
+        ? [names ? `${names}, a reel idea from SubhSandesh` : "", "A reel idea from SubhSandesh"]
+        : [names ? `A little reel idea for ${names}` : "", "A little reel idea from SubhSandesh"];
+  const probe = (c: string) => c.replace(/\{\{firstName\}\}/g, "Asha");
+  for (const c of candidates) if (c && !/\d/.test(c) && subjectIssues(probe(c), "personal").length === 0 && probe(c).length <= SUBJECT_LINT_MAX) return c;
+  return o.kind === "fresh" ? "One more reel idea from SubhSandesh" : "A reel idea from SubhSandesh";
 }
 
 /**
