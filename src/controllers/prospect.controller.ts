@@ -51,7 +51,7 @@ import {
   setSuppressed,
   unsubscribeByToken,
 } from "../services/prospect.service";
-import { pacingNow, personalSenderStatus, prospectQueueHealth } from "../services/prospectQueue.service";
+import { kickProspectQueue, pacingNow, personalSenderStatus, prospectQueueHealth } from "../services/prospectQueue.service";
 import {
   ThreadAiRefusedError,
   ThreadAiUnavailableError,
@@ -137,6 +137,7 @@ async function deploymentStatus() {
     joinUrl: facts.joinUrl,
     followUpDays: env.PROSPECT_FOLLOWUP_DAYS,
     dailyCap: pacing.cap,
+    instant: env.PROSPECT_INSTANT,
     sentLast24h: pacing.sentLast24h,
     minGapSeconds: env.PROSPECT_MIN_GAP_SECONDS,
     queued,
@@ -592,6 +593,8 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
 
     const aiAssisted = req.body?.aiAssisted === true;
     const q = await enqueueJobs(items, { aiAssisted, byEmail: req.userEmail || "" });
+    // Instant mode: start sending now rather than on the next queue tick.
+    if (q.queued.length) kickProspectQueue();
     const pacing = await pacingNow();
     const totalQueued = await ProspectMailJob.countDocuments({ state: { $in: ["queued", "sending"] } });
     await audit(req, {

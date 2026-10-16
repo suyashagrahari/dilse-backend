@@ -423,6 +423,29 @@ describe("sending pattern: 09:00–21:00 IST + 2–6 min jitter", () => {
   });
 });
 
+describe("instant mode: Send means now", () => {
+  const IST: SendWindow = { startHour: 9, endHour: 21, tzOffsetMinutes: 330 };
+  const at = (iso: string) => new Date(iso);
+
+  it("sends at 2 am IST and straight after the last send, ignoring window and gap", () => {
+    const now = at("2026-10-16T20:30:00Z"); // 02:00 IST
+    const d = nextSendDecision({ sentLast24h: 5, oldestInWindow: null, lastSentAt: new Date(now.getTime() - 1_000), lastGapMs: 300_000, cap: 200, minGapMs: 120_000, window: IST, instant: true, now });
+    assert.deepEqual(d, { send: true });
+  });
+
+  it("still stops at the daily cap", () => {
+    const now = at("2026-10-16T20:30:00Z");
+    const d = nextSendDecision({ sentLast24h: 200, oldestInWindow: at("2026-10-16T05:00:00Z"), lastSentAt: null, cap: 200, minGapMs: 120_000, window: IST, instant: true, now });
+    assert.ok(!d.send && d.reason === "cap");
+  });
+
+  it("estimates a batch finishing within seconds, not hours", () => {
+    const now = at("2026-10-16T20:30:00Z");
+    const end = estimateFinish(10, { sentLast24h: 0, oldestInWindow: null, lastSentAt: null, cap: 200, minGapMs: 120_000, avgGapMs: 240_000, window: IST, instant: true, now });
+    assert.ok(end.getTime() - now.getTime() <= 60_000, end.toISOString());
+  });
+});
+
 describe("personal: SES refusing the sender is said plainly", () => {
   const AWS_TEXT =
     "User `arn:aws:iam::769638986416:user/subhsandesh-ses-sender' is not authorized to perform `ses:SendEmail' on resource `arn:aws:ses:us-east-1:769638986416:identity/subhsandesh.in'";

@@ -723,6 +723,8 @@ export interface PacingInput {
   avgGapMs?: number;
   /** Local sending hours; absent = any time. */
   window?: SendWindow | null;
+  /** Instant mode: ignore the window and the gap; only the cap still holds. */
+  instant?: boolean;
   now: Date;
 }
 
@@ -735,6 +737,7 @@ export function nextSendDecision(p: PacingInput): PacingDecision {
     const free = p.oldestInWindow ? p.oldestInWindow.getTime() + 86_400_000 : p.now.getTime() + 3_600_000;
     return { send: false, until: new Date(Math.max(free, p.now.getTime() + 1000)), reason: "cap" };
   }
+  if (p.instant) return { send: true };
   if (p.window) {
     const w = sendWindowState(p.now, p.window);
     if (!w.open) return { send: false, until: w.opensAt, reason: "window" };
@@ -754,9 +757,9 @@ export function estimateFinish(queued: number, p: PacingInput): Date {
   let left = Math.max(0, p.cap - p.sentLast24h);
   if (!first.send && first.reason === "cap") left = p.cap;
   left -= 1;
-  const gap = p.avgGapMs ?? p.minGapMs;
+  const gap = p.instant ? 2_000 : p.avgGapMs ?? p.minGapMs;
   const inWindow = (ms: number) => {
-    if (!p.window) return ms;
+    if (!p.window || p.instant) return ms;
     const w = sendWindowState(new Date(ms), p.window);
     return w.open ? ms : w.opensAt.getTime();
   };

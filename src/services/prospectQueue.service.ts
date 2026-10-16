@@ -96,6 +96,7 @@ export async function pacingNow(now: Date = new Date()): Promise<PacingInput> {
     minGapMs: minS * 1000,
     avgGapMs: ((minS + maxS) / 2) * 1000,
     window: envSendWindow(),
+    instant: env.PROSPECT_INSTANT,
     now,
   };
 }
@@ -322,24 +323,34 @@ let timer: NodeJS.Timeout | null = null;
 let running = false;
 
 /** Started by server.ts after the DB connects. Idempotent. */
+/**
+ * Drain whatever pacing allows right now. In instant mode that is the whole
+ * queue (up to the cap); in paced mode pacing stops it after one send.
+ */
+async function drainProspectQueue(): Promise<void> {
+  if (running || mongoose.connection.readyState !== 1) return;
+  running = true;
+  try {
+    const max = env.PROSPECT_INSTANT ? 100 : 5;
+    for (let i = 0; i < max; i++) {
+      const r = await processProspectQueueOnce();
+      if (r.did === "idle") break;
+    }
+  } catch (err) {
+    lastError = (err as Error)?.message || "queue error";
+    console.error("Prospect queue tick failed:", lastError);
+  } finally {
+    running = false;
+  }
+}
+
+/** Send now instead of waiting for the next tick — called right after Send. */
+export function kickProspectQueue(): void {
+  void drainProspectQueue();
+}
+
 export function startProspectQueue(): void {
   if (timer) return;
-  timer = setInterval(async () => {
-    if (running || mongoose.connection.readyState !== 1) return;
-    running = true;
-    try {
-      // Drain whatever is allowed right now; pacing stops it after one send
-      // unless the gap is tiny, so this is one email per tick in practice.
-      for (let i = 0; i < 5; i++) {
-        const r = await processProspectQueueOnce();
-        if (r.did === "idle") break;
-      }
-    } catch (err) {
-      lastError = (err as Error)?.message || "queue error";
-      console.error("Prospect queue tick failed:", lastError);
-    } finally {
-      running = false;
-    }
-  }, TICK_MS);
+  timer = setInterval(() => void drainProspectQueue(), TICK_MS);
   timer.unref?.();
 }

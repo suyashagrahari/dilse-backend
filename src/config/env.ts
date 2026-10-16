@@ -274,7 +274,14 @@ export const env = {
   /** The only link a prospect email may carry. */
   PROSPECT_JOIN_URL: process.env.PROSPECT_JOIN_URL || "https://subhsandesh.in/influencer",
   /** At most this many prospect emails in any rolling 24 hours (warm-up). */
-  PROSPECT_DAILY_CAP: Math.max(0, parseInt(process.env.PROSPECT_DAILY_CAP || "30", 10) || 0),
+  PROSPECT_DAILY_CAP: Math.max(0, parseInt(process.env.PROSPECT_DAILY_CAP || "200", 10) || 0),
+  /**
+   * Instant send (the owner's choice, on by default): an email goes out the
+   * moment Send is pressed, at any hour, with no gap between sends. The daily
+   * cap still applies. PROSPECT_INSTANT=0 brings back the paced queue (the
+   * send window and 2–6 min jitter below).
+   */
+  PROSPECT_INSTANT: !/^(0|false|no|off)$/i.test(process.env.PROSPECT_INSTANT || "1"),
   /**
    * Gap between two prospect sends: a random number of seconds in
    * [MIN, MAX], drawn once per send. A fixed 90 s cadence is itself a
