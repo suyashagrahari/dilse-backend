@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { env } from "../config/env";
 import InfluencerProspect, { type IInfluencerProspect, type ProspectStatus } from "../models/InfluencerProspect";
-import ProspectMailJob, { type JobKind } from "../models/ProspectMailJob";
+import ProspectMailJob, { type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
 import EmailThread from "../models/EmailThread";
 import User from "../models/User";
 import { getInfluencerSettings } from "./influencer.service";
@@ -266,6 +266,7 @@ export interface EnqueueItem {
   kind: JobKind;
   subject: string;
   body: string;
+  style: OutreachStyle;
 }
 
 /**
@@ -285,6 +286,7 @@ export async function enqueueJobs(
         prospectId: new mongoose.Types.ObjectId(it.prospectId),
         batchId,
         kind: it.kind,
+        style: it.style,
         subject: it.subject,
         body: it.body,
         aiAssisted: meta.aiAssisted,

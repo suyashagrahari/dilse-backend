@@ -27,7 +27,7 @@ import crypto from "node:crypto";
 import { env } from "../config/env";
 import { maskEmail } from "../config/influencerMath";
 import { rfcMessageIdFor } from "./emailThread.service";
-import { sendSesEmail, sesConfigured, type SesEmail, type SesSendResult } from "./ses.service";
+import { SesSendError, sendSesEmail, sesConfigured, type SesEmail, type SesSendResult } from "./ses.service";
 
 const ADDRESS_RE = /[^\s<>,;"()]+@[^\s<>,;"()]+\.[^\s<>,;"()]+/g;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -245,6 +245,13 @@ export interface InfluencerSendInput {
   render?: (c: { fromAddress: string; replyToAddress: string }) => { text: string; html: string };
   fromName?: string;
   extraHeaders?: Record<string, string>;
+  /**
+   * Personal invite mode sends AS a person. Both must be complete addresses;
+   * there is deliberately no fallback to the team address when the person's
+   * address is refused — see prospectQueue.service.
+   */
+  fromAddress?: string;
+  replyToAddress?: string;
 }
 
 export interface InfluencerSendResult {
@@ -274,8 +281,9 @@ export async function sendInfluencerMail(
   }
   const send: MailTransport = transport || (mode === "stub" ? stubTransport : sendSesEmail);
 
-  const fromAddress = influencerFromAddress();
-  const replyToAddress = influencerReplyToAddress();
+  const fromAddress = input.fromAddress !== undefined ? cleanAddress(input.fromAddress) : influencerFromAddress();
+  const replyToAddress = input.replyToAddress !== undefined ? cleanAddress(input.replyToAddress) || fromAddress : influencerReplyToAddress();
+  if (!fromAddress) throw new SesSendError(`"${input.fromAddress}" is not a valid From address, so nothing was sent.`);
   const content = { body: input.body, token: input.token, fromAddress, replyToAddress };
   const rendered = input.render
     ? input.render({ fromAddress, replyToAddress })

@@ -18,7 +18,7 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import InfluencerProspect, { type IInfluencerProspect, PROSPECT_STATUSES } from "../models/InfluencerProspect";
-import ProspectMailJob, { type JobKind } from "../models/ProspectMailJob";
+import ProspectMailJob, { type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
 import EmailThread, { type IEmailThread } from "../models/EmailThread";
 import { env } from "../config/env";
 import { audit } from "../services/adminAudit";
@@ -27,12 +27,17 @@ import { baseSubject, replySubject } from "../services/emailThread.service";
 import { influencerFromAddress, influencerReplyToAddress, influencerSendMode } from "../services/influencerMail.service";
 import {
   canEmailProspect,
+  envSendWindow,
   estimateFinish,
+  inboxCheck,
   lintOutreach,
   parseProspectCsv,
   parseProspectInput,
+  personalSender,
+  personalSignature,
   prospectMailHtml,
   prospectMailText,
+  prospectPersonalText,
   renderMergeFields,
   unsubscribeUrl,
   type ContactVerdict,
@@ -46,7 +51,7 @@ import {
   setSuppressed,
   unsubscribeByToken,
 } from "../services/prospect.service";
-import { pacingNow, prospectQueueHealth } from "../services/prospectQueue.service";
+import { pacingNow, personalSenderStatus, prospectQueueHealth } from "../services/prospectQueue.service";
 import {
   ThreadAiRefusedError,
   ThreadAiUnavailableError,
@@ -93,6 +98,7 @@ function shapeProspect(
     joinedUserId: p.joinedUserId ? String(p.joinedUserId) : null,
     createdAt: p.createdAt,
     threadId: p.threadId ? String(p.threadId) : null,
+    outreachStyle: p.outreachStyle || "",
     unread: !!extra.thread?.unread,
     messages: extra.thread?.messageCount || 0,
     lastDirection: extra.thread?.lastDirection || "",
@@ -108,11 +114,23 @@ async function deploymentStatus() {
     programmeFacts(),
   ]);
   const health = prospectQueueHealth();
+  const person = personalSender();
+  const blocked = personalSenderStatus();
+  const w = envSendWindow();
   return {
     sendMode: influencerSendMode(),
     fromAddress: influencerFromAddress(),
     fromName: env.PROSPECT_FROM_NAME,
     replyToAddress: influencerReplyToAddress(),
+    defaultStyle: "personal" as OutreachStyle,
+    personal: {
+      fromAddress: person.fromAddress,
+      fromName: person.fromName,
+      replyToAddress: person.replyToAddress,
+      blocked: blocked ? { message: blocked.message, at: blocked.at } : null,
+    },
+    sendWindow: w.startHour === w.endHour ? null : { startHour: w.startHour, endHour: w.endHour, tzOffsetMinutes: w.tzOffsetMinutes },
+    maxGapSeconds: Math.max(env.PROSPECT_MIN_GAP_SECONDS, env.PROSPECT_MAX_GAP_SECONDS),
     aiConfigured: !!env.OPENAI_API_KEY,
     commissionPercent: facts.commissionPercent,
     attributionDays: facts.attributionDays,
@@ -354,6 +372,20 @@ async function resolveSelection(ids: mongoose.Types.ObjectId[]): Promise<Selecti
   return out;
 }
 
+/** What the admin asked for. Personal is the default; anything else is classic only when said. */
+const readStyle = (req: Request): OutreachStyle => (req.body?.style === "classic" ? "classic" : "personal");
+
+/**
+ * The style one recipient actually gets. A first email takes the requested
+ * style; a follow-up or reply keeps the style the conversation started in,
+ * so it comes from the same sender and threads in their inbox. Prospects
+ * emailed before personal mode existed were classic.
+ */
+function styleFor(e: { p: IInfluencerProspect; kind: JobKind }, requested: OutreachStyle): OutreachStyle {
+  if (e.kind === "initial") return requested;
+  return e.p.outreachStyle === "personal" ? "personal" : "classic";
+}
+
 function singleKind(sel: Selection, res: Response): JobKind | null {
   if (sel.eligible.length === 0) {
     res.status(400).json({
@@ -401,6 +433,7 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
     const one = sel.eligible.length === 1 ? sel.eligible[0] : null;
     const person = one ? { name: one.p.name, instagram: one.p.instagram, niche: one.p.niche, note: one.p.note } : undefined;
     const note = typeof req.body?.note === "string" ? req.body.note : "";
+    const style = styleFor(sel.eligible[0], readStyle(req));
 
     let ctx: ProspectDraftContext;
     if (kind === "initial") {
@@ -413,6 +446,7 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
     } else {
       ctx = { mode: "reply", person, programme, messages: forAi(one!.thread), adminNote: note };
     }
+    ctx.style = style;
 
     const draft = await draftProspectMailWithRetry(ctx);
     // Follow-ups and replies continue each person's own thread, so the subject
@@ -424,6 +458,7 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
         ...draft,
         subject,
         kind,
+        style,
         subjectPerRecipient: kind !== "initial",
         eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name })),
         skipped: sel.skipped,
@@ -470,10 +505,16 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
       res.json({ success: true, data: { lint: null, skipped: sel.skipped, eligible: [] } });
       return;
     }
+    const style = styleFor(pick, readStyle(req));
     const target = { name: pick.p.name, instagram: pick.p.instagram };
     const subj = renderMergeFields(subjectFor(pick.kind, subject, pick.thread), target);
     const text = renderMergeFields(body, target);
-    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind });
+    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style });
+    const person = personalSender();
+    const sender =
+      style === "personal"
+        ? person
+        : { fromAddress: influencerFromAddress(), fromName: env.PROSPECT_FROM_NAME, replyToAddress: influencerReplyToAddress() };
     const content = {
       body: text,
       signature: env.PROSPECT_SIGNATURE,
@@ -486,11 +527,17 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
       data: {
         to: { id: String(pick.p._id), name: pick.p.name, email: pick.p.email },
         kind: pick.kind,
+        style,
+        from: `${sender.fromName} <${sender.fromAddress}>`,
+        replyTo: sender.replyToAddress,
         subject: subj,
-        text: prospectMailText(content),
-        html: prospectMailHtml(content),
+        text: style === "personal" ? prospectPersonalText({ body: text, signature: personalSignature() }) : prospectMailText(content),
+        html: style === "personal" ? "" : prospectMailHtml(content),
+        headers: style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"],
         lint,
-        eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name, kind: e.kind })),
+        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender }),
+        personalBlocked: style === "personal" ? personalSenderStatus()?.message || "" : "",
+        eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name, kind: e.kind, hasNote: !!(e.p.note || "").trim() })),
         skipped: sel.skipped,
       },
     });
@@ -524,20 +571,23 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     // The spam check, per recipient, on exactly what they will receive. One
     // failure blocks the whole send: the admin fixes the template once.
     const { commissionPercent } = await programmeFacts();
+    const requested = readStyle(req);
     const items = [];
     for (const e of sel.eligible) {
       const subj = subjectFor(kind, subject, e.thread);
       const target = { name: e.p.name, instagram: e.p.instagram };
+      const style = styleFor(e, requested);
       const lint = lintOutreach(renderMergeFields(subj, target), renderMergeFields(body, target), {
         commissionPercent,
         template: { subject: subj, body },
         kind,
+        style,
       });
       if (!lint.ok) {
         res.status(422).json({ success: false, code: "LINT", error: lint.errors[0].message, lint, for: e.p.name });
         return;
       }
-      items.push({ prospectId: String(e.p._id), kind, subject: subj, body });
+      items.push({ prospectId: String(e.p._id), kind, subject: subj, body, style });
     }
 
     const aiAssisted = req.body?.aiAssisted === true;
@@ -546,7 +596,7 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     const totalQueued = await ProspectMailJob.countDocuments({ state: { $in: ["queued", "sending"] } });
     await audit(req, {
       action: "prospect.mail_queued",
-      reason: `Queued ${q.queued.length} ${kind} email(s) "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} skipped` : ""} [${q.batchId}]`,
+      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} skipped` : ""} [${q.batchId}]`,
       ...(sel.eligible.length === 1 ? { targetUserEmail: sel.eligible[0].p.email } : {}),
     });
     res.json({
@@ -558,6 +608,7 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
         already: q.already,
         skipped: sel.skipped,
         finishEstimate: totalQueued ? estimateFinish(totalQueued, pacing) : null,
+        personalBlocked: items.some((i) => i.style === "personal") ? personalSenderStatus()?.message || "" : "",
       },
     });
   } catch (error) {

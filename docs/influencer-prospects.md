@@ -9,7 +9,68 @@ what you typed about them. Several → one template with `{{firstName}}` /
 
 It is built on the influencer-mail system (see `influencer-mail-setup.md`):
 same SES sender, same Reply-To, same inbound pipeline, same `EmailThread`
-store and `INF-` reference tokens. Nothing here adds a sender address.
+store and `INF-` reference tokens. Classic style uses the influencer sender;
+Personal style (the default) sends as a person — see below.
+
+## Two styles: Personal (default) and Classic
+
+The Generate dialog has a **Personal (recommended) / Classic** toggle. The
+style is stored on each job and, once the first email goes, on the prospect
+(`outreachStyle`): a follow-up or reply keeps the style — and so the sender —
+the conversation started with.
+
+**Why Personal exists.** Classic first emails landed in Gmail **Promotions**.
+The signals responsible, strongest first: the `List-Unsubscribe` /
+`-Post` headers (Gmail's bulk-mail marker), the newsletter footer (why-line,
+unsubscribe link, business address, `Ref:` token), sales copy in a cold first
+email (percentages, "free", a sign-up link), a role sender
+(`influencer-support@`) under a brand-ish name, and the HTML part. Personal
+style removes every one of them:
+
+| | Personal | Classic |
+|---|---|---|
+| From | `PROSPECT_PERSONAL_FROM_NAME <PROSPECT_PERSONAL_FROM_EMAIL>` — Suyash Agrahari &lt;suyashagrahari@subhsandesh.in&gt; | `PROSPECT_FROM_NAME <INFLUENCER_FROM_EMAIL>` |
+| Reply-To | `INFLUENCER_REPLY_TO_EMAIL` (the SES receiving address), else the From | same |
+| Parts | text/plain only | text + HTML |
+| Headers | none extra (threading only) | `List-Unsubscribe`, `List-Unsubscribe-Post` |
+| Footer | none — just the signature `PROSPECT_PERSONAL_SIGNATURE` | why-line, unsubscribe link, address, `Ref:` |
+| First email | 40–90 words, no links, no digits/₹/%, no pitch words, one question, ends with the opt-out line | 60–180 words, one subhsandesh.in link, the real % |
+| Follow-up | 8–45 words, same thread (`Re:` + In-Reply-To/References), no link | 25–140 words |
+| Reply (after they wrote) | may include the join link and the real commission % | same |
+
+The linter has a personal profile (`lintOutreach(..., { style: "personal" })`)
+that enforces the first-email rules on the server at send time and in the
+worker; the dialog shows the same verdict plus an **Inbox check** list.
+
+**Opt-out without a footer.** Every personal first email ends with one human
+line — *If it's not for you, just reply "no" and I won't email again.* — and
+`classifyProspectReply` turns a short "no", "nope", "no thanks", "not
+interested", "not for me", "I'll pass" into `not_interested`, and "stop",
+"remove me", "unsubscribe", "don't email me" into `unsubscribed`. Both are
+suppressed for every future send. The public unsubscribe endpoint and SES
+bounce/complaint suppression are unchanged.
+
+**Matching replies without the `Ref:` token.** The thread still has its token
+(stored, not printed). Replies match on In-Reply-To / References (SES's
+reconstructed Message-ID), then on the sender address — see
+`matchInfluencerInbound`. A reply from a different address with the headers
+stripped lands in Unmatched; reassign it from there.
+
+**The sender must be allowed by IAM.** The prod SES user's policy
+(`SubhSandeshSesSendOnly`) restricts `ses:FromAddress`. Until the personal
+address is on that list, SES refuses: the job waits in the queue (retried
+hourly, never re-sent from another address), and the dialog and job show
+"Personal sender isn't allowed yet". Fix: run
+`/private/tmp/claude-501/sesfix/add-personal-sender.sh` (re-runnable; keeps
+the existing five addresses, simulates all six at the end) — or switch to
+Classic.
+
+**Compliance.** Personal style drops the postal-address footer. India has no
+equivalent rule for a one-to-one business note, but **CAN-SPAM requires a
+valid physical postal address in commercial email to US recipients**. Set
+`PROSPECT_PERSONAL_INCLUDE_ADDRESS=1` to append one plain line
+("SubhSandesh, <postal address>") to the signature when emailing US creators.
+Reply-to-opt-out and suppression stay in force either way.
 
 ## Pieces
 
@@ -55,9 +116,11 @@ store and `INF-` reference tokens. Nothing here adds a sender address.
   unsubscribed address is refused.
 - **Contact limits**: one first email, one follow-up after
   `PROSPECT_FOLLOWUP_DAYS` days of silence, nothing more unless they reply.
-- **Warm-up**: the worker sends one email at a time, at least
-  `PROSPECT_MIN_GAP_SECONDS` apart, and at most `PROSPECT_DAILY_CAP` in any
-  rolling 24 hours. A 50-person selection is spread over two days at the
+- **Warm-up**: the worker sends one email at a time, a random
+  `PROSPECT_MIN_GAP_SECONDS`–`PROSPECT_MAX_GAP_SECONDS` apart (2–6 min, drawn
+  once per send and stored on the job as `gapAfterMs`), only between
+  `PROSPECT_SEND_START_HOUR` and `PROSPECT_SEND_END_HOUR` local time
+  (09–21 IST), and at most `PROSPECT_DAILY_CAP` in any rolling 24 hours. A 50-person selection is spread over two days at the
   defaults. A job interrupted mid-send is marked failed, never retried
   blindly; throttling errors retry with backoff.
 
@@ -90,7 +153,13 @@ user — the conversation appears on their influencer page.
 | `PROSPECT_SIGNATURE` | `Suyash\nSubhSandesh` |
 | `PROSPECT_JOIN_URL` | `https://subhsandesh.in/influencer` |
 | `PROSPECT_DAILY_CAP` | `30` (0 pauses sending) |
-| `PROSPECT_MIN_GAP_SECONDS` | `90` |
+| `PROSPECT_MIN_GAP_SECONDS` / `PROSPECT_MAX_GAP_SECONDS` | `120` / `360` (random gap per send) |
+| `PROSPECT_SEND_START_HOUR` / `PROSPECT_SEND_END_HOUR` | `9` / `21` (equal = any time) |
+| `PROSPECT_SEND_TZ_OFFSET_MINUTES` | `330` (IST) |
+| `PROSPECT_PERSONAL_FROM_EMAIL` | `suyashagrahari@subhsandesh.in` (must be in the IAM `ses:FromAddress` list) |
+| `PROSPECT_PERSONAL_FROM_NAME` | `Suyash Agrahari` |
+| `PROSPECT_PERSONAL_SIGNATURE` | `Suyash\nSubhSandesh · subhsandesh.in` |
+| `PROSPECT_PERSONAL_INCLUDE_ADDRESS` | off; `1` appends the postal line (CAN-SPAM, US recipients) |
 | `PROSPECT_FOLLOWUP_DAYS` | `4` |
 | `PUBLIC_API_URL` | derived: `api.subhsandesh.in` / `stag-api.subhsandesh.in` |
 

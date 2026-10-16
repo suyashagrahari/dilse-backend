@@ -275,8 +275,39 @@ export const env = {
   PROSPECT_JOIN_URL: process.env.PROSPECT_JOIN_URL || "https://subhsandesh.in/influencer",
   /** At most this many prospect emails in any rolling 24 hours (warm-up). */
   PROSPECT_DAILY_CAP: Math.max(0, parseInt(process.env.PROSPECT_DAILY_CAP || "30", 10) || 0),
-  /** Minimum seconds between two prospect sends. */
-  PROSPECT_MIN_GAP_SECONDS: Math.max(5, parseInt(process.env.PROSPECT_MIN_GAP_SECONDS || "90", 10) || 90),
+  /**
+   * Gap between two prospect sends: a random number of seconds in
+   * [MIN, MAX], drawn once per send. A fixed 90 s cadence is itself a
+   * machine fingerprint; 2–6 minutes of jitter reads like a person.
+   */
+  PROSPECT_MIN_GAP_SECONDS: Math.max(5, parseInt(process.env.PROSPECT_MIN_GAP_SECONDS || "120", 10) || 120),
+  PROSPECT_MAX_GAP_SECONDS: Math.max(5, parseInt(process.env.PROSPECT_MAX_GAP_SECONDS || "360", 10) || 360),
+  /**
+   * Prospect mail only goes out between these hours (24h clock) in the
+   * timezone below — 09:00–21:00 IST by default. Outside it, jobs wait in
+   * the queue. START = END switches the window off.
+   */
+  PROSPECT_SEND_START_HOUR: Math.min(23, Math.max(0, Number.parseInt(process.env.PROSPECT_SEND_START_HOUR ?? "9", 10) || 0)),
+  PROSPECT_SEND_END_HOUR: Math.min(24, Math.max(0, Number.parseInt(process.env.PROSPECT_SEND_END_HOUR ?? "21", 10) || 0)),
+  PROSPECT_SEND_TZ_OFFSET_MINUTES: Number.parseInt(process.env.PROSPECT_SEND_TZ_OFFSET_MINUTES ?? "330", 10) || 0,
+
+  // ── Personal invite mode (the default style) ────────────────────────────
+  //
+  // A plain-text note from a real person's address, with no List-Unsubscribe
+  // header and no footer — what lands in Gmail's Primary tab. The address
+  // must be allowed by the SES IAM policy (ses:FromAddress); until it is, SES
+  // refuses and the panel says so. It NEVER silently falls back to another
+  // sender. Reply-To stays INFLUENCER_REPLY_TO_EMAIL so replies reach the app.
+  PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || "suyashagrahari@subhsandesh.in").trim().toLowerCase(),
+  PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || "Suyash Agrahari",
+  /** Signature under personal mail. `\n` becomes a line break. Plain text. */
+  PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || "Suyash\\nSubhSandesh · subhsandesh.in").replace(/\\n/g, "\n"),
+  /**
+   * CAN-SPAM wants a postal address on commercial mail to US recipients.
+   * "1" appends one plain line — "SubhSandesh, <postal address>" — to the
+   * personal signature. Off by default (Primary-tab first).
+   */
+  PROSPECT_PERSONAL_INCLUDE_ADDRESS: ["1", "true"].includes(String(process.env.PROSPECT_PERSONAL_INCLUDE_ADDRESS || "").toLowerCase()),
   /** A follow-up is offered only this many days after the first email. */
   PROSPECT_FOLLOWUP_DAYS: Math.max(1, parseInt(process.env.PROSPECT_FOLLOWUP_DAYS || "4", 10) || 4),
   /**

@@ -15,7 +15,8 @@
     "repair:inline-media": "tsx src/scripts/repairInlineMedia.ts",
     "test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
     "leak:check": "node scripts/leak-check.mjs",
-    "thread:test": "node scripts/thread-integration.js"
+    "thread:test": "node scripts/thread-integration.js",
+    "prospect:personal:test": "PROSPECT_SEND_START_HOUR=0 PROSPECT_SEND_END_HOUR=0 PPM_MONGO=${PPM_MONGO:-mongodb://localhost:27017/ppm_test} tsx scripts/prospect-personal-integration.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.998.0",

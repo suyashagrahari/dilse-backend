@@ -16,11 +16,19 @@ export const JOB_STATES = ["queued", "sending", "sent", "failed", "cancelled", "
 export type JobState = (typeof JOB_STATES)[number];
 export const JOB_KINDS = ["initial", "followup", "reply"] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
+/**
+ * How the email is dressed. "personal" — plain text from a person's address,
+ * no List-Unsubscribe, no footer (Gmail Primary). "classic" — the original
+ * multipart email with the unsubscribe footer and headers.
+ */
+export const OUTREACH_STYLES = ["personal", "classic"] as const;
+export type OutreachStyle = (typeof OUTREACH_STYLES)[number];
 
 export interface IProspectMailJob extends Document {
   prospectId: mongoose.Types.ObjectId;
   batchId: string;
   kind: JobKind;
+  style: OutreachStyle;
   /** The template as approved — merge fields still in it. */
   subject: string;
   body: string;
@@ -38,6 +46,8 @@ export interface IProspectMailJob extends Document {
   sentAt?: Date;
   providerMessageId: string;
   via: "" | "ses" | "stub";
+  /** Drawn at send time: how long the queue waits after THIS send (jitter). */
+  gapAfterMs?: number;
   byEmail: string;
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +58,8 @@ const jobSchema = new Schema<IProspectMailJob>(
     prospectId: { type: Schema.Types.ObjectId, ref: "InfluencerProspect", required: true, index: true },
     batchId: { type: String, required: true, index: true },
     kind: { type: String, enum: JOB_KINDS, required: true },
+    // Rows written before personal mode existed were all classic.
+    style: { type: String, enum: OUTREACH_STYLES, default: "classic" },
     subject: { type: String, required: true, maxlength: 200 },
     body: { type: String, required: true, maxlength: 6000 },
     aiAssisted: { type: Boolean, default: false },
@@ -59,6 +71,7 @@ const jobSchema = new Schema<IProspectMailJob>(
     sentAt: { type: Date, index: true },
     providerMessageId: { type: String, default: "" },
     via: { type: String, enum: ["", "ses", "stub"], default: "" },
+    gapAfterMs: { type: Number },
     byEmail: { type: String, default: "", lowercase: true, trim: true },
   },
   { timestamps: true }

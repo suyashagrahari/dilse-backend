@@ -68,6 +68,11 @@ export interface IInfluencerProspect extends Document {
   lastReplyAt?: Date;
 
   threadId?: mongoose.Types.ObjectId;
+  /**
+   * The style of the first email, set when it is sent. A follow-up or reply
+   * keeps it, so the conversation comes from the same sender throughout.
+   */
+  outreachStyle?: "personal" | "classic";
   /** Secret in the unsubscribe link. Unique, never shown in the admin UI. */
   unsubscribeToken: string;
   unsubscribedAt?: Date;
@@ -113,6 +118,7 @@ const prospectSchema = new Schema<IInfluencerProspect>(
     lastReplyAt: { type: Date },
 
     threadId: { type: Schema.Types.ObjectId, ref: "EmailThread" },
+    outreachStyle: { type: String, enum: ["personal", "classic"] },
     unsubscribeToken: { type: String, required: true, unique: true },
     unsubscribedAt: { type: Date },
     bouncedAt: { type: Date },
