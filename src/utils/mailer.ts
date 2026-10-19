@@ -892,6 +892,32 @@ export async function sendWeddingRsvpDigestEmail(opts: {
   }
 }
 
+/** A guest's blessing from the wall (the Royal tier) — one mail each, so the couple keeps them all. */
+export async function sendWeddingBlessingEmail(opts: { to: string; coupleA: string; coupleB: string; name: string; message: string; link: string }): Promise<void> {
+  const couple = wCouple(opts.coupleA, opts.coupleB);
+  const who = wOneLine(opts.name) || "A guest";
+  const message = (opts.message || "").replace(/\r\n?/g, "\n").slice(0, 300);
+  const subject = `A blessing from ${who} 🙏`.slice(0, 140);
+  const head = `${who} left you a blessing`;
+  const bodyHtml = `<p style="margin:0;padding:16px 18px;border-radius:12px;background:#fbf3e3;font-size:17px;line-height:1.7;font-style:italic;word-break:break-word;text-align:center;">“${wEsc(message).replace(/\n/g, "<br />")}”</p>`;
+  if (!resend) {
+    console.log(`\n[WEDDING BLESSING — no RESEND_API_KEY] To: ${opts.to} | ${subject} | ${message}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${who} left a blessing for you: “${message}”\n\nSee every blessing: ${opts.link}\n\n— SubhSandesh`,
+      html: weddingMailShell({ eyebrow: `Blessings · ${couple}`, head, bodyHtml, link: opts.link, button: "See every blessing" }),
+    });
+  } catch (err) {
+    console.error("[WEDDING BLESSING] Failed to send email:", err);
+  }
+}
+
 function escapeHtml(s: string): string {
   return (s || "")
     .replace(/&/g, "&amp;")

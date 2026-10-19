@@ -167,6 +167,8 @@ router.use("/digital-bouquet-pages", makeValentineDayRouter("digital-bouquet"));
 router.use("/wedding-invitation-pages", makeValentineDayRouter("wedding-invitation"));
 // Wedding Invitation ✦ Premium — story, every function, gallery, RSVP per function. Same engine + wedding kit routes.
 router.use("/wedding-invitation-premium-pages", makeValentineDayRouter("wedding-invitation-premium"));
+// Royal Wedding Invitation 👑 ($20 wedding tier) — same engine; guest RSVP + blessings routes mount with it.
+router.use("/royal-wedding-invitation-pages", makeValentineDayRouter("royal-wedding-invitation"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.

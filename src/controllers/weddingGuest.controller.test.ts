@@ -24,7 +24,7 @@ function world(slug: string, opts: { password?: string } = {}) {
   };
   const rsvps: (RsvpRecord & { tokenHash: string; digestSentAt?: Date })[] = [];
   const blessings: BlessingRecord[] = [];
-  const mails: { kind: "single" | "digest"; n: number; heads: number }[] = [];
+  const mails: { kind: "single" | "digest" | "blessing"; n: number; heads: number; text?: string }[] = [];
   let clock = new Date("2026-12-01T10:00:00Z");
   const deps: Partial<WeddingGuestDeps> = {
     findPublishedPage: async (s) => (s === page.shareId ? page : null),
@@ -63,6 +63,7 @@ function world(slug: string, opts: { password?: string } = {}) {
     shareUrl: async () => "https://subhsandesh.in/x",
     sendSingle: async (o) => { mails.push({ kind: "single", n: 1, heads: o.totals.heads }); },
     sendDigest: async (o) => { mails.push({ kind: "digest", n: o.rsvps.length, heads: o.totals.heads }); },
+    sendBlessing: async (o) => { mails.push({ kind: "blessing", n: 1, heads: 0, text: `${o.name}: ${o.message}` }); },
     now: () => clock,
   };
   return { page, rsvps, blessings, mails, deps, tick: (ms: number) => { clock = new Date(clock.getTime() + ms); } };
@@ -176,6 +177,9 @@ describe("wedding guests: password gate + blessings", () => {
   it("posts blessings, shows approved ones only, lets the owner hide one", async () => {
     const b = await s.call("POST", "/share/share-1/blessing", { name: "Nani", message: "सदा सुखी रहो", password: "lotus" });
     assert.equal(b.status, 201);
+    await flush();
+    // The owner is mailed every blessing.
+    assert.deepEqual(w.mails.filter((m) => m.kind === "blessing").map((m) => m.text), ["Nani: सदा सुखी रहो"]);
     const bid = (b.json.blessing as { id: string }).id;
     const list = await s.call("GET", "/share/share-1/blessings", undefined, { "x-page-password": "lotus" });
     assert.equal((list.json.blessings as unknown[]).length, 1);

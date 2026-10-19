@@ -174,6 +174,7 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: VALENTINE_DAY_MODELS["digital-bouquet"] as unknown as mongoose.Model<unknown>, templateType: "digital-bouquet", editorRoute: "/digital-bouquet", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["wedding-invitation"] as unknown as mongoose.Model<unknown>, templateType: "wedding-invitation", editorRoute: "/wedding-invitation", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["wedding-invitation-premium"] as unknown as mongoose.Model<unknown>, templateType: "wedding-invitation-premium", editorRoute: "/wedding-invitation-premium", projectShared: valentineShared },
+  { model: VALENTINE_DAY_MODELS["royal-wedding-invitation"] as unknown as mongoose.Model<unknown>, templateType: "royal-wedding-invitation", editorRoute: "/royal-wedding-invitation", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["proposal-premium"] as unknown as mongoose.Model<unknown>, templateType: "proposal-premium", editorRoute: "/proposal-premium", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["happy-anniversary"] as unknown as mongoose.Model<unknown>, templateType: "happy-anniversary", editorRoute: "/happy-anniversary", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["anniversary-premium"] as unknown as mongoose.Model<unknown>, templateType: "anniversary-premium", editorRoute: "/anniversary-premium", projectShared: valentineShared },
