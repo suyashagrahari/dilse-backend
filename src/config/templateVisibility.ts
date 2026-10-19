@@ -120,6 +120,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "miss-you-premium",
   // I'm Sorry ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "sorry-premium",
+  // Digital Bouquet ✦ Premium ships hidden the same way; released (and priced) by the super admin.
+  "digital-bouquet",
   // The Proposal ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "proposal-premium",
   // Happy Anniversary ships hidden the same way; released (and priced) by the super admin.

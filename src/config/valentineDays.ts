@@ -63,6 +63,8 @@ export const BASE_DAY_SLUGS = [
   "happy-anniversary",
   // Anniversary ✦ Premium ("The Book of Us") — the flagship anniversary page on the engine.
   "anniversary-premium",
+  // Digital Bouquet ✦ Premium — the sender arranges a bouquet stem by stem; it blooms for them.
+  "digital-bouquet",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -157,6 +159,12 @@ export const VW_LIMITS = {
 } as const;
 
 const RUNAWAY_LINES = 28;
+
+/** Digital Bouquet: the sixteen flowers on the studio shelf (client DB_FLOWERS ids). */
+export const BOUQUET_FLOWERS = [
+  "rose-red", "rose-pink", "rose-white", "tulip", "sunflower", "peony", "lily", "daisy",
+  "lavender", "carnation", "orchid", "babys-breath", "cherry-blossom", "lotus", "marigold", "hydrangea",
+] as const;
 
 export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
   // ── 7 Feb ── hold to bloom, pluck to love ──────────────────────────────────
@@ -859,6 +867,81 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "lock", kind: "enum", options: ["none", "passcode", "countdown"], default: "none" },
       { key: "openOn", kind: "text", max: 10 },
       { key: "passHint", kind: "text", max: 50 },
+    ],
+  },
+  // ── Digital Bouquet ✦ Premium ── the sender ARRANGES a bouquet in a little
+  //    studio (each stem: which flower, where, tilt, size, layer), picks the
+  //    greenery, the wrapping paper, the ribbon and bow and a few charms, and
+  //    writes a card. The recipient gets a delivery at the door, pulls the
+  //    ribbon, watches it bloom stem by stem in exactly that arrangement, taps
+  //    each flower for its meaning (+ the sender's own line), waters it, finds
+  //    the photos tucked among the petals, opens the card and answers with a
+  //    reaction (every reaction is a yes; which one lands in reactions.count). ─
+  "digital-bouquet": {
+    title: "Digital Bouquet",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client DB_TRACK, Perfect) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["b1-delivery", "b2-bloom", "b3-water", "b4-photos", "b5-letter", "b6-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["blushGarden", "peachSorbet", "lilacDream", "sageMorning"], default: "blushGarden" },
+      { key: "tone", kind: "enum", options: ["romantic", "sweet", "playful"], default: "romantic" },
+      /**
+       * The arrangement, one row per stem, in the studio's own coordinates:
+       * x/y = the bloom's centre on a 1000×1000 bouquet canvas (the tie point
+       * is bottom-centre), rot = degrees, scale = percent, z = layer. No text
+       * leaf, so every row is kept (capped at 15).
+       */
+      {
+        key: "stems",
+        kind: "objlist",
+        maxItems: 15,
+        minItems: 3,
+        item: [
+          {
+            key: "flower",
+            kind: "enum",
+            options: BOUQUET_FLOWERS,
+            default: "rose-red",
+          },
+          { key: "x", kind: "number", min: 0, max: 1000, default: 500 },
+          { key: "y", kind: "number", min: 0, max: 1000, default: 400 },
+          { key: "rot", kind: "number", min: -60, max: 60, default: 0 },
+          { key: "scale", kind: "number", min: 60, max: 150, default: 100 },
+          { key: "z", kind: "number", min: 0, max: 99, default: 0 },
+        ],
+      },
+      { key: "greenery", kind: "enum", options: ["mixed", "eucalyptus", "fern", "leafy", "none"], default: "mixed" },
+      { key: "wrap", kind: "enum", options: ["tissue", "kraft", "newspaper", "pearl"], default: "tissue" },
+      { key: "ribbon", kind: "enum", options: ["rose", "blush", "red", "gold", "lilac", "sage", "ivory"], default: "rose" },
+      { key: "bow", kind: "enum", options: ["bow", "knot", "twine"], default: "bow" },
+      /** Little charms tied to the bouquet: "heart" · "teddy" · "butterfly" (the client ignores anything else). */
+      { key: "charms", kind: "list", maxItems: 3, itemMax: 12 },
+      /** Written on the little gift tag on the ribbon. */
+      { key: "giftTag", kind: "text", max: 40 },
+      /** The courier's note on the delivery box at the door. */
+      { key: "deliveryLine", kind: "text", max: 70 },
+      /** The sender's own line per flower kind, shown under its meaning when they tap it. */
+      {
+        key: "flowerNotes",
+        kind: "objlist",
+        maxItems: 16,
+        item: [
+          {
+            key: "flower",
+            kind: "enum",
+            options: BOUQUET_FLOWERS,
+            default: "rose-red",
+          },
+          { key: "note", kind: "text", max: 80 },
+        ],
+      },
+      /** The card's handwriting. */
+      { key: "cardHand", kind: "enum", options: ["script", "hand", "serif"], default: "hand" },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish

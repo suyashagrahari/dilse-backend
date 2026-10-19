@@ -171,6 +171,7 @@ export const TEMPLATE_LOOKUPS: TemplateLookup[] = [
   { model: VALENTINE_DAY_MODELS["miss-you-premium"] as unknown as mongoose.Model<unknown>, templateType: "miss-you-premium", editorRoute: "/miss-you-premium", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["will-you-be-mine"] as unknown as mongoose.Model<unknown>, templateType: "will-you-be-mine", editorRoute: "/will-you-be-mine", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["sorry-premium"] as unknown as mongoose.Model<unknown>, templateType: "sorry-premium", editorRoute: "/sorry-premium", projectShared: valentineShared },
+  { model: VALENTINE_DAY_MODELS["digital-bouquet"] as unknown as mongoose.Model<unknown>, templateType: "digital-bouquet", editorRoute: "/digital-bouquet", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["proposal-premium"] as unknown as mongoose.Model<unknown>, templateType: "proposal-premium", editorRoute: "/proposal-premium", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["happy-anniversary"] as unknown as mongoose.Model<unknown>, templateType: "happy-anniversary", editorRoute: "/happy-anniversary", projectShared: valentineShared },
   { model: VALENTINE_DAY_MODELS["anniversary-premium"] as unknown as mongoose.Model<unknown>, templateType: "anniversary-premium", editorRoute: "/anniversary-premium", projectShared: valentineShared },

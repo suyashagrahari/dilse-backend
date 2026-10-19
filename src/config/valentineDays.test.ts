@@ -6,6 +6,7 @@ import { sorryPremium } from "./aiFill/sorry-premium";
 import { proposalPremium } from "./aiFill/proposal-premium";
 import { happyAnniversary } from "./aiFill/happy-anniversary";
 import { anniversaryPremium } from "./aiFill/anniversary-premium";
+import { digitalBouquet } from "./aiFill/digital-bouquet";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -89,9 +90,9 @@ describe("sanitizeMusic — the template's own track", () => {
     // A stored "track" on a slug that lost its track degrades to the melody.
     assert.equal(sanitizeMusic({ musicStart: 5 }, tr).musicMode, "melody");
   });
-  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You, Will You Be Mine and their premium editions and both Anniversary pages ship a track", () => {
+  it("only the two Halloween slugs, Sorry, Happy Birthday, Miss You, Will You Be Mine and their premium editions and both Anniversary pages and the Digital Bouquet ship a track", () => {
     const withTrack = (Object.keys(VALENTINE_DAYS) as (keyof typeof VALENTINE_DAYS)[]).filter((s) => VALENTINE_DAYS[s].musicTrack).sort();
-    assert.deepEqual(withTrack, ["anniversary-premium", "birthday-premium", "happy-anniversary", "happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "miss-you-premium", "proposal-premium", "sorry", "sorry-premium", "will-you-be-mine"]);
+    assert.deepEqual(withTrack, ["anniversary-premium", "birthday-premium", "digital-bouquet", "happy-anniversary", "happy-birthday", "happy-halloween", "happy-halloween-premium", "miss-you", "miss-you-premium", "proposal-premium", "sorry", "sorry-premium", "will-you-be-mine"]);
   });
 });
 
@@ -124,6 +125,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   ],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
+  "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "question", "yesLine"],
   "sorry-premium": ["palette", "tone", "togetherSince", "knockLine", "confession", "feelings", "lessons", "stars", "promises", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -167,14 +169,14 @@ describe("Valentine's week day configs", () => {
       // The flagship anniversary book carries the ultra-premium limits (pinned in its own suite).
       if (slug === "anniversary-premium") continue;
       // The ✦ premium editions carry one sticker per act.
-      assert.equal(d.gifSlots.length, slug === "proposal-premium" ? 7 : slug === "miss-you-premium" || slug === "sorry-premium" || slug === "happy-anniversary" ? 6 : 5, slug);
+      assert.equal(d.gifSlots.length, slug === "proposal-premium" ? 7 : slug === "miss-you-premium" || slug === "sorry-premium" || slug === "happy-anniversary" || slug === "digital-bouquet" ? 6 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
       assert.ok(d.letterMax === 1500 || d.letterMax === 2000, slug);
       assert.notEqual(d.premium, true, slug);
     }
     assert.deepEqual(
       BASE_DAY_SLUGS.filter((s) => VALENTINE_DAYS[s].asksQuestion),
-      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "birthday-premium", "miss-you", "will-you-be-mine", "miss-you-premium", "sorry-premium", "proposal-premium", "happy-anniversary", "anniversary-premium"]
+      ["happy-propose-day", "happy-valentines-day", "happy-halloween", "dandiya-partner", "sorry", "happy-birthday", "birthday-premium", "miss-you", "will-you-be-mine", "miss-you-premium", "sorry-premium", "proposal-premium", "happy-anniversary", "anniversary-premium", "digital-bouquet"]
     );
   });
 
@@ -825,5 +827,52 @@ describe("Anniversary Premium extras", () => {
     assert.equal(d.gifSlots.length, 6);
     assert.deepEqual([d.maxPhotos, d.letterMax], [10, 2500]);
     assert.notEqual(d.premium, true);
+  });
+});
+
+describe("Digital Bouquet ✦ Premium extras", () => {
+  it("keeps every arranged stem (no text leaf), clamps the geometry and caps at 15", () => {
+    const stems = Array.from({ length: 20 }, (_, k) => ({ flower: k === 0 ? "cactus" : "peony", x: 5000, y: -40, rot: 999, scale: 10, z: 7.6, evil: "x" }));
+    const out = sanitizeExtras("digital-bouquet", { stems });
+    const st = out.stems as Record<string, unknown>[];
+    assert.equal(st.length, 15);
+    assert.deepEqual(st[0], { flower: "rose-red", x: 1000, y: 0, rot: 60, scale: 60, z: 8 });
+    assert.equal(st[1].flower, "peony");
+    assert.equal("evil" in st[1], false);
+  });
+
+  it("looks fall back to their defaults; notes, tag and courier line are capped", () => {
+    const out = sanitizeExtras("digital-bouquet", {
+      palette: "neon",
+      wrap: "plastic",
+      ribbon: "black",
+      bow: "chain",
+      greenery: "cactus",
+      cardHand: "comic",
+      giftTag: "t".repeat(90),
+      deliveryLine: "d".repeat(200),
+      charms: ["heart", "teddy", "butterfly", "x"],
+      flowerNotes: [{ flower: "tulip", note: "n".repeat(200) }, { flower: "lily", note: "" }],
+    });
+    assert.deepEqual([out.palette, out.wrap, out.ribbon, out.bow, out.greenery, out.cardHand], ["blushGarden", "tissue", "rose", "bow", "mixed", "hand"]);
+    assert.equal((out.giftTag as string).length, 40);
+    assert.equal((out.deliveryLine as string).length, 70);
+    assert.equal((out.charms as string[]).length, 3);
+    const notes = out.flowerNotes as { flower: string; note: string }[];
+    // A note row left blank is dropped.
+    assert.deepEqual(notes.map((n) => [n.flower, n.note.length]), [["tulip", 80]]);
+  });
+
+  it("asks a (yes-only) question, ships its own track, six GIF slots; its AI schema is valid", () => {
+    const d = VALENTINE_DAYS["digital-bouquet"];
+    assert.equal(d.asksQuestion, true);
+    assert.equal(d.musicTrack, true);
+    assert.equal(d.gifSlots.length, 6);
+    assert.deepEqual([d.maxPhotos, d.letterMax], [6, 1500]);
+    assert.deepEqual(validateSchema(digitalBouquet), []);
+    for (const f of digitalBouquet.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(d.extras.some((e) => e.key === key), f.path);
+    }
   });
 });
