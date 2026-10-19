@@ -9,6 +9,7 @@ import { anniversaryPremium } from "./aiFill/anniversary-premium";
 import { digitalBouquet } from "./aiFill/digital-bouquet";
 import { weddingInvitation } from "./aiFill/wedding-invitation";
 import { isWeddingSlug, WEDDING_TIER_LIMITS } from "./weddingShared";
+import { weddingInvitationPremium } from "./aiFill/wedding-invitation-premium";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -129,6 +130,9 @@ const PINNED_KEYS: Record<string, string[]> = {
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "question", "yesLine"],
   "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests"],
+  "wedding-invitation-premium": [
+    "theme", "order", "motif", "hindi", "date", "time", "city", "hashtag", "brideParents", "brideNote", "groomParents", "groomNote", "events", "story", "faqs", "rsvpBy", "maxGuests", "rsvpMeal",
+  ],
   "sorry-premium": ["palette", "tone", "togetherSince", "knockLine", "confession", "feelings", "lessons", "stars", "promises", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -913,6 +917,49 @@ describe("Wedding Invitation (Classic)", () => {
     for (const p of paths.filter((x) => x.startsWith("extras."))) {
       const key = p.slice("extras.".length).split(/[.[]/)[0];
       assert.ok(d.extras.some((f) => f.key === key), p);
+    }
+  });
+});
+
+
+describe("Wedding Invitation ✦ Premium extras", () => {
+  it("tier limits: 5 functions, 5 story moments, 3 good-to-know notes, 20 photos; asks nothing", () => {
+    const d = VALENTINE_DAYS["wedding-invitation-premium"];
+    assert.equal(d.asksQuestion, false);
+    assert.deepEqual([d.maxPhotos, d.letterMax, d.gifSlots.length], [20, 1200, 0]);
+    const cap = (k: string) => (d.extras.find((e) => e.key === k) as { maxItems: number }).maxItems;
+    assert.deepEqual([cap("events"), cap("story"), cap("faqs")], [5, 5, 3]);
+  });
+
+  it("keeps the function ids the RSVP refers to, caps rows and falls back to a known theme", () => {
+    const events = Array.from({ length: 8 }, (_, k) => ({ id: `e${k}`, title: `F${k}`, date: "2027-02-12", time: "19:30", venue: "v".repeat(200), evil: 1 }));
+    const out = sanitizeExtras("wedding-invitation-premium", {
+      theme: "neon",
+      events,
+      story: [{ when: "2018", title: "Met", text: "t", photo: 99 }, { when: "", title: "", text: "", photo: 3 }],
+      faqs: Array.from({ length: 5 }, () => ({ title: "Parking", text: "At the gate" })),
+      maxGuests: 40,
+    });
+    assert.equal(out.theme, "blush");
+    const ev = out.events as Record<string, unknown>[];
+    assert.equal(ev.length, 5);
+    assert.equal(ev[0].id, "e0");
+    assert.equal((ev[0].venue as string).length, 80);
+    assert.equal("evil" in ev[0], false);
+    const st = out.story as Record<string, unknown>[];
+    // A moment with no words is dropped; the photo index is clamped.
+    assert.deepEqual(st, [{ when: "2018", title: "Met", text: "t", photo: 20 }]);
+    assert.equal((out.faqs as unknown[]).length, 3);
+    assert.equal(out.maxGuests, 10);
+  });
+
+  it("its AI schema is valid and only writes keys the page stores", () => {
+    const d = VALENTINE_DAYS["wedding-invitation-premium"];
+    assert.deepEqual(validateSchema(weddingInvitationPremium), []);
+    assert.ok(weddingInvitationPremium.fields.length <= 40);
+    for (const f of weddingInvitationPremium.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(d.extras.some((e) => e.key === key), f.path);
     }
   });
 });

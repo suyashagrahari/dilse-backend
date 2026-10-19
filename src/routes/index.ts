@@ -165,6 +165,8 @@ router.use("/sorry-premium-pages", makeValentineDayRouter("sorry-premium"));
 router.use("/digital-bouquet-pages", makeValentineDayRouter("digital-bouquet"));
 // Wedding Invitation (Classic, $5) — the wax-seal envelope invite. Same engine (+ wedding guest RSVPs).
 router.use("/wedding-invitation-pages", makeValentineDayRouter("wedding-invitation"));
+// Wedding Invitation ✦ Premium — story, every function, gallery, RSVP per function. Same engine + wedding kit routes.
+router.use("/wedding-invitation-premium-pages", makeValentineDayRouter("wedding-invitation-premium"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.

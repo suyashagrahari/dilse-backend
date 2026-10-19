@@ -67,6 +67,8 @@ export const BASE_DAY_SLUGS = [
   "digital-bouquet",
   // Wedding Invitation (Classic, $5) — a wax-sealed envelope that opens to an elegant one-page invite.
   "wedding-invitation",
+  // Wedding Invitation ✦ Premium — a scroll-told wedding website (story, every function, gallery, RSVP per function).
+  "wedding-invitation-premium",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -989,6 +991,81 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "rsvp", kind: "bool", default: true },
       { key: "rsvpBy", kind: "text", max: 10 },
       { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+    ],
+  },
+  // ── Wedding Invitation ✦ Premium ── a scroll-told wedding website: an
+  //    envelope opens on a gold-foil monogram, then the couple, a flip-digit
+  //    countdown, the invitation, "our story" moments, both families, up to
+  //    five functions (dress code, map, timings), a 20-photo masonry gallery,
+  //    good-to-know notes and an RSVP where guests tick each function (the
+  //    wedding kit's own routes: config/weddingShared.ts). recipientName =
+  //    the bride, senderName = the groom, letter = the invitation, endLine =
+  //    the closing thank-you. photos[0] is the cover. No yes/no question. ─
+  "wedding-invitation-premium": {
+    title: "Wedding Invitation ✦ Premium",
+    maxPhotos: 20,
+    letterMax: 1200,
+    asksQuestion: false,
+    gifSlots: [],
+    extras: [
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "blush" },
+      /** Whose name is printed first. */
+      { key: "order", kind: "enum", options: ["bride", "groom"], default: "bride" },
+      /** The blessing ornament over the invitation (a Christian or court wedding picks rings or none). */
+      { key: "motif", kind: "enum", options: ["ganesha", "lotus", "rings", "none"], default: "ganesha" },
+      /** Small Hindi lines under the section titles. */
+      { key: "hindi", kind: "bool", default: true },
+      /** The main day, "YYYY-MM-DD" + "HH:mm" (countdown + calendar). */
+      { key: "date", kind: "text", max: 10 },
+      { key: "time", kind: "text", max: 5 },
+      { key: "city", kind: "text", max: 40 },
+      { key: "hashtag", kind: "text", max: 40 },
+      { key: "brideParents", kind: "text", max: 90 },
+      { key: "brideNote", kind: "text", max: 90 },
+      { key: "groomParents", kind: "text", max: 90 },
+      { key: "groomNote", kind: "text", max: 90 },
+      {
+        key: "events",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "id", kind: "text", max: 40 },
+          { key: "title", kind: "text", max: 30 },
+          { key: "date", kind: "text", max: 10 },
+          { key: "time", kind: "text", max: 5 },
+          { key: "endTime", kind: "text", max: 5 },
+          { key: "venue", kind: "text", max: 80 },
+          { key: "address", kind: "text", max: 140 },
+          { key: "mapUrl", kind: "text", max: 300 },
+          { key: "dressCode", kind: "text", max: 50 },
+          { key: "note", kind: "text", max: 220 },
+        ],
+      },
+      /** "Our story": up to five moments; photo = 1-based index into photos (0 = none). */
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "when", kind: "text", max: 30 },
+          { key: "title", kind: "text", max: 50 },
+          { key: "text", kind: "longtext", max: 320 },
+          { key: "photo", kind: "number", min: 0, max: 20, default: 0 },
+        ],
+      },
+      /** Good to know: dress code, parking, stay, contacts. */
+      {
+        key: "faqs",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "title", kind: "text", max: 40 },
+          { key: "text", kind: "text", max: 220 },
+        ],
+      },
+      { key: "rsvpBy", kind: "text", max: 10 },
+      { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+      { key: "rsvpMeal", kind: "bool", default: false },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish

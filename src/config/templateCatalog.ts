@@ -81,6 +81,7 @@ const LABELS: Record<string, string> = {
   "sorry-premium": "I'm Sorry ✦ Premium",
   "digital-bouquet": "Digital Bouquet ✦",
   "wedding-invitation": "Wedding Invitation",
+  "wedding-invitation-premium": "Wedding Invitation ✦ Premium",
   "proposal-premium": "The Proposal ✦ Premium",
   "happy-anniversary": "Happy Anniversary",
   "anniversary-premium": "Anniversary ✦ Premium",

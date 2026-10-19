@@ -124,6 +124,8 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "digital-bouquet",
   // Wedding Invitation (Classic, $5) ships hidden the same way; released (and priced) by the super admin.
   "wedding-invitation",
+  // Wedding Invitation ✦ Premium ships hidden the same way; released (and priced) by the super admin.
+  "wedding-invitation-premium",
   // The Proposal ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "proposal-premium",
   // Happy Anniversary ships hidden the same way; released (and priced) by the super admin.
