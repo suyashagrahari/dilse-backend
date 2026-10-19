@@ -828,6 +828,9 @@ describe("personal: SES refusing the sender is said plainly", () => {
     assert.match(msg, /Sender isn't allowed yet: SES refused to send as yash@subhsandesh\.in/);
     assert.match(msg, /add-personal-sender\.sh/);
     assert.match(msg, /Nothing was sent from another address/);
+    const raw = personalSenderBlockedMessage("yash@subhsandesh.in", "User arn:aws:iam::1:user/x is not authorized to perform: ses:SendRawEmail on resource …");
+    assert.match(raw, /^Sender isn't allowed yet: SES refused the email with the screenshot/, "keeps the prefix the Send-button release matches");
+    assert.match(raw, /ses:SendRawEmail/);
   });
 });
 

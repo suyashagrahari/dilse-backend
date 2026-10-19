@@ -845,7 +845,13 @@ export function isSenderNotAllowedError(message: string): boolean {
   return /not authori[sz]ed to perform\W+ses:Send(Raw)?Email/i.test(m) || /ses:FromAddress/i.test(m);
 }
 
-export function personalSenderBlockedMessage(address: string): string {
+export function personalSenderBlockedMessage(address: string, awsMessage = ""): string {
+  // An email carrying the screenshot goes out as a raw MIME message, which IAM
+  // checks as ses:SendRawEmail — a policy that only allows ses:SendEmail
+  // refuses it even though the address is on the list. Say which one it was.
+  if (/ses:SendRawEmail/i.test(awsMessage)) {
+    return `Sender isn't allowed yet: SES refused the email with the screenshot from ${address} — the IAM policy allows ses:SendEmail but not ses:SendRawEmail, which an attached image needs. Add ses:SendRawEmail to the policy, or send without the screenshot. Nothing was sent from another address.`;
+  }
   return `Sender isn't allowed yet: SES refused to send as ${address} (the IAM policy's ses:FromAddress list doesn't include it). Add it to the policy (add-personal-sender.sh) or switch these emails to Classic. Nothing was sent from another address.`;
 }
 

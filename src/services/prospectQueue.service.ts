@@ -333,7 +333,7 @@ export async function processProspectQueueOnce(
     if (style === "personal" && error instanceof SesSendError && isSenderNotAllowedError(msg)) {
       // The IAM policy does not (yet) allow the person's address. Nothing was
       // sent. The job waits — it is never retried from the team address.
-      const message = personalSenderBlockedMessage(person.fromAddress);
+      const message = personalSenderBlockedMessage(person.fromAddress, msg);
       personalBlocked = { message, at: now };
       lastError = message;
       await ProspectMailJob.updateOne(
