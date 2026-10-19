@@ -232,7 +232,7 @@ export function proofFactsForPrompt(p: ProofSnapshot): string {
     `REAL NUMBERS — from our ${SOURCE_NAME[p.source]}, ${p.periodLabel}. These are the ONLY numbers you may write:`,
     ...stats.map((s) => `- ${s.value} — ${s.label}: ${statMeaning(p.source, s.label)}.`),
     "How to use them: ONE natural sentence, in your own words, using one or two of these numbers written exactly as above (you may say “about” or “over” before a number). Say truthfully what the number counts — Google Search visits are visits from Google Search, impressions are times shown in Google — never call them users or customers unless the line above says users.",
-    "Then, in the same or the next sentence, connect it to them: the people who find these pages are mostly couples looking for something for a birthday, an anniversary or to say sorry — the same people who watch their videos.",
+    "Then, in the same or the next sentence, connect it to them: people come to SubhSandesh to make something for someone they love — a birthday, an anniversary, a sorry — the same kind of people who watch their videos. Never claim who the visitors are (e.g. 'mostly couples'); the numbers don't show that.",
   ].join("\n");
 }
 

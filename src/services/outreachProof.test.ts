@@ -194,7 +194,7 @@ describe("the linter lets through the proof's numbers — and only those", () =>
     `Hey Om and Diya,\n\nI'm Yash from SubhSandesh. Your Hindi couple reels from Jaipur are so warm and easy to watch.\n\nWe make little interactive pages people send someone they love: birthday surprises, miss-you notes, proposals. ${numbers}\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link your followers can use.\n\nWould you be up for trying one together?`;
   const lint = (b: string, allowedNumbers?: string[]) =>
     lintOutreach("Om & Diya, a reel idea from SubhSandesh", b, { commissionPercent: 30, kind: "initial", style: "personal", writer: "Yash", allowedNumbers });
-  const LINE = "In the last 3 months about 52K people found us through Google Search alone, mostly couples planning birthdays and anniversaries.";
+  const LINE = "In the last 3 months about 52K people found us through Google Search alone, looking for something special for a birthday or an anniversary.";
 
   it("allows 52K / 3 months with the proof", () => {
     const r = lint(body(LINE), ALLOWED);
@@ -249,7 +249,7 @@ describe("the parse step: a model draft with numbers passes only with the proof"
   const raw = JSON.stringify({
     reading: "Intro with numbers",
     subject: "x",
-    body: "Hey Om and Diya,\n\nI'm Yash from SubhSandesh. Your Hindi couple reels from Jaipur are lovely.\n\nWe make little interactive pages people send someone they love — birthday surprises, miss-you notes, proposals. In the last 3 months about 52K people found us through Google Search alone, mostly couples planning birthdays and anniversaries.\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link to share.\n\nWould you be up for trying one together?",
+    body: "Hey Om and Diya,\n\nI'm Yash from SubhSandesh. Your Hindi couple reels from Jaipur are lovely.\n\nWe make little interactive pages people send someone they love — birthday surprises, miss-you notes, proposals. In the last 3 months about 52K people found us through Google Search alone, looking for something special for a birthday or an anniversary.\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link to share.\n\nWould you be up for trying one together?",
   });
 
   it("passes with the proof in the context", () => {
