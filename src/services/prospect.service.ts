@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { env } from "../config/env";
 import InfluencerProspect, { type IInfluencerProspect, type ProspectStatus } from "../models/InfluencerProspect";
-import ProspectMailJob, { type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
+import ProspectMailJob, { type IProspectMailJob, type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
 import EmailThread from "../models/EmailThread";
 import User from "../models/User";
 import { getInfluencerSettings } from "./influencer.service";
@@ -269,6 +269,8 @@ export interface EnqueueItem {
   style: OutreachStyle;
   /** The admin confirmed sending to someone marked not interested. */
   override?: boolean;
+  /** The traction proof snapshot (numbers allowed; screenshot inline when attach). */
+  proof?: IProspectMailJob["proof"];
 }
 
 /**
@@ -293,6 +295,7 @@ export async function enqueueJobs(
         body: it.body,
         aiAssisted: meta.aiAssisted,
         override: !!it.override,
+        proof: it.proof || null,
         state: "queued",
         live: true,
         notBefore: new Date(),

@@ -1,5 +1,8 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
+import multer from "multer";
+import { deleteProof, listProofs, updateProof, uploadProof } from "../controllers/outreachProof.controller";
+import { PROOF_MAX_BYTES } from "../services/outreachProof.service";
 import {
   getFullUserProfile,
   getPageContent,
@@ -136,6 +139,27 @@ router.post("/prospects/draft", perAdminKey("prospect-draft", 30, 10, "Too many 
 router.post("/prospects/preview", perAdminKey("prospect-preview", 400, 10, "Too many previews. Please wait."), previewProspectMail);
 router.post("/prospects/send", perAdminKey("prospect-send", 20, 60, "Too many sends in the last hour. Please wait."), sendProspectMail);
 router.post("/prospects/cancel", cancelProspectMail);
+// Traction screenshots (Prospects → Traction). Before "/prospects/:id", which
+// would otherwise read "proofs" as an id. The bytes are sniffed in the
+// service; multer only caps the size (a little over 5 MB, so the service
+// answers with a sentence instead of multer with a stack trace).
+const proofUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: PROOF_MAX_BYTES + 256 * 1024, files: 1 } });
+router.get("/prospects/proofs", listProofs);
+router.post(
+  "/prospects/proofs/upload",
+  perAdminKey("prospect-proof-upload", 30, 60, "Too many uploads in an hour."),
+  (req, res, next) =>
+    proofUpload.single("file")(req, res, (err: unknown) => {
+      if (err) {
+        res.status(400).json({ success: false, error: (err as { code?: string })?.code === "LIMIT_FILE_SIZE" ? "That image is over 5 MB — crop it or save it smaller." : "That upload could not be read." });
+        return;
+      }
+      next();
+    }),
+  uploadProof
+);
+router.patch("/prospects/proofs/:id", updateProof);
+router.delete("/prospects/proofs/:id", deleteProof);
 router.get("/prospects/:id", getProspect);
 router.patch("/prospects/:id", updateProspect);
 

@@ -185,6 +185,67 @@ Reply-to-opt-out and suppression stay in force either way.
 | `services/prospect.service.ts` | DB transitions: add + duplicate check, reply / unsubscribe / bounce / join |
 | `services/prospectQueue.service.ts` | the background sender (started in `server.ts`) |
 | `controllers/prospect.controller.ts` | `/api/admin/super/prospects/*` + the public unsubscribe |
+| `models/OutreachProof.ts` | a traction screenshot + the numbers the admin confirmed |
+| `services/outreachProof.service.ts` | sniff / strip / resize / store the screenshot, vision extraction, prompt facts, the allowed-number list, the inline image |
+| `services/prospectModel.service.ts` | which OpenAI model drafts (best on the key, cached; `PROSPECT_AI_MODEL` overrides) |
+| `services/mime.service.ts` | raw MIME for an email with an inline image (nodemailer MailComposer) |
+| `controllers/outreachProof.controller.ts` | `/api/admin/super/prospects/proofs*` |
+
+## Traction: real numbers in the email
+
+Prospects → **Traction**. Upload a Google Search Console / Google Analytics
+screenshot (PNG/JPG/WebP, ≤ 5 MB). The server checks the bytes (not the
+declared type), applies EXIF orientation and drops all metadata, resizes to
+≤ 1600 px wide, re-encodes as PNG (JPEG if the PNG would exceed ~1.2 MB), and
+stores it at `gifts-media/outreach-proof/<id>.png` → `https://cdn.subhsandesh.in/…`.
+The vision model then reads the headline totals and pre-fills a form. **Nothing
+is usable until the admin presses Confirm numbers** (`active: true`); an upload
+that is discarded is deleted from the CDN too. One confirmed proof is the
+default (preselected in Generate). Replace swaps the image and asks for a
+re-confirm; Delete removes the row and the object (queued emails keep their
+snapshot and fail visibly if the image is gone).
+
+In **Generate**: *Show our numbers* (+ which proof) and *Attach the screenshot*.
+
+- The AI gets the confirmed **counts** only (never CTR %, average position,
+  rates) with what each one truthfully means: Search Console clicks = visits
+  from Google Search (not users), impressions = times shown in Google, GA users
+  = people. It writes ONE line, e.g. "In the last 3 months about 52K people
+  found us through Google Search alone, mostly couples planning birthdays and
+  anniversaries."
+- The linter (`allowedNumbers`) lets exactly those values through — `52.2K`,
+  the rounded `52K`, `52.2 thousand`, `2.75M`/`2.8M`/`2.7M`/`2.75 million`, and
+  the period's `3 months` — and still refuses every other digit, %, ₹ and the
+  pitch words. A first email with numbers may be 70–120 words (a follow-up
+  30–80).
+- *Attach the screenshot* (personal style only): the email goes as raw MIME —
+  `multipart/alternative` = `text/plain` (with "(screenshot of our Google
+  Search stats attached)" above the signature) + `multipart/related`
+  (`text/html` mirroring the text, `<img src="cid:…">`, the PNG inline). No
+  remote image, no designed template. Threading headers, Reply-To and the
+  quiet configuration set are kept. The Inbox check warns: images can nudge
+  Gmail toward Promotions; numbers in the text alone are safest for a first
+  email.
+- Defaults (remembered per browser, separately for first emails and later
+  ones): numbers on; image **off** for a first email, **on** for follow-ups,
+  new emails and replies.
+- The preview renders the HTML twin with the CDN URL in place of `cid:` — the
+  email exactly as sent, image included — plus From / Reply-To / Subject.
+- Each queued job carries a snapshot of the proof (`job.proof`), so the
+  send-time linter checks the same numbers and later edits change nothing
+  already queued. The image is fetched from our CDN at send time (≤ 3 MB,
+  cached); if it can't be fetched the email is retried, then failed — never
+  sent without the screenshot its text mentions.
+
+### Which model writes
+
+`PROSPECT_AI_MODEL` if set; otherwise the models list is read once per process
+and the newest bare GPT-5-family model is used (`gpt-5.5` on the current key —
+never -mini/-nano/-pro/-codex/dated/experimental), else o3, else gpt-4.1, else
+gpt-4o. Reasoning models get `reasoning_effort: low` and
+`max_completion_tokens`; a model that refuses the request falls back to gpt-4o
+once. The choice is logged (`[prospect AI] drafting with …`). Screenshot
+extraction uses the same model (image input).
 
 ## Deliverability measures
 
@@ -269,6 +330,8 @@ user — the conversation appears on their influencer page.
 | `PROSPECT_FOLLOWUP_DAYS` | `4` — when "Follow-up due" shows; advice only |
 | `PROSPECT_INSTANT` | on — Send goes out immediately; `0` brings back the paced queue |
 | `PUBLIC_API_URL` | derived: `api.subhsandesh.in` / `stag-api.subhsandesh.in` |
+| `PROSPECT_AI_MODEL` | unset — best model on the key (see "Which model writes") |
+| `S3_*` / `S3_PUBLIC_BASE_URL` | the existing media bucket; traction screenshots need `s3:PutObject` + `s3:DeleteObject` on `gifts-media/outreach-proof/*` |
 
 Classic From is `INFLUENCER_FROM_EMAIL`; Reply-To is `INFLUENCER_REPLY_TO_EMAIL`
 for both styles.

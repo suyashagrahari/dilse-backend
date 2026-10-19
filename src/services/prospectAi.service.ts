@@ -76,6 +76,8 @@ import {
   type OutreachStyle,
 } from "./prospectMail.service";
 import type { JobKind } from "../models/ProspectMailJob";
+import { prospectCompletion } from "./prospectModel.service";
+import { proofAllowedNumbers, proofFactsForPrompt, quotableStats, type ProofSnapshot } from "./outreachProof.service";
 
 export { ThreadAiRefusedError, ThreadAiUnavailableError };
 
@@ -115,7 +117,15 @@ export interface ProspectDraftContext {
   priorFollowups?: number;
   /** Which of the two drafts this is. Default "a". */
   angle?: DraftAngle;
+  /**
+   * "Show our numbers": the confirmed traction proof. Its counts are given to
+   * the model as facts and are the only numbers the linter lets through.
+   */
+  proof?: ProofSnapshot | null;
 }
+
+/** Does this draft carry a numbers line? (A proof with at least one quotable count.) */
+export const hasProof = (ctx: ProspectDraftContext) => !!ctx.proof && quotableStats(ctx.proof.stats).length > 0;
 
 export interface ProspectDraft {
   subject: string;
@@ -180,7 +190,8 @@ export function renderWhoWeAre(f: ProgrammeFacts, withLink = false): string {
     "WHO IS WRITING — the only things you may say about yourself and SubhSandesh in this email:",
     `- You are ${w}. You work at SubhSandesh, a small Indian company, and you write this yourself, in the first person: “I'm ${w}”, “I”. “We” and “our” mean only the company.`,
     "- What SubhSandesh makes, in plain words: little interactive pages people send to someone they love — birthday surprises, miss-you notes, anniversary pages, proposals. The person opens it on their phone.",
-    "- What you would like: to make a reel together with a few creators, where they make or open one of these pages for each other. You pay for it. Everything else is talked through once they reply.",
+    "- Who uses them: mostly young couples in India — someone planning a birthday or anniversary surprise, or trying to say sorry. The same people who watch couple and relationship videos.",
+    "- What you would like: to make a reel together with a few creators, where they make or open one of these pages for each other, in their own style. You pay for it, and they get their own link their followers can use to make one. The details (how much, how the link works) are talked through once they reply.",
     withLink ? `- If it helps, the page with the details is: ${f.joinUrl} (at most once, on its own line).` : "",
     `- TODAY is ${f.today}.`,
   ]
@@ -228,9 +239,15 @@ function personalBrief(ctx: ProspectDraftContext): string {
           ? "3. Why them, honestly: you came across {{instagram}} on Instagram. {{instagram}} becomes their @handle. Use no other {{ }} field and nothing specific to one person."
           : "3. ONE genuine, specific sentence about their content, built ONLY from ABOUT THEM. Prefer OUR NOTE over the niche label: pick its single most specific true detail (the language they create in, the kind of videos, where they are from) and say it in your own words, the way you'd tell them what you liked. Follower numbers stay out (no digits). If ABOUT THEM has nothing specific, simply say you came across their page on Instagram. Never invent a reel, a topic, a number or praise.",
         "4. One sentence on what SubhSandesh is, in plain human words, e.g. “we make little interactive pages people send their partner — birthday surprises, miss-you notes, proposals.”",
-        "5. The ask, as ONE soft, direct question that ends with a question mark — e.g. “Would you be up for making a reel together with one of these?” Right after it, say once and casually that you'd pay for it (e.g. “Happy to pay for it, of course.”).",
-        "End on the question. Everything else waits until they reply: how it works, amounts and web addresses do not appear. Write no digits at all.",
-        "Body: 50 to 100 words.",
+        ...(hasProof(ctx)
+          ? ["4b. ONE honest sentence with the real numbers from REAL NUMBERS (one or two of them), and why it matters to them: the people finding these pages are couples — exactly their audience. E.g. “In the last 3 months about 52K people found us through Google Search alone, mostly couples planning birthdays and anniversaries.”"]
+          : []),
+        "5. Why it is worth a reply for them, in one or two sentences: one concrete reel idea that fits their style (for example one of them surprising the other with a page on camera, and the reaction); you'd pay for it (said once, casually, e.g. “Happy to pay for it, of course.”); and they'd get their own link their followers can use.",
+        "6. The ask, as ONE soft, direct question that ends with a question mark — e.g. “Would you be up for trying one together?”",
+        hasProof(ctx)
+          ? "End on the question. Everything else waits until they reply: amounts and web addresses do not appear. The only digits allowed are the REAL NUMBERS, written as given."
+          : "End on the question. Everything else waits until they reply: how it works, amounts and web addresses do not appear. Write no digits at all.",
+        hasProof(ctx) ? "Body: 70 to 120 words — aim for about 100, never more than 120; the numbers sentence replaces words elsewhere, not adds to them." : "Body: 50 to 100 words.",
       ].join("\n");
     case "followup": {
       const n = (ctx.priorFollowups || 0) + 1;
@@ -239,9 +256,10 @@ function personalBrief(ctx: ProspectDraftContext): string {
         `PURPOSE: follow-up number ${n} from ${w} under your earlier note, which got no reply. It is sent in the SAME email thread, so do not introduce yourself again at length.`,
         template ? `1. ${greet} Use no other {{ }} fields.` : `1. ${greet}`,
         "2. Start straight with the reason for writing — no well-wishing opener. One or two short, warm lines in the first person: you know inboxes get busy; bring back the idea in a few words (a reel together with one of our pages).",
+        ...(hasProof(ctx) ? ["2b. Add ONE short sentence with one number from REAL NUMBERS that gives them a reason to reply (e.g. how many people found the pages through Google lately — mostly couples), unless the earlier note already said it."] : []),
         "3. One soft question asking whether they would be up for it. They have not said yes to anything yet, so never ask if they are “still” interested.",
-        link ? "You may add the page with the details from WHO IS WRITING once, on its own line, for them to look at — optional." : "No web address and no digits.",
-        "Body: 20 to 60 words.",
+        link ? "You may add the page with the details from WHO IS WRITING once, on its own line, for them to look at — optional." : hasProof(ctx) ? "No web address, and no digits except the REAL NUMBERS as given." : "No web address and no digits.",
+        hasProof(ctx) ? "Body: 30 to 80 words." : "Body: 20 to 60 words.",
       ].join("\n");
     }
     case "fresh":
@@ -249,8 +267,9 @@ function personalBrief(ctx: ProspectDraftContext): string {
         `PURPOSE: a NEW email (new subject, not a reply) from ${w} to someone you wrote to before who has not answered. Honest: say you wrote a little while back (e.g. “${w} here again”) — never pretend it is the first contact.`,
         template ? `1. ${greet} You may use {{instagram}} once. No other {{ }} fields.` : `1. ${greet}`,
         "2. One fresh reel idea in one or two sentences, true to WHO IS WRITING and ABOUT THEM.",
+        ...(hasProof(ctx) ? ["2b. One honest sentence with a number from REAL NUMBERS — why their audience would care."] : []),
         "3. One soft question — would they be up for making it together.",
-        "You may add the page with the details from WHO IS WRITING once, on its own line — optional. No digits.",
+        hasProof(ctx) ? "You may add the page with the details from WHO IS WRITING once, on its own line — optional. No digits except the REAL NUMBERS as given." : "You may add the page with the details from WHO IS WRITING once, on its own line — optional. No digits.",
         "Body: 40 to 100 words.",
       ].join("\n");
     case "reply":
@@ -327,6 +346,7 @@ export function buildProspectPrompt(ctx: ProspectDraftContext, language: MailLan
       ? renderWhoWeAre(ctx.programme, personalLinkAllowed(kind, ctx.priorFollowups || 0))
       : renderProgramme(ctx.programme);
   const parts: string[] = [brief(ctx), angleLine(ctx), "", prospectLanguage(language, ctx), "", facts];
+  if (hasProof(ctx)) parts.push("", proofFactsForPrompt(ctx.proof!));
   if (ctx.person) parts.push("", renderPerson(ctx.person, personal ? "Hey" : "Hi"));
   if (ctx.firstEmail) {
     // Rendered for one person; the template must not inherit their name.
@@ -389,7 +409,9 @@ export function personalSystemPrompt(w: string = writerName(), signature: string
   return `You write short, genuine emails from ${w}, who works at SubhSandesh, to one Indian content creator at a time — the kind of note a real person types in Gmail to someone whose videos they liked. You write AS ${w}, in the first person: “I'm ${w}”, “I”, “I'd love to”. “We” and “our” are only for the company SubhSandesh.
 
 HOW IT MUST READ
-- A note from one person to another, then a light ask — never an advert. Warm, plain, specific, a little informal, respectful of their time. Talk about making a reel together and about “our pages” the way you'd tell a friend about your work.
+- A note from one person to another, then a light ask — never a sales message. Warm, plain, specific, a little informal, respectful of their time. Talk about making a reel together and about “our pages” the way you'd tell a friend about your work.
+- Give them a real reason to want to talk, in plain facts rather than adjectives: the people who use these pages are couples — their audience; a reel idea that suits how they already make videos; that it is paid; and that they get their own link to share. When REAL NUMBERS are given, one honest line with them does more than any praise.
+- Sound like someone describing their own small company to a creator they admire: no sales language, no hype, no talk of reach, audiences to target or growth.
 - Two to four very short paragraphs with a blank line between them. Easy to read on a phone.
 - Open with the greeting the purpose asks for, on its own line.
 - Honest about the relationship: you have not met them. Friendly the way a stranger with a genuine reason to write is friendly.
@@ -496,6 +518,7 @@ export function parseProspectDraft(raw: string, ctx: ProspectDraftContext, langu
     kind,
     style: personal ? "personal" : "classic",
     priorFollowups: ctx.priorFollowups || 0,
+    allowedNumbers: hasProof(ctx) ? proofAllowedNumbers(ctx.proof!) : undefined,
   });
   if (!lint.ok) {
     throw new ThreadAiRefusedError(`The draft failed the spam check: ${lint.errors[0].message}`);
@@ -505,9 +528,9 @@ export function parseProspectDraft(raw: string, ctx: ProspectDraftContext, langu
 
 export async function draftProspectMail(
   ctx: ProspectDraftContext,
-  complete: Completion = openAiCompletion
+  complete: Completion = prospectCompletion
 ): Promise<ProspectDraft> {
-  if (complete === openAiCompletion && !env.OPENAI_API_KEY) {
+  if ((complete === prospectCompletion || complete === openAiCompletion) && !env.OPENAI_API_KEY) {
     throw new ThreadAiUnavailableError("OPENAI_API_KEY is not set on this deployment.");
   }
   if (ctx.mode === "reply" && !ctx.messages?.some((m) => m.direction === "inbound")) {
@@ -530,7 +553,7 @@ export async function draftProspectMail(
 /** Up to two retries on a guardrail/lint rejection — wording varies run to run. */
 export async function draftProspectMailWithRetry(
   ctx: ProspectDraftContext,
-  complete: Completion = openAiCompletion
+  complete: Completion = prospectCompletion
 ): Promise<ProspectDraft> {
   let last: unknown;
   for (let i = 0; i < 3; i++) {
@@ -551,7 +574,7 @@ export async function draftProspectMailWithRetry(
  */
 export async function draftProspectAlternatives(
   ctx: ProspectDraftContext,
-  complete: Completion = openAiCompletion
+  complete: Completion = prospectCompletion
 ): Promise<ProspectDraft[]> {
   const settled = await Promise.allSettled(
     (["a", "b"] as DraftAngle[]).map((angle) => draftProspectMailWithRetry({ ...ctx, angle }, complete))

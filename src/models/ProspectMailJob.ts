@@ -61,6 +61,22 @@ export interface IProspectMailJob extends Document {
    * it the worker skips them (their "no" may have landed after queueing).
    */
   override?: boolean;
+  /**
+   * The traction proof this email quotes, as it was when Send was pressed (a
+   * snapshot: editing or deleting the proof later changes nothing already
+   * queued). Its numbers are the only ones the send-time linter allows;
+   * `attach` puts the screenshot inline.
+   */
+  proof?: {
+    id: string;
+    imageUrl: string;
+    source: "search_console" | "google_analytics" | "other";
+    periodLabel: string;
+    stats: { label: string; value: string }[];
+    width?: number;
+    height?: number;
+    attach: boolean;
+  } | null;
   byEmail: string;
   createdAt: Date;
   updatedAt: Date;
@@ -86,6 +102,22 @@ const jobSchema = new Schema<IProspectMailJob>(
     via: { type: String, enum: ["", "ses", "stub"], default: "" },
     gapAfterMs: { type: Number },
     override: { type: Boolean, default: false },
+    proof: {
+      type: new Schema(
+        {
+          id: { type: String, default: "" },
+          imageUrl: { type: String, default: "" },
+          source: { type: String, enum: ["search_console", "google_analytics", "other"], default: "other" },
+          periodLabel: { type: String, default: "" },
+          stats: { type: [{ label: String, value: String, _id: false }], default: [] },
+          width: { type: Number },
+          height: { type: Number },
+          attach: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
     byEmail: { type: String, default: "", lowercase: true, trim: true },
   },
   { timestamps: true }

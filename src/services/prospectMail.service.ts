@@ -354,6 +354,7 @@ export const PERSONAL_PITCH_WORDS = [
   "exclusive", "limited", "free", "earn", "earns", "earning", "earnings", "commission", "commissions",
   "sign up", "sign-up", "signup", "join now", "program", "programme", "programs", "programmes", "affiliate",
   "referral", "payout", "payouts", "income", "profit", "discount",
+  "ad", "ads", "advert", "adverts", "advertise", "advertising", "advertisement", "promo", "promos", "marketing",
 ];
 
 /**
@@ -445,6 +446,31 @@ export interface LintOptions {
   priorFollowups?: number;
   /** Personal: who writes it ("Yash"). Defaults to personalWriterName(). */
   writer?: string;
+  /**
+   * The confirmed traction numbers this email may quote ("52.2K", "52K",
+   * "2.75M", "3 months" — outreachProof.service proofAllowedNumbers). A
+   * personal first email / follow-up still refuses every OTHER digit, %, ₹.
+   */
+  allowedNumbers?: string[];
+}
+
+/** Personal first email with a numbers line: a little more room (70–120 words). */
+const PERSONAL_INITIAL_WITH_NUMBERS = { min: 55, max: 135, ideal: [70, 120] as const };
+/** …and a follow-up that brings one number back: 30–80 words. */
+const PERSONAL_FOLLOWUP_WITH_NUMBERS = { min: 15, max: 95, ideal: [30, 80] as const };
+
+/** One regex for every allowed number form, matched as a whole token. */
+function allowedNumbersRe(forms: string[] | undefined): RegExp | null {
+  const list = [...new Set((forms || []).map((f) => String(f || "").trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!list.length) return null;
+  const alt = list.map((f) => escRe(f).replace(/\\s\+|\s+/g, "\\s+")).join("|");
+  return new RegExp(`(?<![\\p{L}\\p{N}.,])(?:${alt})(?![\\p{L}\\p{N}]|[.,]\\d)`, "giu");
+}
+
+/** The text with the allowed number tokens blanked out. */
+export function withoutAllowedNumbers(text: string, forms: string[] | undefined): string {
+  const re = allowedNumbersRe(forms);
+  return re ? String(text || "").replace(re, " ") : String(text || "");
 }
 
 /**
@@ -504,7 +530,13 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
 
   // ── Length ─────────────────────────────────────────────────────────────
   const words = countWords(b);
-  const r = (personal ? PERSONAL_RANGES : RANGES)[kind];
+  const hasNumbers = !!o.allowedNumbers?.length && allowedNumbersRe(o.allowedNumbers)!.test(b);
+  const r =
+    personal && hasNumbers && kind === "initial"
+      ? PERSONAL_INITIAL_WITH_NUMBERS
+      : personal && hasNumbers && kind === "followup"
+        ? PERSONAL_FOLLOWUP_WITH_NUMBERS
+        : (personal ? PERSONAL_RANGES : RANGES)[kind];
   if (words < r.min) err("too_short", `Too short (${words} words). Aim for ${r.ideal[0]}–${r.ideal[1]}.`);
   else if (words > r.max) err("too_long", `Too long (${words} words). Aim for ${r.ideal[0]}–${r.ideal[1]} — short emails get read.`);
   else if (words < r.ideal[0] || words > r.ideal[1]) warn("length", `${words} words — ${r.ideal[0]}–${r.ideal[1]} reads best.`);
@@ -530,7 +562,8 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
   if (/<\/?[a-z][^>]*>/i.test(b)) err("html", "Plain text only — remove the HTML tags.");
 
   // ── Spam wording ───────────────────────────────────────────────────────
-  const spam = all.match(SPAM_RE);
+  // The proof's own numbers ("2.75 million") are not spam wording.
+  const spam = withoutAllowedNumbers(all, o.allowedNumbers).match(SPAM_RE);
   if (spam) err("spam_phrase", `“${spam[1]}” reads like spam to filters and people. Say it plainly instead.`);
 
   const caps = (all.replace(URL_RE, "").match(/\b[A-Z]{4,}\b/g) || []).filter((w) => !["SUBHSANDESH"].includes(w));
@@ -548,10 +581,17 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
     }
   }
   if (coldPersonal) {
-    const scrubbed = withoutHandles(all.replace(URL_RE, " "));
+    const scrubbed = withoutAllowedNumbers(withoutHandles(all.replace(URL_RE, " ")), o.allowedNumbers);
     const label = kind === "initial" ? "first email" : kind === "fresh" ? "new email" : "follow-up";
     const num = scrubbed.match(/₹|\$|\brs\.?(?=\s*\d)|\binr\b|%|\d/i);
-    if (num) err("personal_number", `No numbers, ₹ or % in a ${label} (found “${num[0]}”) — the details come after they reply.`);
+    if (num) {
+      err(
+        "personal_number",
+        o.allowedNumbers?.length
+          ? `Only the numbers from your traction screenshot can go in a ${label} (found “${num[0]}”) — no ₹, %, or other figures.`
+          : `No numbers, ₹ or % in a ${label} (found “${num[0]}”) — the details come after they reply.`
+      );
+    }
     // A follow-up's subject is "Re: <the first email's subject>" — inherited,
     // not written now — so only its body is held to the pitch-word list.
     const pitch = (kind === "followup" ? b : all).replace(URL_RE, " ").match(PITCH_RE);
@@ -727,8 +767,26 @@ export function personalSignature(
  * else — no footer, no unsubscribe link, no visible Ref token. Replies are
  * matched by In-Reply-To/References and the sender address instead.
  */
-export function prospectPersonalText(c: { body: string; signature: string }): string {
-  return [String(c.body || "").trim(), "", String(c.signature || "").trim()].join("\n");
+export function prospectPersonalText(c: { body: string; signature: string; screenshotNote?: string }): string {
+  const note = String(c.screenshotNote || "").trim();
+  return [String(c.body || "").trim(), "", ...(note ? [note, ""] : []), String(c.signature || "").trim()].join("\n");
+}
+
+/**
+ * The HTML twin of a personal email that carries the analytics screenshot —
+ * what Gmail's own composer produces when a person pastes an image: the same
+ * paragraphs, the image inline (cid:), the same signature. No layout tables,
+ * no colours, no fonts, no links: it mirrors the text part line for line.
+ * `src` is "cid:<id>" when sent and the CDN URL in the admin preview.
+ */
+export function prospectPersonalHtml(c: { body: string; signature: string; image: { src: string; alt: string; width?: number; height?: number } }): string {
+  const para = (t: string) => `<div>${esc(t).replace(/\n/g, "<br>")}</div>`;
+  const blocks = String(c.body || "").replace(/\r\n/g, "\n").trim().split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const w = c.image.width ? Math.min(600, c.image.width) : 600;
+  const h = c.image.width && c.image.height ? Math.round((c.image.height * w) / c.image.width) : 0;
+  const img = `<div><img src="${esc(c.image.src)}" alt="${esc(c.image.alt)}" width="${w}"${h ? ` height="${h}"` : ""} style="max-width:100%;height:auto;border:1px solid #ddd"></div>`;
+  const sig = para(String(c.signature || "").trim());
+  return `<div dir="ltr">${blocks.map(para).join("<div><br></div>")}<div><br></div>${img}<div><br></div>${sig}</div>`;
 }
 
 export interface PersonalSender {
@@ -832,6 +890,10 @@ export function inboxCheck(o: {
   quietLane?: QuietLaneState | null;
   /** Personal: who writes it. Defaults to personalWriterName(). */
   writer?: string;
+  /** The body quotes confirmed traction numbers. */
+  numbers?: boolean;
+  /** The analytics screenshot goes inline (multipart/related HTML + text). */
+  image?: boolean;
 }): InboxCheckItem[] {
   const codes = new Set(o.lint.errors.map((e) => e.code));
   const from = `${o.sender.fromName} <${o.sender.fromAddress}>`;
@@ -848,7 +910,9 @@ export function inboxCheck(o: {
   const items: InboxCheckItem[] = [
     { ok: isTrustworthySender(o.sender), label: `From ${from}` },
     { ok: !codes.has("no_intro") && !codes.has("team_signoff"), label: writer ? `Written by ${writer}, first person` : "Written by one person" },
-    { ok: true, label: "Plain text — no HTML or images" },
+    o.image
+      ? { ok: false, warn: true, label: "Screenshot attached — images can nudge Gmail toward Promotions; numbers in the text alone are safest for a first email" }
+      : { ok: true, label: "Plain text — no HTML or images" },
     { ok: true, label: "No unsubscribe header or newsletter footer" },
     quietLaneItem(o.quietLane),
   ];
@@ -857,7 +921,7 @@ export function inboxCheck(o: {
   if (o.kind === "initial") {
     items.push({ ok: !codes.has("personal_link"), label: "No links in the first email" });
     items.push({ ok: !subjectBad, label: "Short, human subject" });
-    items.push({ ok: noPitch, label: "No pitch words in the first email" });
+    items.push({ ok: noPitch, label: o.numbers ? "No pitch words; only your confirmed traction numbers (no ₹, %)" : "No pitch words in the first email" });
     items.push({ ok: !codes.has("no_question"), label: "Asks one easy question" });
     items.push({ ok: !codes.has("opt_out_line"), label: "No “reply no / unsubscribe” line (a “no” reply still stops future emails)" });
     return items;

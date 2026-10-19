@@ -44,7 +44,6 @@ import {
   personalWriterName,
   prospectMailHtml,
   prospectMailText,
-  prospectPersonalText,
   renderMergeFields,
   unsubscribeUrl,
   type ContactVerdict,
@@ -59,6 +58,8 @@ import {
   unsubscribeByToken,
 } from "../services/prospect.service";
 import { kickProspectQueue, pacingNow, personalSenderStatus, prospectQueueHealth, quietLaneStatus } from "../services/prospectQueue.service";
+import { readProofChoice } from "./outreachProof.controller";
+import { personalEmailParts, proofAllowedNumbers, screenshotAlt, SOURCE_NAME } from "../services/outreachProof.service";
 import {
   ThreadAiRefusedError,
   ThreadAiUnavailableError,
@@ -504,6 +505,8 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
       ctx = { mode: "reply", person, programme, messages: forAi(one!.thread), adminNote: note };
     }
     ctx.style = style;
+    const choice = await readProofChoice(req.body);
+    if (choice) ctx.proof = choice.proof;
 
     const drafts = await draftProspectAlternatives(ctx);
     // Follow-ups and replies continue each person's own thread, so the subject
@@ -520,6 +523,7 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
         kind,
         intent: kind,
         style,
+        proofId: choice?.proof.id || null,
         subjectPerRecipient: threaded,
         eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name })),
         skipped: sel.skipped,
@@ -576,7 +580,12 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
     const subj = renderMergeFields(subjectFor(pick.kind, subject, pick.thread), target);
     const text = renderMergeFields(body, target);
     const priorFollowups = priorFollowupsOf(pick.p);
-    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style, priorFollowups });
+    const choice = await readProofChoice(req.body);
+    const allowedNumbers = choice ? proofAllowedNumbers(choice.proof) : undefined;
+    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style, priorFollowups, allowedNumbers });
+    // The screenshot goes inline only in personal mail (classic has its own HTML).
+    const attach = !!choice?.attach && style === "personal";
+    const signature = personalSignature();
     const person = personalSender();
     const sender =
       style === "personal"
@@ -600,11 +609,19 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
         replyTo: sender.replyToAddress,
         subject: subj,
         threaded,
-        text: style === "personal" ? prospectPersonalText({ body: text, signature: personalSignature() }) : prospectMailText(content),
-        html: style === "personal" ? "" : prospectMailHtml(content),
+        // Personal + screenshot: the text and HTML twin exactly as sent, with
+        // the CDN URL standing in for "cid:" so the preview shows the image.
+        ...(style === "personal"
+          ? personalEmailParts({ body: text, signature, proof: attach ? choice!.proof : null, imageSrc: attach ? choice!.proof.imageUrl : "" })
+          : { text: prospectMailText(content), html: prospectMailHtml(content) }),
         headers: [...(style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"]), ...(threaded && pick.thread ? ["In-Reply-To", "References"] : [])],
+        /** What goes inline, for the preview's attachment line. */
+        image: attach
+          ? { url: choice!.proof.imageUrl, alt: screenshotAlt(choice!.proof.source), source: SOURCE_NAME[choice!.proof.source], mime: "multipart/alternative: text/plain + multipart/related (text/html + inline image, cid)" }
+          : null,
+        proof: choice ? { id: choice.proof.id, allowedNumbers, attach } : null,
         lint,
-        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups, quietLane: quietLaneStatus() }),
+        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups, quietLane: quietLaneStatus(), numbers: !!allowedNumbers?.length && style === "personal", image: attach }),
         personalBlocked: style === "personal" ? personalSenderStatus()?.message || "" : "",
         eligible: sel.eligible.map((e) => {
           const v = e.verdict.ok ? e.verdict : null;
@@ -652,6 +669,12 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     // failure blocks the whole send: the admin fixes the template once.
     const { commissionPercent } = await programmeFacts();
     const requested = readStyle(req);
+    const choice = await readProofChoice(req.body);
+    if (req.body?.useNumbers === true && !choice) {
+      res.status(400).json({ success: false, error: "That traction screenshot is gone or not confirmed yet — pick another, or switch “Show our numbers” off." });
+      return;
+    }
+    const allowedNumbers = choice ? proofAllowedNumbers(choice.proof) : undefined;
     const items = [];
     for (const e of sel.eligible) {
       const subj = subjectFor(kind, subject, e.thread);
@@ -663,12 +686,21 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
         kind,
         style,
         priorFollowups: priorFollowupsOf(e.p),
+        allowedNumbers,
       });
       if (!lint.ok) {
         res.status(422).json({ success: false, code: "LINT", error: lint.errors[0].message, lint, for: e.p.name });
         return;
       }
-      items.push({ prospectId: String(e.p._id), kind, subject: subj, body, style, override: !!(e.verdict.ok && e.verdict.needsConfirm) });
+      items.push({
+        prospectId: String(e.p._id),
+        kind,
+        subject: subj,
+        body,
+        style,
+        override: !!(e.verdict.ok && e.verdict.needsConfirm),
+        proof: choice ? { ...choice.proof, attach: choice.attach && style === "personal" } : null,
+      });
     }
 
     const aiAssisted = req.body?.aiAssisted === true;
@@ -680,7 +712,7 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     const overrides = items.filter((i) => i.override).length;
     await audit(req, {
       action: "prospect.mail_queued",
-      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${overrides ? ` · ${overrides} marked not interested, confirmed` : ""}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} excluded` : ""} [${q.batchId}]`,
+      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${choice ? ` · traction numbers${choice.attach ? " + screenshot inline" : ""}` : ""}${overrides ? ` · ${overrides} marked not interested, confirmed` : ""}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} excluded` : ""} [${q.batchId}]`,
       ...(sel.eligible.length === 1 ? { targetUserEmail: sel.eligible[0].p.email } : {}),
     });
     res.json({

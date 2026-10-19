@@ -45,7 +45,6 @@ import {
   prospectHeaders,
   prospectMailHtml,
   prospectMailText,
-  prospectPersonalText,
   renderMergeFields,
   unsubscribeUrl,
   type PacingInput,
@@ -53,6 +52,8 @@ import {
   type QuietLaneState,
 } from "./prospectMail.service";
 import { getInfluencerSettings } from "./influencer.service";
+import { fetchProofImage, inlineProofImage, personalEmailParts, proofAllowedNumbers, type ImageFetcher, type InlineImage } from "./outreachProof.service";
+import type { ProofSource } from "../models/OutreachProof";
 
 const STALE_SENDING_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 3;
@@ -149,6 +150,12 @@ export function buildProspectSendInput(
     unsubscribeUrl: string;
     inReplyTo?: string;
     references?: string;
+    /**
+     * Personal only: the analytics screenshot, inline. The text part gets
+     * "(screenshot of our Google Search stats attached)"; an HTML twin with
+     * <img src="cid:…"> is added and the email goes as raw MIME.
+     */
+    proofImage?: { image: InlineImage; source: ProofSource; width?: number; height?: number } | null;
   },
   sender: PersonalSender = personalSender(),
   configurationSet: string = env.PROSPECT_SES_CONFIGURATION_SET
@@ -163,9 +170,12 @@ export function buildProspectSendInput(
     ...(configurationSet ? { configurationSet } : {}),
   };
   if (style === "personal") {
+    const pi = m.proofImage;
+    const signature = personalSignature();
     return {
       ...base,
-      render: () => ({ text: prospectPersonalText({ body: m.body, signature: personalSignature() }), html: "" }),
+      render: () => personalEmailParts({ body: m.body, signature, proof: pi, imageSrc: pi ? `cid:${pi.image.cid}` : "" }),
+      ...(pi ? { inlineImages: [pi.image] } : {}),
       fromName: sender.fromName,
       fromAddress: sender.fromAddress,
       replyToAddress: sender.replyToAddress,
@@ -187,7 +197,7 @@ export type TickOutcome =
 
 /** One step of the queue: send at most one email. Exported for tests and the admin "status". */
 export async function processProspectQueueOnce(
-  opts: { now?: Date; transport?: MailTransport } = {}
+  opts: { now?: Date; transport?: MailTransport; imageFetcher?: ImageFetcher } = {}
 ): Promise<TickOutcome> {
   const now = opts.now || new Date();
   lastTickAt = now;
@@ -250,6 +260,7 @@ export async function processProspectQueueOnce(
     kind: job.kind,
     style,
     priorFollowups,
+    allowedNumbers: job.proof ? proofAllowedNumbers(job.proof) : undefined,
   });
   if (!lint.ok) {
     await finish("failed", { error: `Blocked by the spam check: ${lint.errors[0].message}` });
@@ -275,6 +286,26 @@ export async function processProspectQueueOnce(
   const unsub = unsubscribeUrl(p.unsubscribeToken);
   const person = personalSender();
 
+  // The screenshot, fetched from our CDN. If it can't be fetched the email
+  // does NOT go without it (its text says a screenshot is attached): retried
+  // like a throttled send, then failed visibly.
+  let proofImage: { image: InlineImage; source: ProofSource; width?: number; height?: number } | null = null;
+  if (style === "personal" && job.proof?.attach && job.proof.imageUrl) {
+    try {
+      const image = await inlineProofImage(job.proof, opts.imageFetcher || fetchProofImage);
+      proofImage = { image, source: job.proof.source, width: job.proof.width, height: job.proof.height };
+    } catch (error) {
+      const msg = `Couldn't attach the screenshot: ${(error as Error)?.message || "fetch failed"}`;
+      lastError = msg;
+      if (job.attempts < MAX_ATTEMPTS) {
+        await ProspectMailJob.updateOne({ _id: job._id }, { $set: { state: "queued", error: msg.slice(0, 600), notBefore: new Date(now.getTime() + job.attempts * 5 * 60_000) } });
+        return { did: "failed", jobId, reason: "retrying" };
+      }
+      await finish("failed", { error: msg.slice(0, 600) });
+      return { did: "failed", jobId, reason: msg };
+    }
+  }
+
   let sent;
   try {
     sent = await sendInfluencerMail(
@@ -287,6 +318,7 @@ export async function processProspectQueueOnce(
         unsubscribeUrl: unsub,
         inReplyTo: threading.inReplyTo || undefined,
         references: threading.references || undefined,
+        proofImage,
       }),
       opts.transport
     );
@@ -338,7 +370,8 @@ export async function processProspectQueueOnce(
     direction: "outbound",
     subject,
     body,
-    html: "",
+    // The conversation shows what they got: the HTML twin when the screenshot went inline.
+    html: proofImage && job.proof ? (sent.html || "").split(`cid:${proofImage.image.cid}`).join(job.proof.imageUrl) : "",
     byEmail: job.byEmail,
     fromAddress: sent.fromAddress,
     aiAssisted: job.aiAssisted,

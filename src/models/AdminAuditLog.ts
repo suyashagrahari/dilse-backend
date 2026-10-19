@@ -74,6 +74,10 @@ export type AuditAction =
   | "prospect.delete"
   | "prospect.mail_queued"
   | "prospect.mail_cancelled"
+  // Traction screenshots for outreach: uploaded / replaced, numbers confirmed, deleted.
+  | "prospect.proof_uploaded"
+  | "prospect.proof_confirmed"
+  | "prospect.proof_deleted"
   // A super admin's own "Pay like a customer" switch, and "All templates free"
   // granted to / revoked from an account. See config/freeAccess.ts.
   | "superadmin.pays_as_customer"

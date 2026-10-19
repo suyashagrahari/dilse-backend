@@ -50,6 +50,7 @@ import {
   TooManyRequestsException,
 } from "@aws-sdk/client-sesv2";
 import { env } from "../config/env";
+import { buildRawMime } from "./mime.service";
 
 /** Raised for every SES failure, carrying something a human can act on. */
 export class SesSendError extends Error {
@@ -203,6 +204,12 @@ export interface SesEmail {
    * silently doing nothing. See `emailThread.service.ts`.
    */
   headers?: Record<string, string>;
+  /**
+   * Images shown inline in the HTML part (`<img src="cid:…">`). When present
+   * the email is sent as Content.Raw (multipart/alternative → text +
+   * multipart/related html + images) — see mime.service.ts. Requires `html`.
+   */
+  inlineImages?: { cid: string; filename: string; contentType: string; content: Buffer }[];
 }
 
 /**
@@ -314,8 +321,47 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
     .trim();
 
   const configurationSet = email.configurationSet || env.SES_CONFIGURATION_SET;
+  const command = await buildSendCommand(email, { to, subject, fromEmail, fromName, configurationSet, messageHeaders });
 
-  const command = new SendEmailCommand({
+  try {
+    const res = await client.send(command);
+    return { outcome: "sent", messageId: res.MessageId };
+  } catch (error) {
+    describeSesError(error, email);
+  }
+}
+
+/**
+ * The SendEmail request for one email. Simple content normally; Raw when it
+ * carries inline images. Exported for tests (the command is inspected, never
+ * sent).
+ */
+export async function buildSendCommand(
+  email: SesEmail,
+  o: { to: string; subject: string; fromEmail: string; fromName: string; configurationSet: string; messageHeaders: { Name: string; Value: string }[] }
+): Promise<SendEmailCommand> {
+  const { to, subject, fromEmail, fromName, configurationSet, messageHeaders } = o;
+  const fromHeader = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+  if (email.inlineImages?.length) {
+    if (!email.html) throw new SesSendError("An email with inline images needs an HTML part.");
+    const raw = await buildRawMime({
+      from: fromHeader,
+      to,
+      replyTo: email.replyTo || fromEmail,
+      subject,
+      text: email.text,
+      html: email.html,
+      headers: messageHeaders,
+      inlineImages: email.inlineImages,
+    });
+    return new SendEmailCommand({
+      FromEmailAddress: fromHeader,
+      Destination: { ToAddresses: [to] },
+      ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
+      Content: { Raw: { Data: raw } },
+    });
+  }
+  return new SendEmailCommand({
     FromEmailAddress: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
     Destination: { ToAddresses: [to] },
     ReplyToAddresses: [email.replyTo || fromEmail],
@@ -333,11 +379,11 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
       },
     },
   });
+}
 
-  try {
-    const res = await client.send(command);
-    return { outcome: "sent", messageId: res.MessageId };
-  } catch (error) {
+/** Turn an SES SDK error into a SesSendError a person can act on. */
+function describeSesError(error: unknown, email: SesEmail): never {
+  {
     // Each of these has a different fix, and a super admin staring at
     // "Failed to send" cannot tell them apart. Named individually so the panel
     // can say what to actually do.

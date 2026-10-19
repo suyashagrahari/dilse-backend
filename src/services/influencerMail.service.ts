@@ -259,6 +259,8 @@ export interface InfluencerSendInput {
    * says so (`quietLane: "fallback"`).
    */
   configurationSet?: string;
+  /** Inline images for the HTML part (prospect outreach's analytics screenshot). Sent as raw MIME. */
+  inlineImages?: SesEmail["inlineImages"];
 }
 
 export interface InfluencerSendResult {
@@ -320,6 +322,7 @@ export async function sendInfluencerMail(
       "In-Reply-To": input.inReplyTo || "",
       References: input.references || "",
     },
+    ...(input.inlineImages?.length ? { inlineImages: input.inlineImages } : {}),
   };
   const lane = String(input.configurationSet || "").trim();
   let quietLane: InfluencerSendResult["quietLane"] = lane ? "used" : "none";

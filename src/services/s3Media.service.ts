@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "../config/env";
 
 type MediaKind = "image" | "audio" | "video";
@@ -96,4 +96,26 @@ export const uploadToS3 = async ({
     kind,
     size: buffer.length,
   };
+};
+
+/** The public (CDN) URL an object key is served at. */
+export const publicUrlForKey = (key: string): string => getPublicUrl(key);
+
+/** The configured upload prefix ("gifts-media"), sanitised like uploadToS3's. */
+export const uploadPrefix = (): string => sanitizeSegment(env.S3_UPLOAD_PREFIX || "gifts-media");
+
+/**
+ * Put one object at an exact key (uploadToS3 picks its own dated key). For
+ * callers that name their objects — outreach proof screenshots.
+ */
+export const putS3Object = async (key: string, buffer: Buffer, contentType: string, cacheControl = "public, max-age=31536000, immutable"): Promise<string> => {
+  ensureS3Configured();
+  await s3!.send(new PutObjectCommand({ Bucket: env.S3_BUCKET_NAME, Key: key, Body: buffer, ContentType: contentType, CacheControl: cacheControl }));
+  return getPublicUrl(key);
+};
+
+/** Delete one object. Missing objects are not an error (S3 answers 204 either way). */
+export const deleteS3Object = async (key: string): Promise<void> => {
+  ensureS3Configured();
+  await s3!.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET_NAME, Key: key }));
 };
