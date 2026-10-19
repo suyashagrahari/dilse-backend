@@ -65,6 +65,8 @@ export const BASE_DAY_SLUGS = [
   "anniversary-premium",
   // Digital Bouquet ✦ Premium — the sender arranges a bouquet stem by stem; it blooms for them.
   "digital-bouquet",
+  // Wedding Invitation (Classic, $5) — a wax-sealed envelope that opens to an elegant one-page invite.
+  "wedding-invitation",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -942,6 +944,51 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "cardHand", kind: "enum", options: ["script", "hand", "serif"], default: "hand" },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
+    ],
+  },
+  // ── Wedding Invitation (Classic, $5) ── one elegant page that opens like a
+  //    wax-sealed envelope: names in gold script, the date + countdown, the
+  //    invitation (letter), the families, up to two functions with maps, six
+  //    photos (masonry), one-tap RSVP for every guest (weddingGuest routes,
+  //    WEDDING_TIER_LIMITS) and a closing line (endLine). recipientName = the
+  //    bride, senderName = the groom. No question, no stickers. ─────────────
+  "wedding-invitation": {
+    title: "Wedding Invitation",
+    maxPhotos: 6,
+    letterMax: 900,
+    asksQuestion: false,
+    gifSlots: [],
+    extras: [
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "champagne" },
+      { key: "namesOrder", kind: "enum", options: ["bride", "groom"], default: "bride" },
+      /** "YYYY-MM-DD" — the big day (countdown). */
+      { key: "date", kind: "text", max: 10 },
+      /** "HH:mm" — the muhurat / start time. */
+      { key: "time", kind: "text", max: 5 },
+      { key: "brideFamily", kind: "text", max: 90 },
+      { key: "groomFamily", kind: "text", max: 90 },
+      /** The functions (≤ 2 on this tier); every leaf is text, `id` is the stable RSVP key. */
+      {
+        key: "events",
+        kind: "objlist",
+        maxItems: 2,
+        item: [
+          { key: "id", kind: "text", max: 40 },
+          { key: "title", kind: "text", max: 40 },
+          { key: "date", kind: "text", max: 10 },
+          { key: "time", kind: "text", max: 5 },
+          { key: "endTime", kind: "text", max: 5 },
+          { key: "venue", kind: "text", max: 80 },
+          { key: "address", kind: "text", max: 140 },
+          { key: "mapUrl", kind: "text", max: 300 },
+          { key: "dressCode", kind: "text", max: 60 },
+          { key: "dressColor", kind: "text", max: 9 },
+          { key: "note", kind: "text", max: 200 },
+        ],
+      },
+      { key: "rsvp", kind: "bool", default: true },
+      { key: "rsvpBy", kind: "text", max: 10 },
+      { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish

@@ -7,6 +7,8 @@ import { proposalPremium } from "./aiFill/proposal-premium";
 import { happyAnniversary } from "./aiFill/happy-anniversary";
 import { anniversaryPremium } from "./aiFill/anniversary-premium";
 import { digitalBouquet } from "./aiFill/digital-bouquet";
+import { weddingInvitation } from "./aiFill/wedding-invitation";
+import { isWeddingSlug, WEDDING_TIER_LIMITS } from "./weddingShared";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -126,6 +128,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "question", "yesLine"],
+  "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests"],
   "sorry-premium": ["palette", "tone", "togetherSince", "knockLine", "confession", "feelings", "lessons", "stars", "promises", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
   // of its base day's extras; a builder changing one updates its line here.
@@ -168,6 +171,8 @@ describe("Valentine's week day configs", () => {
       const d = VALENTINE_DAYS[slug];
       // The flagship anniversary book carries the ultra-premium limits (pinned in its own suite).
       if (slug === "anniversary-premium") continue;
+      // The wedding tiers have no stickers and their own limits (pinned in their own suite).
+      if (isWeddingSlug(slug)) continue;
       // The ✦ premium editions carry one sticker per act.
       assert.equal(d.gifSlots.length, slug === "proposal-premium" ? 7 : slug === "miss-you-premium" || slug === "sorry-premium" || slug === "happy-anniversary" || slug === "digital-bouquet" ? 6 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
@@ -873,6 +878,41 @@ describe("Digital Bouquet ✦ Premium extras", () => {
     for (const f of digitalBouquet.fields.filter((x) => x.path.startsWith("extras."))) {
       const key = f.path.slice("extras.".length).split(/[.[]/)[0];
       assert.ok(d.extras.some((e) => e.key === key), f.path);
+    }
+  });
+});
+
+describe("Wedding Invitation (Classic)", () => {
+  const d = VALENTINE_DAYS["wedding-invitation"];
+  it("tier limits: 6 photos, 2 events, no stickers, no question", () => {
+    assert.equal(d.maxPhotos, WEDDING_TIER_LIMITS["wedding-invitation"].photos);
+    const ev = d.extras.find((f) => f.key === "events");
+    assert.ok(ev && ev.kind === "objlist" && ev.maxItems === WEDDING_TIER_LIMITS["wedding-invitation"].events);
+    assert.deepEqual([...d.gifSlots], []);
+    assert.equal(d.asksQuestion, false);
+    assert.notEqual(d.premium, true);
+  });
+  it("keeps two events (text leaves, ids intact), drops a third and empty rows; theme falls back", () => {
+    const row = (id: string, title: string) => ({ id, title, date: "2026-12-12", time: "19:30", venue: "The Lake Palace", address: "Udaipur", mapUrl: "https://maps.app.goo.gl/x" });
+    const out = sanitizeExtras("wedding-invitation", {
+      theme: "neon",
+      events: [row("wedding", "Wedding"), {}, row("reception", "Reception"), row("x", "Extra")],
+      maxGuests: 40,
+    });
+    const events = out.events as Record<string, string>[];
+    assert.deepEqual(events.map((e) => e.id), ["wedding", "reception"]);
+    assert.equal(events[0].mapUrl, "https://maps.app.goo.gl/x");
+    assert.equal(out.theme, "champagne");
+    assert.equal(out.maxGuests, 10);
+    assert.equal(out.rsvp, true);
+  });
+  it("AI schema validates and never writes ids, map links or the theme", () => {
+    assert.deepEqual(validateSchema(weddingInvitation), []);
+    const paths = weddingInvitation.fields.map((f) => f.path);
+    assert.ok(!paths.some((p) => /\.id$|mapUrl|theme|photos/.test(p)), paths.join(","));
+    for (const p of paths.filter((x) => x.startsWith("extras."))) {
+      const key = p.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(d.extras.some((f) => f.key === key), p);
     }
   });
 });
