@@ -29,7 +29,7 @@ import {
 import User from "../models/User";
 import { WeddingRsvp } from "../models/WeddingRsvp";
 import { WeddingBlessing } from "../models/WeddingBlessing";
-import { sendWeddingRsvpDigestEmail, sendWeddingRsvpEmail } from "../utils/mailer";
+import { sendWeddingBlessingEmail, sendWeddingRsvpDigestEmail, sendWeddingRsvpEmail } from "../utils/mailer";
 
 // ── The shapes the controller needs (a subset of the real documents) ────────
 
@@ -86,6 +86,8 @@ export interface WeddingGuestDeps {
   shareUrl(shareId: string, userId: string): Promise<string>;
   sendSingle: typeof sendWeddingRsvpEmail;
   sendDigest: typeof sendWeddingRsvpDigestEmail;
+  /** Optional: the owner's mail per blessing (absent = no mail). */
+  sendBlessing?: typeof sendWeddingBlessingEmail;
   now(): Date;
 }
 
@@ -138,6 +140,7 @@ function mongoDeps(model: mongoose.Model<any>): WeddingGuestDeps { // eslint-dis
     },
     sendSingle: sendWeddingRsvpEmail,
     sendDigest: sendWeddingRsvpDigestEmail,
+    sendBlessing: sendWeddingBlessingEmail,
     now: () => new Date(),
   };
 }
@@ -308,6 +311,20 @@ export function makeWeddingGuestController(slug: string, model: mongoose.Model<a
       }
       const saved = await deps.blessings.create({ ...clean.value, pageId: page._id, slug, ipHash: ipHash(req.ip, String(page._id)) });
       res.status(201).json({ success: true, blessing: publicBlessing(saved) });
+      // The couple keeps every blessing: one mail each (fire-and-forget).
+      const send = deps.sendBlessing;
+      if (send) {
+        void (async () => {
+          try {
+            const to = await deps.ownerEmail(page.userId);
+            if (!to) return;
+            const link = await deps.shareUrl(page.shareId, String(page.userId));
+            await send({ to, coupleA: page.recipientName, coupleB: page.senderName, name: saved.name, message: saved.message, link });
+          } catch (err) {
+            console.error(`${label} blessing email error:`, err);
+          }
+        })();
+      }
     } catch (error) {
       console.error(`Create ${label} blessing error:`, error);
       res.status(500).json({ success: false, error: "Could not post your blessing — please try again" });

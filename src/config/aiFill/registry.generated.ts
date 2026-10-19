@@ -74,6 +74,7 @@ import { proposalPremium } from "./proposal-premium";
 import { happyAnniversary } from "./happy-anniversary";
 import { anniversaryPremium } from "./anniversary-premium";
 import { digitalBouquet } from "./digital-bouquet";
+import { royalWeddingInvitation } from "./royal-wedding-invitation";
 import { call } from "./call";
 import { challan } from "./challan";
 import { nutrition } from "./nutrition";
@@ -147,6 +148,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   happyAnniversary,
   anniversaryPremium,
   digitalBouquet,
+  royalWeddingInvitation,
   call,
   challan,
   nutrition,

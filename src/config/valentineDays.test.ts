@@ -7,6 +7,8 @@ import { proposalPremium } from "./aiFill/proposal-premium";
 import { happyAnniversary } from "./aiFill/happy-anniversary";
 import { anniversaryPremium } from "./aiFill/anniversary-premium";
 import { digitalBouquet } from "./aiFill/digital-bouquet";
+import { royalWeddingInvitation } from "./aiFill/royal-wedding-invitation";
+import { WEDDING_TIER_LIMITS, eventIdsOf } from "./weddingShared";
 import {
   BASE_DAY_SLUGS,
   PREMIUM_BASE,
@@ -125,6 +127,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   ],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
+  "royal-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "question", "yesLine"],
   "sorry-premium": ["palette", "tone", "togetherSince", "knockLine", "confession", "feelings", "lessons", "stars", "promises", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
@@ -168,6 +171,8 @@ describe("Valentine's week day configs", () => {
       const d = VALENTINE_DAYS[slug];
       // The flagship anniversary book carries the ultra-premium limits (pinned in its own suite).
       if (slug === "anniversary-premium") continue;
+      // The wedding tiers are invitations, not love notes: no stickers, a 40-photo gallery (pinned in their own suite).
+      if (slug === "royal-wedding-invitation") continue;
       // The ✦ premium editions carry one sticker per act.
       assert.equal(d.gifSlots.length, slug === "proposal-premium" ? 7 : slug === "miss-you-premium" || slug === "sorry-premium" || slug === "happy-anniversary" || slug === "digital-bouquet" ? 6 : 5, slug);
       assert.ok(d.maxPhotos >= 6 && d.maxPhotos <= 9, slug);
@@ -871,6 +876,43 @@ describe("Digital Bouquet ✦ Premium extras", () => {
     assert.deepEqual([d.maxPhotos, d.letterMax], [6, 1500]);
     assert.deepEqual(validateSchema(digitalBouquet), []);
     for (const f of digitalBouquet.fields.filter((x) => x.path.startsWith("extras."))) {
+      const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+      assert.ok(d.extras.some((e) => e.key === key), f.path);
+    }
+  });
+});
+
+describe("Royal Wedding Invitation 👑 extras", () => {
+  it("is the $20 wedding tier: 40 photos, no stickers, no question; limits match WEDDING_TIER_LIMITS", () => {
+    const d = VALENTINE_DAYS["royal-wedding-invitation"];
+    const L = WEDDING_TIER_LIMITS["royal-wedding-invitation"];
+    assert.deepEqual([d.maxPhotos, d.letterMax, d.gifSlots.length, d.asksQuestion], [L.photos, 1500, 0, false]);
+    const max = (k: string) => (d.extras.find((f) => f.key === k) as { maxItems: number }).maxItems;
+    assert.deepEqual([max("events"), max("story"), max("things")], [L.events, L.story, L.faq]);
+  });
+
+  it("keeps up to eight functions with their ids (RSVPs refer to them), caps every leaf, drops empty rows", () => {
+    const events = Array.from({ length: 11 }, (_, k) => ({ id: k === 2 ? "" : `f${k}`, title: k === 2 ? "" : `Function ${k}`, venue: k === 2 ? "" : "v".repeat(200), evil: "x" }));
+    const out = sanitizeExtras("royal-wedding-invitation", { events, theme: "neon", maxGuests: 99, story: [{ title: "Met", line: "l".repeat(400), photo: 77 }, { when: "", title: "", line: "", photo: 3 }] });
+    const ev = out.events as Record<string, unknown>[];
+    assert.equal(ev.length, 8);
+    assert.equal(ev.some((e) => e.id === "f2"), false);
+    assert.equal((ev[0].venue as string).length, 80);
+    assert.equal("evil" in ev[0], false);
+    assert.deepEqual(eventIdsOf(out, "royal-wedding-invitation"), ["f0", "f1", "f3", "f4", "f5", "f6", "f7", "f8"]);
+    assert.equal(out.theme, "maroon");
+    assert.equal(out.maxGuests, 10);
+    assert.equal(out.rsvpMeal, true);
+    const st = out.story as Record<string, unknown>[];
+    assert.equal(st.length, 1);
+    assert.deepEqual([(st[0].line as string).length, st[0].photo], [240, 40]);
+  });
+
+  it("its AI schema is valid, within the field cap, and only writes declared extras", () => {
+    const d = VALENTINE_DAYS["royal-wedding-invitation"];
+    assert.deepEqual(validateSchema(royalWeddingInvitation), []);
+    assert.ok(royalWeddingInvitation.fields.length <= 40);
+    for (const f of royalWeddingInvitation.fields.filter((x) => x.path.startsWith("extras."))) {
       const key = f.path.slice("extras.".length).split(/[.[]/)[0];
       assert.ok(d.extras.some((e) => e.key === key), f.path);
     }

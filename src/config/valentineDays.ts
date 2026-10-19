@@ -65,6 +65,8 @@ export const BASE_DAY_SLUGS = [
   "anniversary-premium",
   // Digital Bouquet ✦ Premium — the sender arranges a bouquet stem by stem; it blooms for them.
   "digital-bouquet",
+  // Royal Wedding Invitation 👑 — the $20 wedding tier (palace gates, 8 functions, 40 photos, RSVPs, blessings).
+  "royal-wedding-invitation",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -942,6 +944,81 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "cardHand", kind: "enum", options: ["script", "hand", "serif"], default: "hand" },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
+    ],
+  },
+  // ── Royal Wedding Invitation 👑 ($20 wedding tier) ── palace gates swing
+  //    open (shehnai), the crest stamps in gold foil, then one royal scroll:
+  //    the invitation in English + Hindi, families, countdown, story chapters,
+  //    up to eight functions (dress-code swatch, map, calendar), a film, a
+  //    40-photo masonry, good to know, RSVP per function (config/weddingShared
+  //    + weddingGuest routes), a blessings wall and a diya-lantern finale.
+  //    recipientName = the bride, senderName = the groom, letter = the
+  //    English invitation, photos = one pool of 40 (story chapters and family
+  //    cards point into it by 1-based index). No question is asked. ─────────
+  "royal-wedding-invitation": {
+    title: "Royal Wedding Invitation",
+    maxPhotos: 40,
+    letterMax: 1500,
+    asksQuestion: false,
+    gifSlots: [],
+    extras: [
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "maroon" },
+      /** Which language the page opens in (guests can switch). */
+      { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
+      { key: "nameOrder", kind: "enum", options: ["bride", "groom"], default: "bride" },
+      { key: "hindiMessage", kind: "longtext", max: 700 },
+      { key: "brideFamily", kind: "text", max: 120 },
+      { key: "groomFamily", kind: "text", max: 120 },
+      { key: "brideNote", kind: "text", max: 100 },
+      { key: "groomNote", kind: "text", max: 100 },
+      /** "With the blessings of" — grandparents. */
+      { key: "blessingsOf", kind: "text", max: 160 },
+      /** 1-based index into photos; 0 = none. */
+      { key: "bridePhoto", kind: "number", min: 0, max: 40, default: 0 },
+      { key: "groomPhoto", kind: "number", min: 0, max: 40, default: 0 },
+      { key: "muhurat", kind: "text", max: 60 },
+      { key: "hashtag", kind: "text", max: 40 },
+      /** The functions; `id` is a short stable slug the guests' RSVPs refer to. All text. */
+      {
+        key: "events",
+        kind: "objlist",
+        maxItems: 8,
+        minItems: 1,
+        item: [
+          { key: "id", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 40 },
+          { key: "date", kind: "text", max: 10 },
+          { key: "time", kind: "text", max: 5 },
+          { key: "endTime", kind: "text", max: 5 },
+          { key: "venue", kind: "text", max: 80 },
+          { key: "address", kind: "text", max: 140 },
+          { key: "mapUrl", kind: "text", max: 400 },
+          { key: "dressCode", kind: "text", max: 60 },
+          { key: "dressColor", kind: "text", max: 7 },
+          { key: "note", kind: "text", max: 200 },
+        ],
+      },
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 8,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 60 },
+          { key: "line", kind: "text", max: 240 },
+          { key: "photo", kind: "number", min: 0, max: 40, default: 0 },
+        ],
+      },
+      /** Good to know: "Heading: text" lines. */
+      { key: "things", kind: "list", maxItems: 6, itemMax: 180 },
+      { key: "gettingThere", kind: "longtext", max: 500 },
+      /** A YouTube link for the pre-wedding film (the client extracts the id). */
+      { key: "videoUrl", kind: "text", max: 200 },
+      { key: "rsvpBy", kind: "text", max: 10 },
+      { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+      /** Read by weddingGuest.controller: the RSVP accepts a meal choice only when true. */
+      { key: "rsvpMeal", kind: "bool", default: true },
+      { key: "blessings", kind: "bool", default: true },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
