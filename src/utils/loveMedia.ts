@@ -19,7 +19,19 @@ export interface ILovePhoto {
   cropY?: number;
   /** Zoom, 100–300 (percent). */
   scale?: number;
+  /**
+   * Masonry galleries only (the wedding kit): how much room the photo takes —
+   * "wide" = two columns, "tall" = 1.5× its natural height, "large" = both.
+   * Absent = "normal". Every other template ignores it.
+   */
+  span?: PhotoSpan;
+  /** Natural pixel size, measured in the editor, so a masonry lays out before the image loads (no CLS). */
+  w?: number;
+  h?: number;
 }
+
+export const PHOTO_SPANS = ["normal", "wide", "tall", "large"] as const;
+export type PhotoSpan = (typeof PHOTO_SPANS)[number];
 
 export const LOVE_LIMITS = {
   maxPhotos: 10,
@@ -41,6 +53,9 @@ export const lovePhotoSchema = new Schema<ILovePhoto>(
     cropX: { type: Number, min: 0, max: 100 },
     cropY: { type: Number, min: 0, max: 100 },
     scale: { type: Number, min: 100, max: 300 },
+    span: { type: String, enum: PHOTO_SPANS },
+    w: { type: Number, min: 1, max: 20000 },
+    h: { type: Number, min: 1, max: 20000 },
   },
   { _id: false }
 );
@@ -108,6 +123,16 @@ export const sanitizeLovePhotos = async (
     if (cropX !== undefined) photo.cropX = cropX;
     if (cropY !== undefined) photo.cropY = cropY;
     if (scale !== undefined) photo.scale = scale;
+    // Masonry layout hints. "normal" is the default and is not stored.
+    if (typeof src.span === "string" && src.span !== "normal" && (PHOTO_SPANS as readonly string[]).includes(src.span)) {
+      photo.span = src.span as PhotoSpan;
+    }
+    const w = typeof src.w === "number" ? clampNum(src.w, 1, 20000) : undefined;
+    const h = typeof src.h === "number" ? clampNum(src.h, 1, 20000) : undefined;
+    if (w !== undefined && h !== undefined) {
+      photo.w = Math.round(w);
+      photo.h = Math.round(h);
+    }
     out.push(photo);
   }
   return out;

@@ -729,6 +729,169 @@ export async function sendValentineReplyEmail(opts: {
   }
 }
 
+// ─── Wedding RSVPs (config/weddingShared, controllers/weddingGuest) ──────────
+//
+// One email per RSVP while a page is quiet; a digest once an hour when more
+// than RSVP_MAIL_BURST land in an hour (the controller decides — mailPlan).
+// Both carry the running totals. Everything a guest typed is HTML-escaped and
+// names reaching the subject lose control characters.
+
+interface WeddingRsvpMailRow {
+  guestName: string;
+  attending: "yes" | "no" | "maybe";
+  guests: number;
+  events: string[];
+  meal: string | null;
+  message: string;
+  phone?: string;
+}
+interface WeddingTotalsMail {
+  responses: number;
+  attending: number;
+  maybe: number;
+  declined: number;
+  heads: number;
+  perEvent: Record<string, number>;
+}
+
+const wOneLine = (s: string, max = 60) =>
+  (s || "").replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+const wEsc = (s: string) => escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const wCouple = (a: string, b: string) => [wOneLine(a), wOneLine(b)].filter(Boolean).join(" & ") || "your wedding";
+
+function weddingTotalsLines(t: WeddingTotalsMail, labels: Record<string, string>): string[] {
+  const lines = [
+    `${t.heads} guest${t.heads === 1 ? "" : "s"} coming · ${t.attending} yes · ${t.maybe} maybe · ${t.declined} can't make it (${t.responses} responses)`,
+  ];
+  for (const id of Object.keys(labels)) if (t.perEvent[id]) lines.push(`${labels[id]}: ${t.perEvent[id]}`);
+  return lines;
+}
+
+function weddingRsvpLine(r: WeddingRsvpMailRow, labels: Record<string, string>): string {
+  const who = wOneLine(r.guestName) || "A guest";
+  const party = Math.max(1, Number(r.guests) || 1);
+  const ev = r.events.map((e) => labels[e] || e).join(", ");
+  if (r.attending === "no") return `${who} can't make it`;
+  const verb = r.attending === "maybe" ? "might come" : "is coming";
+  return `${who} ${verb}${party > 1 ? ` (${party} guests)` : ""}${ev ? ` — ${ev}` : ""}${r.meal ? ` · ${r.meal}` : ""}`;
+}
+
+function weddingMailShell(o: { eyebrow: string; head: string; bodyHtml: string; link: string; button: string }): string {
+  return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#2a0d14;font-family:Georgia,'Times New Roman',serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#2a0d14;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#fffaf0;border-radius:18px;border:1px solid #d9b46a;overflow:hidden;max-width:520px;width:100%;">
+        <tr><td style="background:linear-gradient(115deg,#6e1423,#9b2335,#c9a24a);padding:28px 30px;text-align:center;">
+          <p style="margin:0;color:#f7e7c1;font-size:11px;letter-spacing:.28em;font-weight:700;text-transform:uppercase;font-family:'Segoe UI',Arial,sans-serif;">${wEsc(o.eyebrow)}</p>
+          <p style="margin:10px 0 0;color:#fff;font-size:26px;font-weight:600;">${wEsc(o.head)}</p>
+        </td></tr>
+        <tr><td style="padding:26px 30px 30px;color:#3a1a12;">
+          ${o.bodyHtml}
+          <p style="margin:24px 0 0;text-align:center;"><a href="${wEsc(o.link)}" style="display:inline-block;background:#6e1423;color:#f7e7c1;font-weight:700;font-size:15px;text-decoration:none;padding:13px 26px;border-radius:999px;font-family:'Segoe UI',Arial,sans-serif;">${wEsc(o.button)}</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+}
+
+const totalsHtml = (lines: string[]) =>
+  `<div style="margin:18px 0 0;padding:14px 16px;border-radius:12px;background:#f6ecd8;font-family:'Segoe UI',Arial,sans-serif;font-size:13.5px;line-height:1.7;color:#5a3d22;"><b style="letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#8a6420;">Running total</b><br />${lines
+    .map(wEsc)
+    .join("<br />")}</div>`;
+
+/** One guest's RSVP (or their edit of it). */
+export async function sendWeddingRsvpEmail(opts: {
+  to: string;
+  coupleA: string;
+  coupleB: string;
+  rsvp: WeddingRsvpMailRow;
+  updated?: boolean;
+  totals: WeddingTotalsMail;
+  eventLabels: Record<string, string>;
+  link: string;
+}): Promise<void> {
+  const couple = wCouple(opts.coupleA, opts.coupleB);
+  const r = opts.rsvp;
+  const who = wOneLine(r.guestName) || "A guest";
+  const line = weddingRsvpLine(r, opts.eventLabels);
+  const subject = `${r.attending === "yes" ? "💍 " : ""}${opts.updated ? `${who} changed their RSVP: ` : ""}${line}`.slice(0, 140);
+  const head = r.attending === "yes" ? `${who} will be there` : r.attending === "maybe" ? `${who} might come` : `${who} sends regrets`;
+  const message = (r.message || "").replace(/\r\n?/g, "\n").slice(0, 300);
+  const phone = wOneLine(r.phone || "", 20);
+  const totals = weddingTotalsLines(opts.totals, opts.eventLabels);
+  const bodyHtml = [
+    `<p style="margin:0;font-size:16px;line-height:1.7;text-align:center;">${wEsc(opts.updated ? `Updated: ${line}.` : `${line}.`)}</p>`,
+    phone ? `<p style="margin:10px 0 0;font-size:14px;color:#7a5a3a;text-align:center;font-family:'Segoe UI',Arial,sans-serif;">Phone: ${wEsc(phone)}</p>` : "",
+    message
+      ? `<p style="margin:16px 0 0;padding:16px 18px;border-radius:12px;background:#fbf3e3;font-size:16px;line-height:1.7;font-style:italic;word-break:break-word;">“${wEsc(message).replace(/\n/g, "<br />")}”</p>`
+      : "",
+    totalsHtml(totals),
+  ].join("");
+
+  if (!resend) {
+    console.log(`\n[WEDDING RSVP — no RESEND_API_KEY] To: ${opts.to} | ${subject} | ${totals.join(" / ")}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${head}\n\n${line}${phone ? `\nPhone: ${phone}` : ""}${message ? `\n\n“${message}”` : ""}\n\nRunning total\n${totals.join("\n")}\n\nSee every RSVP: ${opts.link}\n\n— SubhSandesh`,
+      html: weddingMailShell({ eyebrow: `RSVP · ${couple}`, head, bodyHtml, link: opts.link, button: "See every RSVP" }),
+    });
+  } catch (err) {
+    console.error("[WEDDING RSVP] Failed to send email:", err);
+  }
+}
+
+/** Several RSVPs at once — sent instead of single mails during a burst. */
+export async function sendWeddingRsvpDigestEmail(opts: {
+  to: string;
+  coupleA: string;
+  coupleB: string;
+  rsvps: WeddingRsvpMailRow[];
+  totals: WeddingTotalsMail;
+  eventLabels: Record<string, string>;
+  link: string;
+}): Promise<void> {
+  const couple = wCouple(opts.coupleA, opts.coupleB);
+  const n = opts.rsvps.length;
+  const subject = `💌 ${n} new RSVP${n === 1 ? "" : "s"} for ${couple} — ${opts.totals.heads} guests so far`;
+  const head = `${n} new RSVP${n === 1 ? "" : "s"}`;
+  const rows = opts.rsvps.slice(0, 60).map((r) => weddingRsvpLine(r, opts.eventLabels));
+  const more = n > rows.length ? `…and ${n - rows.length} more on your page.` : "";
+  const totals = weddingTotalsLines(opts.totals, opts.eventLabels);
+  const bodyHtml = [
+    `<p style="margin:0 0 10px;font-size:15px;line-height:1.6;text-align:center;">Guests are answering quickly — here they are together.</p>`,
+    `<ul style="margin:0;padding:0 0 0 18px;font-size:15px;line-height:1.75;">${rows.map((l) => `<li>${wEsc(l)}</li>`).join("")}</ul>`,
+    more ? `<p style="margin:8px 0 0;font-size:14px;color:#7a5a3a;">${wEsc(more)}</p>` : "",
+    totalsHtml(totals),
+  ].join("");
+
+  if (!resend) {
+    console.log(`\n[WEDDING RSVP DIGEST — no RESEND_API_KEY] To: ${opts.to} | ${subject}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${head}\n\n${rows.join("\n")}${more ? `\n${more}` : ""}\n\nRunning total\n${totals.join("\n")}\n\nSee every RSVP: ${opts.link}\n\n— SubhSandesh`,
+      html: weddingMailShell({ eyebrow: `RSVPs · ${couple}`, head, bodyHtml, link: opts.link, button: "See every RSVP" }),
+    });
+  } catch (err) {
+    console.error("[WEDDING RSVP DIGEST] Failed to send email:", err);
+  }
+}
+
 function escapeHtml(s: string): string {
   return (s || "")
     .replace(/&/g, "&amp;")

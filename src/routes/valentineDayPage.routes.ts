@@ -4,6 +4,9 @@ import { optionalAuth, protect } from "../middleware/auth";
 import { makeValentineDayController } from "../controllers/valentineDayPage.controller";
 import { requireTemplateAccess } from "../middleware/templateGate";
 import type { ValentineDaySlug } from "../config/valentineDays";
+import { isWeddingSlug } from "../config/weddingShared";
+import { VALENTINE_DAY_MODELS } from "../models/ValentineDayPage";
+import { mountWeddingGuestOwner, mountWeddingGuestPublic } from "./weddingGuest.routes";
 
 /**
  * One router per Valentine's-week day, mounted at `/<slug>-pages` (the
@@ -38,7 +41,13 @@ export function makeValentineDayRouter(slug: ValentineDaySlug): Router {
     });
   }
 
+  // Wedding tiers: many guests' RSVPs + a blessings wall (config/weddingShared).
+  const wedding = isWeddingSlug(slug);
+  if (wedding) mountWeddingGuestPublic(router, slug, VALENTINE_DAY_MODELS[slug]);
+
   router.use(protect);
+  // Above "/:id" routes only matter for GET "/:id"; these have more segments, order is safe either way.
+  if (wedding) mountWeddingGuestOwner(router, slug, VALENTINE_DAY_MODELS[slug]);
   router.post("/", live, c.create);
   router.get("/my", c.getMy);
   router.get("/:id", c.get);
