@@ -21,7 +21,7 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import InfluencerProspect, { type IInfluencerProspect, PROSPECT_STATUSES } from "../models/InfluencerProspect";
-import ProspectMailJob, { type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
+import ProspectMailJob, { type FirstTouch, type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
 import EmailThread, { type IEmailThread } from "../models/EmailThread";
 import { env } from "../config/env";
 import { audit } from "../services/adminAudit";
@@ -30,6 +30,8 @@ import { baseSubject, replySubject } from "../services/emailThread.service";
 import { influencerFromAddress, influencerReplyToAddress, influencerSendMode } from "../services/influencerMail.service";
 import {
   canEmailProspect,
+  connectSender,
+  connectSignature,
   envSendWindow,
   estimateFinish,
   inboxCheck,
@@ -39,12 +41,14 @@ import {
   planSelection,
   priorFollowupsOf,
   RECENT_SEND_HOURS,
+  personalDress,
   personalSender,
   personalSignature,
   personalWriterName,
   prospectMailHtml,
   prospectMailText,
   renderMergeFields,
+  touchFor,
   unsubscribeUrl,
   type ContactVerdict,
 } from "../services/prospectMail.service";
@@ -108,6 +112,7 @@ function shapeProspect(
     createdAt: p.createdAt,
     threadId: p.threadId ? String(p.threadId) : null,
     outreachStyle: p.outreachStyle || "",
+    firstTouch: p.firstTouch || (p.initialSentAt ? "pitch" : ""),
     unread: !!extra.thread?.unread,
     messages: extra.thread?.messageCount || 0,
     lastDirection: extra.thread?.lastDirection || "",
@@ -132,6 +137,8 @@ async function deploymentStatus() {
     fromName: env.PROSPECT_FROM_NAME,
     replyToAddress: influencerReplyToAddress(),
     defaultStyle: "personal" as OutreachStyle,
+    /** A personal first email is a Connect note unless the admin picks Pitch. */
+    defaultTouch: "connect" as FirstTouch,
     /** A send to someone emailed less than this many hours ago is warned about. */
     recentHours: RECENT_SEND_HOURS,
     /** Above this many recipients at once the dialog suggests spreading out. */
@@ -146,6 +153,9 @@ async function deploymentStatus() {
       signature: personalSignature(),
       /** Who writes in the first person ("Yash"); "" for a team signature. */
       writer: personalWriterName(),
+      /** Connect notes: the From name (PROSPECT_CONNECT_FROM_NAME, else the normal one) and signature. */
+      connectFromName: connectSender().fromName,
+      connectSignature: connectSignature(),
     },
     /** The quiet SES lane prospect mail goes out on (no open tracking). */
     quietLane: quietLaneStatus(),
@@ -179,12 +189,12 @@ export const listProspects = async (_req: Request, res: Response): Promise<void>
       ProspectMailJob.aggregate([
         { $match: { prospectId: { $in: ids } } },
         { $sort: { createdAt: -1 } },
-        { $group: { _id: "$prospectId", state: { $first: "$state" }, kind: { $first: "$kind" }, error: { $first: "$error" }, sentAt: { $first: "$sentAt" }, createdAt: { $first: "$createdAt" } } },
+        { $group: { _id: "$prospectId", state: { $first: "$state" }, kind: { $first: "$kind" }, touch: { $first: "$touch" }, error: { $first: "$error" }, sentAt: { $first: "$sentAt" }, createdAt: { $first: "$createdAt" } } },
       ]),
       deploymentStatus(),
     ]);
     const T = new Map(threads.map((t) => [String(t._id), t]));
-    const J = new Map(jobs.map((j) => [String(j._id), { state: j.state, kind: j.kind, error: j.error || "", sentAt: j.sentAt || null, createdAt: j.createdAt }]));
+    const J = new Map(jobs.map((j) => [String(j._id), { state: j.state, kind: j.kind, touch: j.touch || "pitch", error: j.error || "", sentAt: j.sentAt || null, createdAt: j.createdAt }]));
     const now = new Date();
     const prospects = rows.map((p) =>
       shapeProspect(p, {
@@ -282,7 +292,7 @@ export const getProspect = async (req: Request, res: Response): Promise<void> =>
       data: {
         prospect: shapeProspect(p, { thread: thread ? { ...thread, unread: false } : null, verdict: canEmailProspect(p) }),
         thread: thread ? { ...shapeThread(thread as never), unread: false, userEmail: thread.userEmail, kind: thread.kind } : null,
-        jobs: jobs.map((j) => ({ id: String(j._id), kind: j.kind, state: j.state, error: j.error, subject: j.subject, sentAt: j.sentAt || null, createdAt: j.createdAt, via: j.via })),
+        jobs: jobs.map((j) => ({ id: String(j._id), kind: j.kind, touch: j.style === "personal" ? j.touch || "pitch" : "pitch", state: j.state, error: j.error, subject: j.subject, sentAt: j.sentAt || null, createdAt: j.createdAt, via: j.via })),
       },
     });
   } catch (error) {
@@ -417,6 +427,13 @@ async function resolveSelection(ids: mongoose.Types.ObjectId[], intent: JobKind 
 /** What the admin asked for. Personal is the default; anything else is classic only when said. */
 const readStyle = (req: Request): OutreachStyle => (req.body?.style === "classic" ? "classic" : "personal");
 
+/** Personal first email: Connect (default) or Pitch. */
+const readTouch = (req: Request): FirstTouch => (req.body?.touch === "pitch" ? "pitch" : "connect");
+
+/** The first-touch profile one recipient's email is held to (see touchFor). */
+const touchOf = (e: { p: IInfluencerProspect; kind: JobKind }, style: OutreachStyle, requested: FirstTouch): FirstTouch =>
+  touchFor({ kind: e.kind, style, firstTouch: e.p.firstTouch, lastReplyAt: e.p.lastReplyAt }, requested);
+
 /**
  * The style one recipient actually gets. A first email takes the requested
  * style; anything later keeps the style the conversation started in, so it
@@ -505,7 +522,15 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
       ctx = { mode: "reply", person, programme, messages: forAi(one!.thread), adminNote: note };
     }
     ctx.style = style;
-    const choice = await readProofChoice(req.body);
+    // Connect for the whole selection only when every recipient gets it (a
+    // template follow-up to mixed first emails is written as a pitch-free
+    // bump only if all of them were Connect notes).
+    const touches = sel.eligible.map((e) => touchOf(e, styleFor(e, readStyle(req)), readTouch(req)));
+    const touch: FirstTouch = touches.every((t) => t === "connect") ? "connect" : "pitch";
+    ctx.touch = touch;
+    if (kind === "reply") ctx.afterConnect = style === "personal" && sel.eligible[0].p.firstTouch === "connect";
+    // Numbers and the screenshot are saved for after they reply.
+    const choice = touch === "connect" ? null : await readProofChoice(req.body);
     if (choice) ctx.proof = choice.proof;
 
     const drafts = await draftProspectAlternatives(ctx);
@@ -523,6 +548,8 @@ export const draftProspects = async (req: Request, res: Response): Promise<void>
         kind,
         intent: kind,
         style,
+        touch,
+        afterConnect: !!ctx.afterConnect,
         proofId: choice?.proof.id || null,
         subjectPerRecipient: threaded,
         eligible: sel.eligible.map((e) => ({ id: String(e.p._id), name: e.p.name })),
@@ -554,7 +581,7 @@ function readContent(req: Request) {
 const subjectFor = (kind: JobKind, typed: string, thread: IEmailThread | null) => {
   if (kind === "initial" || kind === "fresh") return typed;
   const base = threadSubject(thread);
-  return base ? replySubject(base) : typed ? replySubject(typed) : "Re: A creator collab with SubhSandesh";
+  return base ? replySubject(base) : typed ? replySubject(typed) : "Re: Would love to connect";
 };
 
 /** POST /admin/super/prospects/preview — { ids, intent?, prospectId?, subject, body, style?, allowNotInterested? } */
@@ -576,17 +603,21 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
       return;
     }
     const style = styleFor(pick, readStyle(req));
+    const touch = touchOf(pick, style, readTouch(req));
+    const connect = touch === "connect";
     const target = { name: pick.p.name, instagram: pick.p.instagram };
     const subj = renderMergeFields(subjectFor(pick.kind, subject, pick.thread), target);
     const text = renderMergeFields(body, target);
     const priorFollowups = priorFollowupsOf(pick.p);
-    const choice = await readProofChoice(req.body);
+    // A Connect note carries no numbers and no screenshot, whatever is toggled.
+    const choice = connect ? null : await readProofChoice(req.body);
     const allowedNumbers = choice ? proofAllowedNumbers(choice.proof) : undefined;
-    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style, priorFollowups, allowedNumbers });
+    const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style, priorFollowups, allowedNumbers, touch });
     // The screenshot goes inline only in personal mail (classic has its own HTML).
     const attach = !!choice?.attach && style === "personal";
-    const signature = personalSignature();
-    const person = personalSender();
+    const dress = personalDress(touch, pick.kind);
+    const signature = dress.signature;
+    const person = dress.sender;
     const sender =
       style === "personal"
         ? person
@@ -605,6 +636,9 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
         to: { id: String(pick.p._id), name: pick.p.name, email: pick.p.email },
         kind: pick.kind,
         style,
+        touch,
+        afterConnect: pick.kind === "reply" && style === "personal" && pick.p.firstTouch === "connect",
+        signature: style === "personal" ? signature : env.PROSPECT_SIGNATURE,
         from: `${sender.fromName} <${sender.fromAddress}>`,
         replyTo: sender.replyToAddress,
         subject: subj,
@@ -621,7 +655,7 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
           : null,
         proof: choice ? { id: choice.proof.id, allowedNumbers, attach } : null,
         lint,
-        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups, quietLane: quietLaneStatus(), numbers: !!allowedNumbers?.length && style === "personal", image: attach }),
+        inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups, quietLane: quietLaneStatus(), numbers: !!allowedNumbers?.length && style === "personal", image: attach, touch }),
         personalBlocked: style === "personal" ? personalSenderStatus()?.message || "" : "",
         eligible: sel.eligible.map((e) => {
           const v = e.verdict.ok ? e.verdict : null;
@@ -630,6 +664,7 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
             name: e.p.name,
             kind: e.kind,
             hasNote: !!(e.p.note || "").trim(),
+            firstTouch: e.p.firstTouch || "",
             ...sentSummary(e.p, e.thread),
             recent: v?.recent || "",
             notInterested: !!v?.needsConfirm,
@@ -669,6 +704,7 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     // failure blocks the whole send: the admin fixes the template once.
     const { commissionPercent } = await programmeFacts();
     const requested = readStyle(req);
+    const requestedTouch = readTouch(req);
     const choice = await readProofChoice(req.body);
     if (req.body?.useNumbers === true && !choice) {
       res.status(400).json({ success: false, error: "That traction screenshot is gone or not confirmed yet — pick another, or switch “Show our numbers” off." });
@@ -680,13 +716,15 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
       const subj = subjectFor(kind, subject, e.thread);
       const target = { name: e.p.name, instagram: e.p.instagram };
       const style = styleFor(e, requested);
+      const touch = touchOf(e, style, requestedTouch);
       const lint = lintOutreach(renderMergeFields(subj, target), renderMergeFields(body, target), {
         commissionPercent,
         template: { subject: subj, body },
         kind,
         style,
         priorFollowups: priorFollowupsOf(e.p),
-        allowedNumbers,
+        allowedNumbers: touch === "connect" ? undefined : allowedNumbers,
+        touch,
       });
       if (!lint.ok) {
         res.status(422).json({ success: false, code: "LINT", error: lint.errors[0].message, lint, for: e.p.name });
@@ -698,8 +736,10 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
         subject: subj,
         body,
         style,
+        touch,
         override: !!(e.verdict.ok && e.verdict.needsConfirm),
-        proof: choice ? { ...choice.proof, attach: choice.attach && style === "personal" } : null,
+        // Saved for after they reply: a Connect note never carries the numbers or the screenshot.
+        proof: choice && touch !== "connect" ? { ...choice.proof, attach: choice.attach && style === "personal" } : null,
       });
     }
 
@@ -712,7 +752,7 @@ export const sendProspectMail = async (req: Request, res: Response): Promise<voi
     const overrides = items.filter((i) => i.override).length;
     await audit(req, {
       action: "prospect.mail_queued",
-      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${choice ? ` · traction numbers${choice.attach ? " + screenshot inline" : ""}` : ""}${overrides ? ` · ${overrides} marked not interested, confirmed` : ""}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} excluded` : ""} [${q.batchId}]`,
+      reason: `Queued ${q.queued.length} ${kind} email(s) [${requested}${items.some((i) => i.touch === "connect") ? " · connect" : ""}] "${subject.slice(0, 80)}"${aiAssisted ? " · AI-assisted draft, reviewed" : " · written by hand"}${choice && items.some((i) => i.proof) ? ` · traction numbers${choice.attach ? " + screenshot inline" : ""}` : ""}${overrides ? ` · ${overrides} marked not interested, confirmed` : ""}${q.already.length ? ` · ${q.already.length} already queued` : ""}${sel.skipped.length ? ` · ${sel.skipped.length} excluded` : ""} [${q.batchId}]`,
       ...(sel.eligible.length === 1 ? { targetUserEmail: sel.eligible[0].p.email } : {}),
     });
     res.json({

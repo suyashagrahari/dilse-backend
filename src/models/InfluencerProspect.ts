@@ -78,6 +78,12 @@ export interface IInfluencerProspect extends Document {
    * keeps it, so the conversation comes from the same sender throughout.
    */
   outreachStyle?: "personal" | "classic";
+  /**
+   * What the first email was: "connect" (a hello asking to connect, no pitch)
+   * or "pitch". Set when it is sent. Follow-ups to a Connect note stay
+   * pitch-free until they reply; the reply then gives the real context.
+   */
+  firstTouch?: "connect" | "pitch";
   /** Secret in the unsubscribe link. Unique, never shown in the admin UI. */
   unsubscribeToken: string;
   unsubscribedAt?: Date;
@@ -125,6 +131,7 @@ const prospectSchema = new Schema<IInfluencerProspect>(
 
     threadId: { type: Schema.Types.ObjectId, ref: "EmailThread" },
     outreachStyle: { type: String, enum: ["personal", "classic"] },
+    firstTouch: { type: String, enum: ["connect", "pitch"] },
     unsubscribeToken: { type: String, required: true, unique: true },
     unsubscribedAt: { type: Date },
     bouncedAt: { type: Date },

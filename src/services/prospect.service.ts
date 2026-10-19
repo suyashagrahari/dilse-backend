@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { env } from "../config/env";
 import InfluencerProspect, { type IInfluencerProspect, type ProspectStatus } from "../models/InfluencerProspect";
-import ProspectMailJob, { type IProspectMailJob, type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
+import ProspectMailJob, { type FirstTouch, type IProspectMailJob, type JobKind, type OutreachStyle } from "../models/ProspectMailJob";
 import EmailThread from "../models/EmailThread";
 import User from "../models/User";
 import { getInfluencerSettings } from "./influencer.service";
@@ -267,6 +267,8 @@ export interface EnqueueItem {
   subject: string;
   body: string;
   style: OutreachStyle;
+  /** Connect (a hello) or pitch — see FIRST_TOUCHES. */
+  touch?: FirstTouch;
   /** The admin confirmed sending to someone marked not interested. */
   override?: boolean;
   /** The traction proof snapshot (numbers allowed; screenshot inline when attach). */
@@ -291,6 +293,7 @@ export async function enqueueJobs(
         batchId,
         kind: it.kind,
         style: it.style,
+        touch: it.touch || "pitch",
         subject: it.subject,
         body: it.body,
         aiAssisted: meta.aiAssisted,

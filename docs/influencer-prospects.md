@@ -68,6 +68,34 @@ dropped silently. Replies stay one at a time.
 The dialog also shows, per person, how many emails were already sent and when,
 and warns above 10 recipients at once (≈15/day keeps a young domain healthy).
 
+## Connect: the default first email (a hello, no pitch)
+
+A personal first email is a **Connect** note unless the admin picks **Pitch**
+in the Generate dialog. It only asks to connect, so the creator replies:
+
+- "Hey <first name(s)>," → one genuine line about THEIR content (from the
+  admin note / niche / handle only; follower counts are scrubbed before the
+  model sees them) → "I'm Yash" → would love to connect, there's something to
+  run by them → ONE easy question. 35–70 words, signed just "Yash".
+- Subject (deterministic): A "Om & Diya, would love to connect", B "Hey Om &
+  Diya, quick hello from Yash" (`{{firstName}}` in a template).
+- Linter profile `connect` (`lintOutreach(…, { touch: "connect" })`): every
+  personal first-touch rule plus no "SubhSandesh" in the body, no product /
+  money / pitch words (`CONNECT_BANNED_WORDS` + collab…/partner…/promot…/
+  sponsor…/brand…), no numbers at all (traction numbers included), no links,
+  a question mark required. The prompt never names the company or a banned word.
+- No numbers, no screenshot: forced off ("Saved for after they reply").
+- Follow-up to a Connect note: same thread ("Re: …"), 20–45 words, still no
+  pitch, no link. It stays Connect until they reply (`touchFor`).
+- When they reply, the Reply draft knows the first email was only a hello
+  (`afterConnect`): it answers them first, then who Yash works for, what
+  SubhSandesh makes, why it fits them, the real numbers (+ screenshot, both on
+  by default for replies), the paid reel idea, their link + commission and a
+  next step.
+- From name: `PROSPECT_CONNECT_FROM_NAME` (empty = the normal From name).
+- The prospect records `firstTouch` (`connect` | `pitch`); each job records
+  `touch`. The sheet shows "Connect sent" / "Pitch sent".
+
 ## Two styles: Note from Yash (default) and Classic
 
 The Generate dialog has a **Personal (recommended) / Classic** toggle. The
@@ -322,6 +350,7 @@ user — the conversation appears on their influencer page.
 | `PROSPECT_SEND_TZ_OFFSET_MINUTES` | `330` (IST) |
 | `PROSPECT_PERSONAL_FROM_EMAIL` | `yash@subhsandesh.in` (must be in the IAM `ses:FromAddress` list) |
 | `PROSPECT_PERSONAL_FROM_NAME` | `Yash from SubhSandesh` |
+| `PROSPECT_CONNECT_FROM_NAME` | empty = Connect notes use `PROSPECT_PERSONAL_FROM_NAME`; set `Yash` to send the hello (and its follow-ups) from plain "Yash" |
 | `PROSPECT_PERSONAL_SIGNATURE` | `Yash` (its first word is who the AI writes as, and who "I'm …" must name) |
 | `PROSPECT_SIGNATURE_COMPANY_LINE` | on — a plain `SubhSandesh` second line; `0` drops it |
 | `PROSPECT_SIGNATURE_SITE_LINE` | off; `1` adds a plain `subhsandesh.in` line under the signature (mail clients linkify it) |

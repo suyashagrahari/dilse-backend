@@ -31,12 +31,27 @@ export type JobKind = (typeof JOB_KINDS)[number];
  */
 export const OUTREACH_STYLES = ["personal", "classic"] as const;
 export type OutreachStyle = (typeof OUTREACH_STYLES)[number];
+/**
+ * What a personal first email (and its follow-ups) is for.
+ *
+ * connect  (default) a short hello from Yash asking to connect: no company,
+ *          no product, no numbers, no links — just them, "I'm Yash", and one
+ *          easy question. Its follow-ups stay a gentle bump. The real context
+ *          (what SubhSandesh makes, the numbers, the paid reel) comes in the
+ *          REPLY, once they have written back.
+ * pitch    the earlier first email: who we are, the reel idea, numbers.
+ * Classic mail is always "pitch".
+ */
+export const FIRST_TOUCHES = ["connect", "pitch"] as const;
+export type FirstTouch = (typeof FIRST_TOUCHES)[number];
 
 export interface IProspectMailJob extends Document {
   prospectId: mongoose.Types.ObjectId;
   batchId: string;
   kind: JobKind;
   style: OutreachStyle;
+  /** Connect (a hello, no pitch) or pitch. Rows from before Connect existed were pitches. */
+  touch?: FirstTouch;
   /** The template as approved — merge fields still in it. */
   subject: string;
   body: string;
@@ -89,6 +104,7 @@ const jobSchema = new Schema<IProspectMailJob>(
     kind: { type: String, enum: JOB_KINDS, required: true },
     // Rows written before personal mode existed were all classic.
     style: { type: String, enum: OUTREACH_STYLES, default: "classic" },
+    touch: { type: String, enum: FIRST_TOUCHES, default: "pitch" },
     subject: { type: String, required: true, maxlength: 200 },
     body: { type: String, required: true, maxlength: 6000 },
     aiAssisted: { type: Boolean, default: false },

@@ -30,13 +30,16 @@ import {
   type InfluencerSendInput,
   type MailTransport,
 } from "./influencerMail.service";
-import type { OutreachStyle } from "../models/ProspectMailJob";
+import type { FirstTouch, JobKind, OutreachStyle } from "../models/ProspectMailJob";
 import {
   canEmailProspect,
+  connectSignature,
   envSendWindow,
+  isConnectProfile,
   isSenderNotAllowedError,
   lintOutreach,
   nextSendDecision,
+  personalDress,
   personalSender,
   personalSenderBlockedMessage,
   personalSignature,
@@ -156,6 +159,9 @@ export function buildProspectSendInput(
      * <img src="cid:…"> is added and the email goes as raw MIME.
      */
     proofImage?: { image: InlineImage; source: ProofSource; width?: number; height?: number } | null;
+    /** Personal: a Connect note / its follow-up is signed with the first name only. */
+    kind?: JobKind;
+    touch?: FirstTouch;
   },
   sender: PersonalSender = personalSender(),
   configurationSet: string = env.PROSPECT_SES_CONFIGURATION_SET
@@ -171,7 +177,7 @@ export function buildProspectSendInput(
   };
   if (style === "personal") {
     const pi = m.proofImage;
-    const signature = personalSignature();
+    const signature = isConnectProfile({ style, kind: m.kind, touch: m.touch }) ? connectSignature() : personalSignature();
     return {
       ...base,
       render: () => personalEmailParts({ body: m.body, signature, proof: pi, imageSrc: pi ? `cid:${pi.image.cid}` : "" }),
@@ -261,6 +267,7 @@ export async function processProspectQueueOnce(
     style,
     priorFollowups,
     allowedNumbers: job.proof ? proofAllowedNumbers(job.proof) : undefined,
+    touch: job.touch,
   });
   if (!lint.ok) {
     await finish("failed", { error: `Blocked by the spam check: ${lint.errors[0].message}` });
@@ -284,13 +291,15 @@ export async function processProspectQueueOnce(
       );
   const token = existing?.threadToken || newThreadToken();
   const unsub = unsubscribeUrl(p.unsubscribeToken);
-  const person = personalSender();
+  // A Connect note and its follow-ups: PROSPECT_CONNECT_FROM_NAME (when set) + "Yash" signature.
+  const dress = personalDress(job.touch, job.kind);
+  const person = dress.sender;
 
   // The screenshot, fetched from our CDN. If it can't be fetched the email
   // does NOT go without it (its text says a screenshot is attached): retried
   // like a throttled send, then failed visibly.
   let proofImage: { image: InlineImage; source: ProofSource; width?: number; height?: number } | null = null;
-  if (style === "personal" && job.proof?.attach && job.proof.imageUrl) {
+  if (style === "personal" && job.proof?.attach && job.proof.imageUrl && !isConnectProfile({ style, kind: job.kind, touch: job.touch })) {
     try {
       const image = await inlineProofImage(job.proof, opts.imageFetcher || fetchProofImage);
       proofImage = { image, source: job.proof.source, width: job.proof.width, height: job.proof.height };
@@ -319,7 +328,9 @@ export async function processProspectQueueOnce(
         inReplyTo: threading.inReplyTo || undefined,
         references: threading.references || undefined,
         proofImage,
-      }),
+        kind: job.kind,
+        touch: job.touch,
+      }, style === "personal" ? person : undefined),
       opts.transport
     );
   } catch (error) {
@@ -387,6 +398,7 @@ export async function processProspectQueueOnce(
   if (job.kind === "initial") {
     set.initialSentAt = now;
     set.outreachStyle = style;
+    set.firstTouch = job.touch === "connect" && style === "personal" ? "connect" : "pitch";
   }
   const inc: Record<string, number> = { contactCount: 1 };
   if (job.kind === "followup") {

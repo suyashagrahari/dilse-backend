@@ -29,9 +29,9 @@ import {
   type FollowerRange,
   type ProspectStatus,
 } from "../models/InfluencerProspect";
-import type { JobKind, OutreachStyle } from "../models/ProspectMailJob";
+import type { FirstTouch, JobKind, OutreachStyle } from "../models/ProspectMailJob";
 
-export type { OutreachStyle };
+export type { FirstTouch, OutreachStyle };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -184,6 +184,16 @@ const PERSONAL_RANGES: Record<JobKind, { min: number; max: number; ideal: readon
   fresh: { min: 30, max: 125, ideal: [40, 100] },
   reply: { min: 10, max: 160, ideal: [25, 130] },
 };
+/**
+ * Connect (a hello asking to connect, no pitch): the first note is 35–70
+ * words, its follow-up a 20–45 word bump.
+ */
+export const CONNECT_RANGES = {
+  initial: { min: 35, max: 70, ideal: [40, 60] as const },
+  followup: { min: 20, max: 45, ideal: [22, 40] as const },
+};
+/** Connect subject: 3–7 words that name them, no company, no pitch. */
+export const CONNECT_SUBJECT_WORDS = [3, 7] as const;
 export const SUBJECT_LINT_MAX = 70;
 /** Classic: a first email's / new email's subject is 4–8 words, specific and honest. */
 export const SUBJECT_WORDS = [4, 8] as const;
@@ -229,10 +239,11 @@ export function stripOptOutLines(body: string): string {
  * person writes one ("Hey Om and Diya", "Loved your couple reels"), with no
  * pitch words at all.
  */
-export function subjectIssues(subject: string, style: OutreachStyle = "classic"): LintIssue[] {
+export function subjectIssues(subject: string, style: OutreachStyle = "classic", touch: FirstTouch = "pitch"): LintIssue[] {
   const s = String(subject || "").replace(/\s+/g, " ").trim();
   const out: LintIssue[] = [];
   const personal = style === "personal";
+  const connect = personal && touch === "connect";
   if (!s) return [{ code: "subject_empty", message: "Add a subject." }];
   const key = s.toLowerCase().replace(/[^\p{L}\p{N}@ ]+/gu, " ").replace(/\s+/g, " ").trim();
   if (GENERIC_SUBJECTS.includes(key) || /\bquick question\b/.test(key)) {
@@ -244,18 +255,24 @@ export function subjectIssues(subject: string, style: OutreachStyle = "classic")
     });
   }
   const n = countWords(s);
-  const [lo, hi] = personal ? PERSONAL_SUBJECT_WORDS : SUBJECT_WORDS;
+  const [lo, hi] = connect ? CONNECT_SUBJECT_WORDS : personal ? PERSONAL_SUBJECT_WORDS : SUBJECT_WORDS;
   if (n < lo || n > hi) {
     out.push({
       code: "subject_words",
-      message: personal
+      message: connect
+        ? `Keep the subject to ${lo}–${hi} words that name them — e.g. “Om & Diya, would love to connect” (it is ${n}).`
+        : personal
         ? `Keep the subject to ${lo}–${hi} words, the way a person writes one — e.g. “Hey Om and Diya” or “A reel idea for you two” (it is ${n}).`
         : `Keep the subject to ${lo}–${hi} words, specific and honest, e.g. “A creator collab with SubhSandesh” (it is ${n}).`,
     });
   }
   const spam = s.match(SUBJECT_SPAM_RE);
   if (spam) out.push({ code: "subject_spam", message: `“${(spam[1] || spam[0]).trim()}” in a subject reads like an ad — ${personal ? "write it like a note to a friend" : "name the collaboration instead"}.` });
-  else if (personal) {
+  else if (connect) {
+    const pitch = s.match(CONNECT_RE);
+    if (pitch) out.push({ code: "subject_pitch", message: `“${pitch[1]}” turns a hello into a pitch — try “<Name>, would love to connect”.` });
+    else if (/\d/.test(s)) out.push({ code: "subject_number", message: "No numbers in a Connect subject." });
+  } else if (personal) {
     const pitch = s.match(PITCH_RE);
     if (pitch) out.push({ code: "subject_pitch", message: `“${pitch[1]}” makes the subject a pitch — try “Hey <name>” or “A reel idea for you two”.` });
   }
@@ -277,7 +294,10 @@ export function fallbackSubject(o: {
   variant?: number;
   style?: OutreachStyle;
   template?: boolean;
+  /** Personal first email: "connect" gets the hello subject (connectSubject). */
+  touch?: FirstTouch;
 }): string {
+  if (o.style === "personal" && o.touch === "connect" && o.kind === "initial") return connectSubject(o);
   if (o.style === "personal") return personalFallbackSubject(o);
   const handle = String(o.person?.instagram || "").replace(/^@+/, "").trim();
   const name = String(o.person?.name || "").replace(/[\r\n"<>]+/g, " ").replace(/\s+/g, " ").trim();
@@ -340,6 +360,26 @@ function personalFallbackSubject(o: { kind: "initial" | "fresh"; person?: { name
 }
 
 /**
+ * The Connect subject. Deterministic, human, names them, says nothing about
+ * the company or an idea — it is a hello:
+ *   A: "Om & Diya, would love to connect"
+ *   B: "Hey Om & Diya, quick hello from Yash"
+ * A template (several recipients) uses {{firstName}} in place of the name.
+ */
+export function connectSubject(o: { person?: { name?: string } | null; variant?: number; template?: boolean; writer?: string }): string {
+  const names = o.template ? "{{firstName}}" : o.person?.name ? subjectNames(o.person.name) : "";
+  const w = o.writer ?? (personalWriterName() || "Yash");
+  const v = Math.abs(o.variant || 0) % 2;
+  const candidates: string[] =
+    v === 0
+      ? [names ? `${names}, would love to connect` : "", "Would love to connect"]
+      : [names ? `Hey ${names}, quick hello from ${w}` : "", `A quick hello from ${w}`];
+  const probe = (c: string) => c.replace(/\{\{firstName\}\}/g, "Asha");
+  for (const c of candidates) if (c && !/\d/.test(c) && subjectIssues(probe(c), "personal", "connect").length === 0 && probe(c).length <= SUBJECT_LINT_MAX) return c;
+  return v === 0 ? "Would love to connect" : `A quick hello from ${w}`;
+}
+
+/**
  * Words that turn a note from Yash into a promotion. Personal first emails,
  * follow-ups and new emails carry none of them (a reply, once they wrote
  * back, may) — the details come after they reply. Kept in code, never in the
@@ -356,6 +396,19 @@ export const PERSONAL_PITCH_WORDS = [
   "referral", "payout", "payouts", "income", "profit", "discount",
   "ad", "ads", "advert", "adverts", "advertise", "advertising", "advertisement", "promo", "promos", "marketing",
 ];
+
+/**
+ * Connect notes go further: they say nothing about the company or what it
+ * makes, so on top of PERSONAL_PITCH_WORDS they refuse the company name,
+ * product words, anything about money, and the prefixes below (collab…,
+ * partner…, promot…, sponsor…, brand…). Linter only — never in a prompt.
+ */
+export const CONNECT_BANNED_WORDS = [
+  "subhsandesh", "pages", "website", "websites", "app", "apps", "link", "links",
+  "pay", "paid", "paying", "payment", "payments", "money", "earn", "earns", "earning", "earnings",
+  "commission", "commissions", "offer", "offers", "deal", "deals", "free", "reel for us", "reels for us",
+];
+const CONNECT_PREFIXES = ["collab", "partner", "promot", "sponsor", "brand"];
 
 /**
  * The first name the personal emails are written and signed by — the first
@@ -425,6 +478,10 @@ const PITCH_RE = new RegExp(
   `(?:^|[^a-z0-9])(${PERSONAL_PITCH_WORDS.map(escRe).sort((a, b) => b.length - a.length).join("|")})(?=$|[^a-z0-9])`,
   "i"
 );
+const CONNECT_RE = new RegExp(
+  `(?:^|[^a-z0-9])(${[...PERSONAL_PITCH_WORDS, ...CONNECT_BANNED_WORDS].map(escRe).sort((a, b) => b.length - a.length).join("|")}|(?:${CONNECT_PREFIXES.join("|")})[a-z]*)(?=$|[^a-z0-9])`,
+  "i"
+);
 const SPAM_RE = new RegExp(
   `(?:^|[^a-z0-9])(${SPAM_PHRASES.map(escRe).sort((a, b) => b.length - a.length).join("|")})(?=$|[^a-z0-9])`,
   "i"
@@ -452,6 +509,17 @@ export interface LintOptions {
    * personal first email / follow-up still refuses every OTHER digit, %, ₹.
    */
   allowedNumbers?: string[];
+  /**
+   * Personal first email / follow-up: "connect" holds it to the Connect
+   * profile (35–70 words, no company, no product, no money, no numbers, no
+   * links, one question). Ignored for classic, a new email and a reply.
+   */
+  touch?: FirstTouch;
+}
+
+/** Is this email held to the Connect profile? */
+export function isConnectProfile(o: { style?: OutreachStyle; kind?: JobKind; touch?: FirstTouch }): boolean {
+  return o.style === "personal" && o.touch === "connect" && (o.kind === "initial" || o.kind === "followup");
 }
 
 /** Personal first email with a numbers line: a little more room (70–120 words). */
@@ -508,11 +576,16 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
   const personal = style === "personal";
   /** Personal anything-but-a-reply: the strict, no-pitch profile. */
   const coldPersonal = personal && kind !== "reply";
-  const linkOk = !coldPersonal || personalLinkAllowed(kind, o.priorFollowups || 0);
+  /** Connect: a hello — stricter still (no company, no money, no numbers, no links). */
+  const connect = isConnectProfile({ style, kind, touch: o.touch });
+  const touch: FirstTouch = connect ? "connect" : "pitch";
+  // A hello carries no numbers at all, confirmed or not.
+  if (connect) o = { ...o, allowedNumbers: undefined };
+  const linkOk = connect ? false : !coldPersonal || personalLinkAllowed(kind, o.priorFollowups || 0);
   // A first email and a new email carry their own subject, which must say
   // what the email is about. Follow-ups and replies are "Re: <subject>".
   if (kind === "initial" || kind === "fresh") {
-    for (const i of subjectIssues(s, style)) err(i.code, i.message);
+    for (const i of subjectIssues(s, style, touch)) err(i.code, i.message);
     if (s && /^(?:[A-Z][a-z']+\s+){3,}[A-Z][a-z']+$/.test(s)) warn("subject_title_case", "Title Case Subjects Look Like Marketing — use sentence case.");
   } else {
     if (!s) err("subject_empty", "Add a subject.");
@@ -531,8 +604,9 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
   // ── Length ─────────────────────────────────────────────────────────────
   const words = countWords(b);
   const hasNumbers = !!o.allowedNumbers?.length && allowedNumbersRe(o.allowedNumbers)!.test(b);
-  const r =
-    personal && hasNumbers && kind === "initial"
+  const r = connect
+    ? CONNECT_RANGES[kind as "initial" | "followup"]
+    : personal && hasNumbers && kind === "initial"
       ? PERSONAL_INITIAL_WITH_NUMBERS
       : personal && hasNumbers && kind === "followup"
         ? PERSONAL_FOLLOWUP_WITH_NUMBERS
@@ -547,7 +621,12 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
   const noEmails = all.replace(/[^\s@<>()]+@[^\s@<>()]+/g, " ").replace(/(^|[^\w/])@[a-z0-9._]+/gi, "$1 ");
   const links = [...new Set((noEmails.match(URL_RE) || []).map((u) => u.replace(/[.,;:!?)]+$/, "")))];
   if (!linkOk && links.length) {
-    err("personal_link", `No links in a ${kind === "initial" ? "first email" : "first follow-up"} (${links[0]}) — links are what push it into Promotions. The link can go in a later follow-up or after they reply.`);
+    err(
+      "personal_link",
+      connect
+        ? `No links in a Connect note (${links[0]}) — it's a hello. The link comes after they reply.`
+        : `No links in a ${kind === "initial" ? "first email" : "first follow-up"} (${links[0]}) — links are what push it into Promotions. The link can go in a later follow-up or after they reply.`
+    );
   }
   for (const u of linkOk ? links : []) {
     if (SHORTENERS.test(u)) { err("shortener", `Link shorteners (${u}) are a classic spam signal — use the full subhsandesh.in link.`); continue; }
@@ -582,7 +661,7 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
   }
   if (coldPersonal) {
     const scrubbed = withoutAllowedNumbers(withoutHandles(all.replace(URL_RE, " ")), o.allowedNumbers);
-    const label = kind === "initial" ? "first email" : kind === "fresh" ? "new email" : "follow-up";
+    const label = connect ? "Connect note" : kind === "initial" ? "first email" : kind === "fresh" ? "new email" : "follow-up";
     const num = scrubbed.match(/₹|\$|\brs\.?(?=\s*\d)|\binr\b|%|\d/i);
     if (num) {
       err(
@@ -594,13 +673,26 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
     }
     // A follow-up's subject is "Re: <the first email's subject>" — inherited,
     // not written now — so only its body is held to the pitch-word list.
-    const pitch = (kind === "followup" ? b : all).replace(URL_RE, " ").match(PITCH_RE);
-    if (pitch) err("pitch_word", `“${pitch[1]}” turns a note into a pitch. Say it the way you'd tell a friend — e.g. “make a reel together” — details after they reply.`);
+    if (connect) {
+      // The company stays out of the hello entirely; so does anything about
+      // what it makes or money. The subject is checked by subjectIssues.
+      const company = b.match(/subh\s*-?\s*sandesh/i);
+      if (company) err("connect_company", "Leave “SubhSandesh” out of a Connect note — it's just a hello from Yash. Who you are and what you make come after they reply.");
+      const pitch = b.replace(URL_RE, " ").replace(/subh\s*-?\s*sandesh/gi, " ").match(CONNECT_RE);
+      if (pitch) err("pitch_word", `“${pitch[1]}” turns a hello into a pitch. Talk only about them and wanting to connect — the details come after they reply.`);
+    } else {
+      const pitch = (kind === "followup" ? b : all).replace(URL_RE, " ").match(PITCH_RE);
+      if (pitch) err("pitch_word", `“${pitch[1]}” turns a note into a pitch. Say it the way you'd tell a friend — e.g. “make a reel together” — details after they reply.`);
+    }
     const pays = (b.match(/\b(paid|pay|paying|payment|payments)\b/gi) || []).length;
     if (pays > 1) err("pay_twice", "Mention paying once, casually (“happy to pay for it, of course”) — more reads like an offer.");
     if ((all.match(EMOJI_RE) || []).length > 0) err("emoji", "No emoji in a note from one person to another stranger — it reads promotional.");
     if (hasOptOutLine(b)) err("opt_out_line", "Leave out “reply no / I won't email again / unsubscribe” lines — they read like a mass mailing. A “no” reply still stops all future emails automatically.");
-    if (kind === "initial" || kind === "fresh") {
+    if (connect && !/\?/.test(b)) {
+      err("no_question", "End with one easy question, e.g. “Would you be open to a quick chat this week?” — it's what gets a reply.");
+    } else if (connect) {
+      if ((b.match(/\?/g) || []).length > 2) warn("many_questions", "One question is easier to answer than three.");
+    } else if (kind === "initial" || kind === "fresh") {
       if (!/\?/.test(b)) (kind === "initial" ? err : warn)("no_question", personal ? "Ask one soft question with a question mark, e.g. “Would you be up for making a reel together?” — a reply is what moves you to Primary." : "Ask one soft question, e.g. “Would you be open to a paid collab?” — a reply is what moves you to Primary.");
       else if ((b.match(/\?/g) || []).length > 2) warn("many_questions", "One question is easier to answer than three.");
     }
@@ -617,7 +709,7 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
     const writer = o.writer ?? personalWriterName();
     if (TEAM_SIGNOFF_RE.test(b)) err("team_signoff", `It comes from ${writer || "one person"} — drop the “Team SubhSandesh” line; the signature${writer ? ` “${writer}”` : ""} is added automatically.`);
     if (writer && !introducesWriter(b, writer)) {
-      if (kind === "initial") err("no_intro", `Introduce yourself in the first person — e.g. “I'm ${writer} from SubhSandesh.”`);
+      if (kind === "initial") err("no_intro", connect ? `Say who you are in the first person — e.g. “I'm ${writer}.”` : `Introduce yourself in the first person — e.g. “I'm ${writer} from SubhSandesh.”`);
       else if (kind === "fresh") warn("no_intro", `A line like “${writer} here again” reminds them who's writing.`);
     }
   }
@@ -763,6 +855,17 @@ export function personalSignature(
 }
 
 /**
+ * The signature under a Connect note and its follow-ups: just the writer's
+ * first name ("Yash") — no company line, no site, no address. The company is
+ * introduced in the reply, once they have written back.
+ */
+export function connectSignature(signature: string = env.PROSPECT_PERSONAL_SIGNATURE): string {
+  const writer = personalWriterName(signature);
+  if (writer) return writer;
+  return String(signature || "").replace(/\r\n/g, "\n").trim().split("\n")[0].trim() || "Yash";
+}
+
+/**
  * The whole personal email: the body, a blank line, the signature. Nothing
  * else — no footer, no unsubscribe link, no visible Ref token. Replies are
  * matched by In-Reply-To/References and the sender address instead.
@@ -810,6 +913,41 @@ export function personalSender(
     fromName: String(fromName || "").replace(/[\r\n"<>]+/g, " ").trim(),
     replyToAddress: ADDR_RE.test(rt) ? rt : from,
   };
+}
+
+/**
+ * The sender of a Connect note and its follow-ups: the personal sender, with
+ * the display name PROSPECT_CONNECT_FROM_NAME when it is set (e.g. plain
+ * "Yash"); empty keeps the normal name ("Yash from SubhSandesh").
+ */
+export function connectSender(connectFromName: string = env.PROSPECT_CONNECT_FROM_NAME, base: PersonalSender = personalSender()): PersonalSender {
+  const name = String(connectFromName || "").replace(/[\r\n"<>]+/g, " ").trim();
+  return name ? { ...base, fromName: name } : base;
+}
+
+/** The sender and signature one personal email goes out with. */
+export function personalDress(touch: FirstTouch | undefined, kind: JobKind): { sender: PersonalSender; signature: string } {
+  return isConnectProfile({ style: "personal", kind, touch })
+    ? { sender: connectSender(), signature: connectSignature() }
+    : { sender: personalSender(), signature: personalSignature() };
+}
+
+/**
+ * Which first-touch profile one recipient's email is held to.
+ *   initial   what the admin picked (Connect unless they chose Pitch).
+ *   followup  the first email's: a follow-up to a Connect note stays a
+ *             pitch-free bump until they reply.
+ *   fresh / reply   always "pitch" — a reply is where the real context goes.
+ * Classic mail is always "pitch".
+ */
+export function touchFor(
+  e: { kind: JobKind; style: OutreachStyle; firstTouch?: FirstTouch | "" | null; lastReplyAt?: Date | null },
+  requested: FirstTouch = "connect"
+): FirstTouch {
+  if (e.style !== "personal") return "pitch";
+  if (e.kind === "initial") return requested === "pitch" ? "pitch" : "connect";
+  if (e.kind === "followup") return e.firstTouch === "connect" && !e.lastReplyAt ? "connect" : "pitch";
+  return "pitch";
 }
 
 /** support@, noreply@, influencer-support@ … — an address no person owns. */
@@ -900,9 +1038,24 @@ export function inboxCheck(o: {
   numbers?: boolean;
   /** The analytics screenshot goes inline (multipart/related HTML + text). */
   image?: boolean;
+  /** Connect note / its follow-up: the hello checklist. */
+  touch?: FirstTouch;
 }): InboxCheckItem[] {
   const codes = new Set(o.lint.errors.map((e) => e.code));
   const from = `${o.sender.fromName} <${o.sender.fromAddress}>`;
+  if (isConnectProfile({ style: o.style, kind: o.kind, touch: o.touch })) {
+    const r = CONNECT_RANGES[o.kind as "initial" | "followup"];
+    const items: InboxCheckItem[] = [
+      { ok: isTrustworthySender(o.sender), label: `From ${from}` },
+      { ok: !codes.has("connect_company") && !codes.has("pitch_word") && !codes.has("subject_pitch") && !codes.has("team_signoff"), label: "No company pitch — just a hello" },
+      { ok: !codes.has("personal_link") && !codes.has("personal_number") && !codes.has("subject_number") && !o.image, label: "No links, numbers or images" },
+      { ok: !codes.has("no_question"), label: "Ends with one easy question" },
+      { ok: !codes.has("too_short") && !codes.has("too_long"), label: `Short (${r.min}–${r.max} words)` },
+    ];
+    if (o.kind === "followup") items.push({ ok: /^re:/i.test(String(o.subject || "Re:").trim()), label: "Same thread (Re: + In-Reply-To)" });
+    items.push(quietLaneItem(o.quietLane));
+    return items;
+  }
   if (o.style === "classic") {
     return [
       { ok: isTrustworthySender(o.sender), label: `From ${from}` },

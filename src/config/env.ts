@@ -329,6 +329,13 @@ export const env = {
   // sender. Reply-To stays INFLUENCER_REPLY_TO_EMAIL so replies reach the app.
   PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || PROSPECT_PERSONAL_DEFAULTS.fromAddress).trim().toLowerCase(),
   PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || PROSPECT_PERSONAL_DEFAULTS.fromName,
+  /**
+   * The From display name for Connect emails (the first hello and its
+   * follow-ups). Empty (default) = the normal PROSPECT_PERSONAL_FROM_NAME
+   * ("Yash from SubhSandesh"); set it to "Yash" to make the hello come from
+   * plain "Yash". The address and everything else stay the same.
+   */
+  PROSPECT_CONNECT_FROM_NAME: (process.env.PROSPECT_CONNECT_FROM_NAME || "").replace(/[\r\n"<>]+/g, " ").trim(),
   /** Signature under personal mail ("Yash"). `\n` becomes a line break. Plain text. */
   PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || PROSPECT_PERSONAL_DEFAULTS.signature).replace(/\\n/g, "\n"),
   /**
