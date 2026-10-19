@@ -163,6 +163,8 @@ router.use("/will-you-be-mine-pages", makeValentineDayRouter("will-you-be-mine")
 router.use("/sorry-premium-pages", makeValentineDayRouter("sorry-premium"));
 // Digital Bouquet ✦ Premium — arrange a bouquet, it blooms for them. Same engine.
 router.use("/digital-bouquet-pages", makeValentineDayRouter("digital-bouquet"));
+// Wedding Invitation ✦ Premium — story, every function, gallery, RSVP per function. Same engine + wedding kit routes.
+router.use("/wedding-invitation-premium-pages", makeValentineDayRouter("wedding-invitation-premium"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.
