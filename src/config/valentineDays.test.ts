@@ -130,7 +130,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
   "royal-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings"],
-  "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "question", "yesLine"],
+  "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "cardSize", "question", "yesLine"],
   "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests"],
   "wedding-invitation-premium": [
     "theme", "order", "motif", "hindi", "date", "time", "city", "hashtag", "brideParents", "brideNote", "groomParents", "groomNote", "events", "story", "faqs", "rsvpBy", "maxGuests", "rsvpMeal",

@@ -946,6 +946,8 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       },
       /** The card's handwriting. */
       { key: "cardHand", kind: "enum", options: ["script", "hand", "serif"], default: "hand" },
+      /** The card's text size (s/m/l); each handwriting is normalised to it. */
+      { key: "cardSize", kind: "enum", options: ["s", "m", "l"], default: "m" },
       { key: "question", kind: "text", max: 60 },
       { key: "yesLine", kind: "text", max: 80 },
     ],
