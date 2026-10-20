@@ -1145,6 +1145,8 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       /** Read by weddingGuest.controller: the RSVP accepts a meal choice only when true. */
       { key: "rsvpMeal", kind: "bool", default: true },
       { key: "blessings", kind: "bool", default: true },
+      /** Ganesha invocation before the gates open (false = the royal crest). */
+      { key: "invocation", kind: "bool", default: true },
     ],
   },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
