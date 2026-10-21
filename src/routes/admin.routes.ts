@@ -61,7 +61,14 @@ import {
   updateThread,
 } from "../controllers/adminThread.controller";
 import { requireSuperAdmin } from "../middleware/adminAuth";
-import { getAdminTemplateTiers, setTemplateTier, clearTemplateTier } from "../controllers/templateMeta.controller";
+import {
+  getAdminTemplateTiers,
+  setTemplateTier,
+  clearTemplateTier,
+  getAdminTemplateOrder,
+  setTemplateOrder,
+  clearTemplateOrder,
+} from "../controllers/templateMeta.controller";
 import { getRecurringUsers } from "../controllers/adminRetention.controller";
 import {
   getAudience,
@@ -151,6 +158,12 @@ router.delete("/template-pricing/:slug", requireSuperAdmin, clearTemplatePricing
 router.get("/template-tiers", requireSuperAdmin, getAdminTemplateTiers);
 router.patch("/template-tiers/:slug", requireSuperAdmin, setTemplateTier);
 router.delete("/template-tiers/:slug", requireSuperAdmin, clearTemplateTier);
+
+// Gallery order. Super-admin only, like tiers: it decides what every visitor
+// sees first.
+router.get("/template-order", requireSuperAdmin, getAdminTemplateOrder);
+router.put("/template-order", requireSuperAdmin, setTemplateOrder);
+router.delete("/template-order", requireSuperAdmin, clearTemplateOrder);
 
 // ── Who gets a template before everybody else ──────────────────────────────
 //

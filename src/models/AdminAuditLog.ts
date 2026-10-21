@@ -33,6 +33,8 @@ export type AuditAction =
   | "template.clear_pricing"
   | "template.set_tier"
   | "template.clear_tier"
+  | "template.set_order"
+  | "template.clear_order"
   | "template.grant_access"
   | "template.revoke_access"
   | "feedback.reply_sent"
