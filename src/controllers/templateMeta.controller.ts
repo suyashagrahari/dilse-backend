@@ -7,6 +7,8 @@
 //    code default `PREMIUM_SLUGS`.
 //  • RANKING — how many pages each template has had created, busiest first.
 //    The gallery orders by it and badges the top five.
+//  • ORDER — the slugs a super admin pulled to the front of the gallery, in
+//    their order (/admin/template-order). Empty = the code's PINNED_FIRST.
 //
 // The public read is anonymous and edge-cached, like /template-visibility: it is
 // on the first page a stranger loads. Both halves fail soft — an error sends
@@ -15,6 +17,7 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import TemplateTier from "../models/TemplateTier";
+import TemplateOrder from "../models/TemplateOrder";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { audit } from "../services/adminAudit";
 
@@ -31,6 +34,18 @@ async function tierOverrides(): Promise<Record<string, boolean>> {
   for (const d of docs) map[String(d.slug)] = Boolean(d.premium);
   tierCache = { map, at: Date.now() };
   return map;
+}
+
+// ── Order (30s cache, invalidated on write) ──────────────────────────────────
+
+let orderCache: { slugs: string[]; at: number } | null = null;
+
+async function galleryOrder(): Promise<string[]> {
+  if (orderCache && Date.now() - orderCache.at < 30_000) return orderCache.slugs;
+  const doc = await TemplateOrder.findOne({ key: "gallery" }).select("slugs").lean();
+  const slugs = (doc?.slugs ?? []).map(String);
+  orderCache = { slugs, at: Date.now() };
+  return slugs;
 }
 
 // ── Ranking (10 min cache) ───────────────────────────────────────────────────
@@ -74,14 +89,15 @@ async function ranking(): Promise<{ slug: string; created: number }[]> {
   return rankInflight;
 }
 
-/** GET /api/template-meta — public. `{ tiers: {slug: premium}, ranking: [{slug, created}] }` */
+/** GET /api/template-meta — public. `{ tiers: {slug: premium}, ranking: [{slug, created}], order: [slug] }` */
 export const getTemplateMeta = async (_req: Request, res: Response): Promise<void> => {
-  const [tiers, rank] = await Promise.all([
+  const [tiers, rank, order] = await Promise.all([
     tierOverrides().catch((e) => { console.error("[template-meta] tiers:", e); return {}; }),
     ranking().catch((e) => { console.error("[template-meta] ranking:", e); return []; }),
+    galleryOrder().catch((e) => { console.error("[template-meta] order:", e); return [] as string[]; }),
   ]);
   res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
-  res.json({ success: true, data: { tiers, ranking: rank } });
+  res.json({ success: true, data: { tiers, ranking: rank, order } });
 };
 
 // ── Super-admin writes ───────────────────────────────────────────────────────
@@ -152,5 +168,70 @@ export const clearTemplateTier = async (req: Request, res: Response): Promise<vo
   } catch (error) {
     console.error("Clear template tier error:", error);
     res.status(500).json({ success: false, error: "Failed to reset tier" });
+  }
+};
+
+// ── Gallery order (super admin) ──────────────────────────────────────────────
+
+/** GET /api/admin/template-order — the saved order, if any. */
+export const getAdminTemplateOrder = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const doc = await TemplateOrder.findOne({ key: "gallery" }).select("slugs updatedByEmail updatedAt").lean();
+    res.json({
+      success: true,
+      data: { slugs: (doc?.slugs ?? []).map(String), updatedByEmail: doc?.updatedByEmail || "", updatedAt: doc?.updatedAt ?? null },
+    });
+  } catch (error) {
+    console.error("Admin template order error:", error);
+    res.status(500).json({ success: false, error: "Failed to read template order" });
+  }
+};
+
+/**
+ * PUT /api/admin/template-order  `{ slugs: string[] }`
+ *
+ * Replaces the whole list in one write, so the gallery can never be read with
+ * half of a reorder applied.
+ */
+export const setTemplateOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const raw = (req.body as { slugs?: unknown })?.slugs;
+    if (!Array.isArray(raw)) { res.status(400).json({ success: false, error: "`slugs` must be an array" }); return; }
+    if (raw.length > 500) { res.status(400).json({ success: false, error: "Too many templates" }); return; }
+    const slugs: string[] = [];
+    for (const v of raw) {
+      const slug = String(v ?? "").trim().toLowerCase();
+      if (!SLUG_RE.test(slug)) { res.status(400).json({ success: false, error: `Invalid slug "${String(v)}"` }); return; }
+      if (!slugs.includes(slug)) slugs.push(slug);
+    }
+
+    const prev = await TemplateOrder.findOne({ key: "gallery" }).select("slugs").lean();
+    const doc = await TemplateOrder.findOneAndUpdate(
+      { key: "gallery" },
+      { key: "gallery", slugs, updatedByEmail: req.userEmail || "" },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    orderCache = null;
+    await audit(req, {
+      action: "template.set_order",
+      changes: { order: { from: prev ? prev.slugs.slice(0, 20) : null, to: slugs.slice(0, 20) } },
+    });
+    res.json({ success: true, data: { slugs: doc.slugs, updatedByEmail: doc.updatedByEmail, updatedAt: doc.updatedAt } });
+  } catch (error) {
+    console.error("Set template order error:", error);
+    res.status(500).json({ success: false, error: "Failed to save template order" });
+  }
+};
+
+/** DELETE /api/admin/template-order — back to the code's default order. */
+export const clearTemplateOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const prev = await TemplateOrder.findOneAndDelete({ key: "gallery" }).lean();
+    orderCache = null;
+    if (prev) await audit(req, { action: "template.clear_order", changes: { order: { from: prev.slugs.slice(0, 20), to: null } } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Clear template order error:", error);
+    res.status(500).json({ success: false, error: "Failed to reset template order" });
   }
 };
