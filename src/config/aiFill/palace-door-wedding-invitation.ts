@@ -2,25 +2,27 @@ import type { AiFillField, AiFillTemplateSchema } from "./types";
 
 /**
  * palace-door-wedding-invitation — Palace Door Wedding Invitation, a wedding design on Royal's limits
- * (carved Rajasthani doors swing open, a floral mandap with lanterns, an illustrated couple for every function).
- * Started as a copy of royal-wedding-invitation's schema (same extras).
- * Paths resolve against `ValentineDayData` (client
+ * (a carved haveli door swings open onto an ivory palace courtyard; every function has its own
+ * illustrated couple). Paths resolve against `ValentineDayData` (client
  * app/(templates)/_valentine/types.ts); extras keys are defined in
  * config/weddingDays/palace-door-wedding-invitation.ts.
  *
  * The engine's fields mean: recipientName = the BRIDE, senderName = the GROOM,
  * letter = the English invitation, endLine = the closing line.
  *
- * The editor opens on a demo wedding with five functions (rows 0–4) and four
- * story chapters, so those indices always exist. The client drops demo rows
- * the model left untouched, so a short description gives a short page.
+ * The editor opens on a demo wedding with five functions (rows 0–4), four
+ * story chapters and two contacts, so those indices always exist. The client
+ * drops demo rows the model left untouched, so a short description gives a
+ * short page.
  *
  * Budget (field cap 40): 2 names, the invitation in English and Hindi, both
- * families, the grandparents' line, five functions × (name, date, time,
- * venue, dress code), three story chapters × (title, line), good to know and
- * the closing line. Not declared: theme / music / photos (visual choices),
- * map links (the model would invent them), dress colours (the client derives a
- * swatch from the dress-code words), RSVP settings (the sender's decisions).
+ * families, five functions × (name, date, time, venue, dress code), two story
+ * chapters × (title, line), one contact person (name, relation, phone), good
+ * to know and the closing line. Not declared: theme / music / photos (visual
+ * choices), map links, livestream and UPI (the model would invent them; a UPI
+ * id is money), dress colours (the client derives a swatch from the dress-code
+ * words), the grandparents' line (rarely in a description; the client clears
+ * the demo's), RSVP settings (the sender's decisions).
  */
 
 const TONE =
@@ -58,7 +60,7 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
     label: `Function ${i + 1} — venue`,
     kind: "text" as const,
     max: 80,
-    guide: `Where function ${i + 1} happens: the venue name and city from the description ('The Leela Palace, Udaipur'; 'Bride's home, Kanpur'). When a function has no venue of its own, repeat the venue the description gives for the neighbouring functions. Null when the description names no place at all.`,
+    guide: `Where function ${i + 1} happens: the venue name and city from the description ('The Leela Palace, Udaipur'; 'Bride's home, Kanpur'), in English words and Latin script even when the description is in Hindi or Hinglish (a family home becomes 'Family home, Lucknow'). When a function has no venue of its own, repeat the venue the description gives for the neighbouring functions. Null when the description names no place at all.`,
   },
   {
     path: `extras.events[${i}].dressCode`,
@@ -70,16 +72,13 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
   },
 ]).flat();
 
-const storyFields: AiFillField[] = [0, 1, 2].flatMap((i) => [
+const storyFields: AiFillField[] = [0, 1].flatMap((i) => [
   {
     path: `extras.story[${i}].title`,
     label: `Our story ${i + 1} — title`,
     kind: "text" as const,
     max: 60,
-    guide:
-      i === 2
-        ? "Chapter 3's title: always 'Forever begins' (or the description's own words for it). No emoji."
-        : `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the roka, the families meeting"][i]}), as a short evocative title ('Two strangers at a book fair', 'A ring by the lake'). Only from a moment the description tells; a function of the wedding itself (engagement ceremony, registration) is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
+    guide: `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the roka, the families meeting"][i]}), as a short evocative title ('A wrong turn in Jodhpur', 'A ring at the haveli door'). Only from a moment the description tells; a function of the wedding itself (engagement ceremony, registration) is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
   },
   {
     path: `extras.story[${i}].line`,
@@ -87,17 +86,40 @@ const storyFields: AiFillField[] = [0, 1, 2].flatMap((i) => [
     kind: "text" as const,
     max: 240,
     guide:
-      (i === 2
-        ? "One warm sentence for the last chapter, the wedding itself, about families becoming one and the guest being part of it. No date, no venue, no time. Under 140 characters."
-        : `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years, and never restate a function's date. Null when the title is null. Under 200 characters.`) + TONE,
+      `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years, and never restate a function's date. Null when the title is null. Under 200 characters.` + TONE,
   },
 ]);
+
+const contactFields: AiFillField[] = [
+  {
+    path: "extras.contacts[0].name",
+    label: "Contact person — name",
+    kind: "text",
+    max: 40,
+    guide: "The person guests should call with questions, ONLY when the description names one together with a phone number ('call Yash on 98290…'): first name and surname as given. Null otherwise; never pick the bride, the groom or a parent unless the description says to call them.",
+  },
+  {
+    path: "extras.contacts[0].relation",
+    label: "Contact person — relation",
+    kind: "text",
+    max: 40,
+    guide: "How the contact person is related to the couple, in a few words ('Ishita's brother', 'Kabir's cousin', 'Wedding planner'), only when the description states the relation in so many words. Write it as '<bride or groom's first name>'s <relation>' only when the description says whose relative they are; when it gives just a name and a number, return null. Null when the name is null.",
+  },
+  {
+    path: "extras.contacts[0].phone",
+    label: "Contact person — phone",
+    kind: "text",
+    max: 16,
+    guide: "The contact person's phone number exactly as the description writes it, digits with an optional +91 ('+91 98290 11223'). Never invent, complete or reformat a number into a different one. Null when the description gives none.",
+    example: "+91 98290 11223",
+  },
+];
 
 export const palaceDoorWeddingInvitation: AiFillTemplateSchema = {
   slug: "palace-door-wedding-invitation",
   audience: "friend",
   premise:
-    "You are writing a couple's wedding invitation website (Palace Door Wedding Invitation), the kind of page a family sends to every guest on WhatsApp. Its look: carved Rajasthani doors swing open, a floral mandap with lanterns, an illustrated couple for every function. It shows the couple's names, the invitation in English and Hindi side by side, both families, a countdown, the couple's story in chapters, every function of the wedding (each with its date, time, venue, map and dress code), a photo gallery, practical notes for guests, an RSVP and a blessings wall, and closes with a 'Shubh Vivah' blessing. The person describing the wedding is the bride, the groom or a family member; the page speaks for both families to their guests. It may be a Hindu, Sikh, Muslim, Christian, South Indian or court/registry wedding: follow the description's customs and words, never assume a Hindu ceremony when it says otherwise." +
+    "You are writing a couple's wedding invitation website (Palace Door Wedding Invitation), the kind of page a family sends to every guest on WhatsApp. Its look: a carved Rajasthani haveli door swings open onto an ivory palace courtyard with a floral arch and gold lanterns; every function shows an illustrated couple dressed for it. It shows the couple's names, the invitation in English and Hindi side by side, both families, a countdown, the couple's story in chapters, every function of the wedding (each with its date, time, venue, map and dress code), a photo gallery, practical notes for guests, a family member to call, an RSVP and a blessings wall, and closes with a 'Shubh Vivah' blessing. The person describing the wedding is the bride, the groom or a family member; the page speaks for both families to their guests. It may be a Hindu, Sikh, Muslim, Christian, South Indian or court/registry wedding: follow the description's customs and words, never assume a Hindu ceremony when it says otherwise." +
     " Use only facts the description states (names, dates, times, places, people). Where it is silent, leave the field null rather than invent.",
   fields: [
     {
@@ -123,7 +145,7 @@ export const palaceDoorWeddingInvitation: AiFillTemplateSchema = {
       max: 1200,
       required: true,
       guide:
-        "The invitation guests read first, in English, 2 short paragraphs (blank line between), 50–110 words. Paragraph 1 invites the guest, naming both partners and, when the description names them, the families ('Together with their families…', or for a royal register 'By the grace of the Almighty and with the blessings of our elders…'; for a church wedding 'request the honour of your presence', for a court marriage keep it simple and modern). Paragraph 2 says in one or two warm lines what the celebration will be (the place, the functions) and that the guest's presence matters. Never write a date, a day, a time or a venue address in it (the page shows every function's details right below); naming the city or palace is fine. No greeting line, no signature. Plain text only: paragraphs separated by one blank line, never HTML tags." +
+        "The invitation guests read first, in English, 2 short paragraphs (blank line between), 50–110 words. Paragraph 1 invites the guest, naming both partners and, when the description names them, the families ('Together with their families…', or for a royal register 'By the grace of the Almighty and with the blessings of our elders…'; for a church wedding 'request the honour of your presence', for a court marriage keep it simple and modern). Paragraph 2 says in one or two warm lines what the celebration will be (the place, the functions) and that the guest's presence matters. Leave every date, day, time and address out of it (the page shows every function's details right below): name the city or the palace instead. No greeting line, no signature. Plain text only: paragraphs separated by one blank line, never HTML tags. This is the English side of a bilingual page (the Hindi side is its own field), so write it in English, in Latin script, even when the description is in Hindi or Hinglish." +
         TONE,
     },
     {
@@ -132,7 +154,7 @@ export const palaceDoorWeddingInvitation: AiFillTemplateSchema = {
       kind: "longtext",
       max: 700,
       guide:
-        "The same invitation in Hindi, in Devanagari script (never romanised), 1–2 short sentences in the traditional nimantran style: 'सर्वशक्तिमान की कृपा और बड़ों के आशीर्वाद से, <bride> और <groom> के शुभ विवाह के पावन अवसर पर आप सपरिवार सादर आमंत्रित हैं।' Write the couple's names in Devanagari here. For a church or court wedding keep it simple ('… के विवाह समारोह में आप सादर आमंत्रित हैं।'). Under 300 characters.",
+        "The same invitation in Hindi, in Devanagari script (never romanised), 1–2 short sentences in the traditional nimantran style: 'सर्वशक्तिमान की कृपा और बड़ों के आशीर्वाद से, <bride> और <groom> के शुभ विवाह के पावन अवसर पर आप सपरिवार सादर आमंत्रित हैं।' Always write this field, even for a short description: it needs only the two names. Write the names in Devanagari syllable by syllable as they are said; a name that ends in a long -a sound keeps the ा sign at its end (Priya → प्रिया, Ananya → अनन्या). For a church or court wedding keep it simple ('… के विवाह समारोह में आप सादर आमंत्रित हैं।'). Under 300 characters.",
     },
     {
       path: "extras.brideFamily",
@@ -148,15 +170,9 @@ export const palaceDoorWeddingInvitation: AiFillTemplateSchema = {
       max: 120,
       guide: "The groom's parents as an invitation prints them: 'Mrs. Nandini & Mr. Arvind Mehta'. Only names the description gives; with only a surname, 'The Mehta family'. Null when it names neither.",
     },
-    {
-      path: "extras.blessingsOf",
-      label: "With the blessings of",
-      kind: "text",
-      max: 160,
-      guide: "Grandparents or elders whose blessings the invitation carries, exactly as named in the description, with honorifics ('Smt. Kamla Devi & Late Shri Ram Prasad Sharma'). Null unless the description names them.",
-    },
     ...functionFields,
     ...storyFields,
+    ...contactFields,
     {
       path: "extras.things",
       label: "Good to know",
@@ -164,7 +180,7 @@ export const palaceDoorWeddingInvitation: AiFillTemplateSchema = {
       max: 6,
       itemMax: 180,
       guide:
-        "Practical notes for guests, but ONLY lines you could back with a quote from the description: rooms it says are held, a shuttle it mentions, a contact person and phone number it gives. Each line starts with a short heading and a colon ('Contact: …'). Most descriptions contain none of this, and an empty list is the normal answer. Never add a line about hotels nearby, traffic, routes, weather, gifts or the dress code (the functions already show dress codes).",
+        "Practical notes for guests, but ONLY lines you could back with a quote from the description: rooms it says are held, a shuttle it mentions, children welcome or not. Each line starts with a short heading and a colon ('Contact: …'). Most descriptions contain none of this, and an empty list is the normal answer. Never put a contact person or phone number here (it has its own fields), and never add a line about hotels nearby, traffic, routes, weather, gifts or the dress code (the functions already show dress codes).",
       example: "Stay: Rooms are held at the hotel for out-of-town guests.",
     },
     {
@@ -172,7 +188,7 @@ export const palaceDoorWeddingInvitation: AiFillTemplateSchema = {
       label: "Closing line",
       kind: "text",
       max: 90,
-      guide: "The closing line under the 'Shubh Vivah' seal at the very end, signed by the two families by their SURNAMES, taken from the parents' names in the description (parents Sunita and Ramesh Agarwal + Pooja and Vikram Khanna → 'With love and gratitude, the Agarwal & Khanna families'). Under 80 characters, no emoji.",
+      guide: "The closing line under the 'Shubh Vivah' seal at the very end, signed by the two families by their SURNAMES, taken from the parents' names in the description (parents Sunita and Ramesh Agarwal + Pooja and Vikram Khanna → 'With love and gratitude, the Agarwal & Khanna families'). Under 80 characters, no emoji. In English and Latin script, like the invitation above it; when the description names no parents, sign it from the couple's first names ('With love, the families of Priya & Rahul').",
     },
   ],
 };
