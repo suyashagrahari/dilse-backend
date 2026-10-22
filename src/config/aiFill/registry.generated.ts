@@ -77,6 +77,10 @@ import { digitalBouquet } from "./digital-bouquet";
 import { weddingInvitation } from "./wedding-invitation";
 import { weddingInvitationPremium } from "./wedding-invitation-premium";
 import { royalWeddingInvitation } from "./royal-wedding-invitation";
+import { palaceDoorWeddingInvitation } from "./palace-door-wedding-invitation";
+import { gardenWeddingInvitation } from "./garden-wedding-invitation";
+import { floralWeddingInvitation } from "./floral-wedding-invitation";
+import { lotusWeddingInvitation } from "./lotus-wedding-invitation";
 import { call } from "./call";
 import { challan } from "./challan";
 import { nutrition } from "./nutrition";
@@ -153,6 +157,10 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   weddingInvitation,
   weddingInvitationPremium,
   royalWeddingInvitation,
+  palaceDoorWeddingInvitation,
+  gardenWeddingInvitation,
+  floralWeddingInvitation,
+  lotusWeddingInvitation,
   call,
   challan,
   nutrition,

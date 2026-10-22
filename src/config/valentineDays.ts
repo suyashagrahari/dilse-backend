@@ -26,6 +26,11 @@ import hugDayPremium from "./premiumDays/happy-hug-day-premium";
 import kissDayPremium from "./premiumDays/happy-kiss-day-premium";
 import valentinesDayPremium from "./premiumDays/happy-valentines-day-premium";
 import halloweenPremium from "./premiumDays/happy-halloween-premium";
+// The wedding designs on Royal's limits — one file each in ./weddingDays.
+import palaceDoorWeddingDay from "./weddingDays/palace-door-wedding-invitation";
+import gardenWeddingDay from "./weddingDays/garden-wedding-invitation";
+import floralWeddingDay from "./weddingDays/floral-wedding-invitation";
+import lotusWeddingDay from "./weddingDays/lotus-wedding-invitation";
 
 /** The nine $2 templates. */
 export const BASE_DAY_SLUGS = [
@@ -71,6 +76,11 @@ export const BASE_DAY_SLUGS = [
   "wedding-invitation-premium",
   // Royal Wedding Invitation 👑 — the $20 wedding tier (palace gates, 8 functions, 40 photos, RSVPs, blessings).
   "royal-wedding-invitation",
+  // Four more wedding designs on Royal's limits (palace door, Mughal garden, pampas & peony, lotus temple).
+  "palace-door-wedding-invitation",
+  "garden-wedding-invitation",
+  "floral-wedding-invitation",
+  "lotus-wedding-invitation",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -1171,6 +1181,12 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "blessing", kind: "text", max: 120 },
     ],
   },
+
+  // ── The wedding designs on Royal's limits — one file each in ./weddingDays ─
+  "palace-door-wedding-invitation": palaceDoorWeddingDay,
+  "garden-wedding-invitation": gardenWeddingDay,
+  "floral-wedding-invitation": floralWeddingDay,
+  "lotus-wedding-invitation": lotusWeddingDay,
 
   // ── The ultra-premium twins — one file each in ./premiumDays ──────────────
   "happy-rose-day-premium": roseDayPremium,

@@ -169,6 +169,11 @@ router.use("/wedding-invitation-pages", makeValentineDayRouter("wedding-invitati
 router.use("/wedding-invitation-premium-pages", makeValentineDayRouter("wedding-invitation-premium"));
 // Royal Wedding Invitation 👑 ($20 wedding tier) — same engine; guest RSVP + blessings routes mount with it.
 router.use("/royal-wedding-invitation-pages", makeValentineDayRouter("royal-wedding-invitation"));
+// The four wedding designs on Royal's limits — same engine; guest RSVP + blessings routes mount with each.
+router.use("/palace-door-wedding-invitation-pages", makeValentineDayRouter("palace-door-wedding-invitation"));
+router.use("/garden-wedding-invitation-pages", makeValentineDayRouter("garden-wedding-invitation"));
+router.use("/floral-wedding-invitation-pages", makeValentineDayRouter("floral-wedding-invitation"));
+router.use("/lotus-wedding-invitation-pages", makeValentineDayRouter("lotus-wedding-invitation"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.
