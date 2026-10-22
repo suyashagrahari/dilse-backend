@@ -7,8 +7,9 @@ import type { ValentineDayConfig } from "../valentineDays";
  * Same fields as royal-wedding-invitation, so the wedding guest routes (RSVP
  * per function, blessings wall) and the owner dashboard work unchanged.
  * recipientName = the bride, senderName = the groom, letter = the English
- * invitation, photos = one pool of 40 (story chapters and family cards point
- * into it by 1-based index). No question is asked. Light themes only.
+ * invitation, photos = one pool of 40 (story chapters, family cards and the
+ * couple portrait point into it by 1-based index). No question is asked.
+ * Light themes only.
  *
  * Client mirror: client/app/(templates)/_valentine/days/floral-wedding-invitation.ts (same keys
  * and limits; PINNED_KEYS in valentineDays.test.ts pins them).
@@ -35,6 +36,8 @@ const config: ValentineDayConfig = {
     /** 1-based index into photos; 0 = none. */
     { key: "bridePhoto", kind: "number", min: 0, max: 40, default: 0 },
     { key: "groomPhoto", kind: "number", min: 0, max: 40, default: 0 },
+    /** The couple's portrait under the floral drape (1-based index into photos; 0 = the illustration only). */
+    { key: "couplePhoto", kind: "number", min: 0, max: 40, default: 0 },
     { key: "muhurat", kind: "text", max: 60 },
     { key: "hashtag", kind: "text", max: 40 },
     /** The functions; `id` is a short stable slug the guests' RSVPs refer to. All text. */
@@ -78,8 +81,24 @@ const config: ValentineDayConfig = {
     /** Read by weddingGuest.controller: the RSVP accepts a meal choice only when true. */
     { key: "rsvpMeal", kind: "bool", default: true },
     { key: "blessings", kind: "bool", default: true },
-    /** Open with the Shri Ganesh invocation (false = the couple's monogram). */
+    /** Shri Ganesh on the invitation card (false = none). */
     { key: "invocation", kind: "bool", default: true },
+    /** Family members guests can call or WhatsApp; the client validates the phone (10 digits, optional +91). */
+    {
+      key: "contacts",
+      kind: "objlist",
+      maxItems: 4,
+      item: [
+        { key: "name", kind: "text", max: 40 },
+        { key: "relation", kind: "text", max: 40 },
+        { key: "phone", kind: "text", max: 20 },
+      ],
+    },
+    /** Optional shagun by UPI (off unless set); the client only links it when it looks like a UPI id. */
+    { key: "upiId", kind: "text", max: 80 },
+    { key: "upiName", kind: "text", max: 60 },
+    /** Livestream link (the client shows it only for https). */
+    { key: "liveUrl", kind: "text", max: 300 },
   ],
 };
 
