@@ -2,8 +2,8 @@ import type { AiFillField, AiFillTemplateSchema } from "./types";
 
 /**
  * lotus-wedding-invitation — Lotus Temple Wedding Invitation, a wedding design on Royal's limits
- * (brass lamps, a lotus pond, gold string lights and the temple gopuram in white, gold and lotus pink).
- * Started as a copy of royal-wedding-invitation's schema (same extras).
+ * (a lotus blooming in a temple pond, brass lamps, gold string lights and the gopuram).
+ * Started as a copy of royal-wedding-invitation's schema, plus the family contacts.
  * Paths resolve against `ValentineDayData` (client
  * app/(templates)/_valentine/types.ts); extras keys are defined in
  * config/weddingDays/lotus-wedding-invitation.ts.
@@ -11,22 +11,28 @@ import type { AiFillField, AiFillTemplateSchema } from "./types";
  * The engine's fields mean: recipientName = the BRIDE, senderName = the GROOM,
  * letter = the English invitation, endLine = the closing line.
  *
- * The editor opens on a demo wedding with five functions (rows 0–4) and four
- * story chapters, so those indices always exist. The client drops demo rows
- * the model left untouched, so a short description gives a short page.
+ * The editor opens on a demo wedding with four functions and four story
+ * chapters. The client drops demo rows the model left untouched, clears the
+ * demo's words from rows it did touch, and keeps the closing "Forever begins"
+ * chapter, so a short description gives a short page.
  *
  * Budget (field cap 40): 2 names, the invitation in English and Hindi, both
- * families, the grandparents' line, five functions × (name, date, time,
- * venue, dress code), three story chapters × (title, line), good to know and
- * the closing line. Not declared: theme / music / photos (visual choices),
- * map links (the model would invent them), dress colours (the client derives a
- * swatch from the dress-code words), RSVP settings (the sender's decisions).
+ * families, the grandparents' line, five functions × (name, date, time, venue)
+ * with a dress code for the first three, two story chapters × (title, line),
+ * two family contacts × (name, phone), good to know and the closing line.
+ * Not declared: theme / music / photos (visual choices), map links (the model
+ * would invent them), dress colours (the client derives a swatch from the
+ * dress-code words), RSVP settings, shagun and the livestream link (the
+ * sender's decisions).
  */
 
 const TONE =
   " Write in the register the description asks for (formal, warm, royal, modern); without a cue, warm and a little regal. Never cheesy, no exclamation-mark spam, no emoji. Write in English unless the description is written in Hindi or Hinglish; never mix scripts inside one field.";
 
 const FUNCTION_ROWS = 5;
+
+/** Rows with a dress code (the rest keep the budget for contacts). */
+const DRESS_ROWS = 3;
 
 const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, i) => [
   {
@@ -36,7 +42,7 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
     max: 40,
     guide:
       i === 0
-        ? "The FIRST function of the wedding in date order, by its usual name: Roka, Tilak, Haldi, Mehendi, Sangeet, Baraat, 'Wedding (Pheras)', Nikah, Anand Karaj, Muhurtham, 'Church Wedding', 'Registry Wedding', Cocktail, Reception… Rows run in date order, one function per row. List ONLY functions the description mentions; when it mentions none, write just the wedding ceremony itself in this row ('Wedding (Pheras)' for a Hindu North Indian wedding, 'Muhurtham' for a Tamil wedding, 'Wedding Ceremony' for a church wedding, 'Registry Wedding' for a court marriage). Under 30 characters."
+        ? "The FIRST function of the wedding in date order. Use the description's own word for each function (a description that says 'muhurtham' gets 'Muhurtham', 'nikah' gets 'Nikah'); otherwise its usual name: Roka, Tilak, Haldi, Mehendi, Sangeet, Baraat, 'Wedding (Pheras)', Nikah, Anand Karaj, Muhurtham, 'Church Wedding', 'Registry Wedding', Cocktail, Reception… Rows run in date order, one function per row. List ONLY functions the description mentions; when it mentions none, write just the wedding ceremony itself in this row ('Wedding (Pheras)' for a Hindu North Indian wedding, 'Muhurtham' for a Tamil wedding, 'Wedding Ceremony' for a church wedding, 'Registry Wedding' for a court marriage). Under 30 characters."
         : `Function ${i + 1} in date order, by its usual name (see function 1). Only a function the description mentions. If the wedding has fewer than ${i + 1} functions, return null for this row and every field of it — never invent one. Under 30 characters.`,
   },
   {
@@ -60,26 +66,23 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
     max: 80,
     guide: `Where function ${i + 1} happens: the venue name and city from the description ('The Leela Palace, Udaipur'; 'Bride's home, Kanpur'). When a function has no venue of its own, repeat the venue the description gives for the neighbouring functions. Null when the description names no place at all.`,
   },
-  {
+  ...(i >= DRESS_ROWS ? [] : [{
     path: `extras.events[${i}].dressCode`,
     label: `Function ${i + 1} — dress code`,
     kind: "text" as const,
     max: 60,
     guide: `A short dress-code line for function ${i + 1}, guests read it under the function: the description's own when it gives one, else the custom for that function (Haldi 'Shades of yellow', Mehendi 'Greens and bright florals', Sangeet 'Indo-western glam', Hindu wedding 'Traditional festive', church wedding 'Formal, pastels', Reception or Cocktail 'Black tie' / 'Cocktail chic'). Mention a colour when it is customary — the page draws a swatch from it. Under 40 characters. Null for an empty row.`,
     example: "Shades of yellow",
-  },
+  }]),
 ]).flat();
 
-const storyFields: AiFillField[] = [0, 1, 2].flatMap((i) => [
+const storyFields: AiFillField[] = [0, 1].flatMap((i) => [
   {
     path: `extras.story[${i}].title`,
     label: `Our story ${i + 1} — title`,
     kind: "text" as const,
     max: 60,
-    guide:
-      i === 2
-        ? "Chapter 3's title: always 'Forever begins' (or the description's own words for it). No emoji."
-        : `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the roka, the families meeting"][i]}), as a short evocative title ('Two strangers at a book fair', 'A ring by the lake'). Only from a moment the description tells; a function of the wedding itself (engagement ceremony, registration) is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
+    guide: `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the roka, the families meeting"][i]}), as a short evocative title ('Two strangers at a book fair', 'A ring by the lake'). Only from a moment the description tells; a function of the wedding itself (engagement ceremony, registration) is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
   },
   {
     path: `extras.story[${i}].line`,
@@ -87,9 +90,24 @@ const storyFields: AiFillField[] = [0, 1, 2].flatMap((i) => [
     kind: "text" as const,
     max: 240,
     guide:
-      (i === 2
-        ? "One warm sentence for the last chapter, the wedding itself, about families becoming one and the guest being part of it. No date, no venue, no time. Under 140 characters."
-        : `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years, and never restate a function's date. Null when the title is null. Under 200 characters.`) + TONE,
+      `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years, and never restate a function's date. Null when the title is null. Under 200 characters.` + TONE,
+  },
+]);
+
+const contactFields: AiFillField[] = [0, 1].flatMap((i) => [
+  {
+    path: `extras.contacts[${i}].name`,
+    label: `Family contact ${i + 1} — name`,
+    kind: "text" as const,
+    max: 40,
+    guide: `${i === 0 ? "The first" : "A second"} person guests can phone about the wedding, ONLY when the description gives that person's phone number. Their name as written, then their relation to the couple in brackets when the description says it: 'Kabir (Rohan's brother)'. Null when the description gives ${i === 0 ? "no phone number" : "fewer than two phone numbers"}.`,
+  },
+  {
+    path: `extras.contacts[${i}].phone`,
+    label: `Family contact ${i + 1} — phone`,
+    kind: "text" as const,
+    max: 20,
+    guide: `That person's phone number exactly as the description writes it, digits with an optional +91. Null when contact ${i + 1}'s name is null; never make a number up.`,
   },
 ]);
 
@@ -97,8 +115,9 @@ export const lotusWeddingInvitation: AiFillTemplateSchema = {
   slug: "lotus-wedding-invitation",
   audience: "friend",
   premise:
-    "You are writing a couple's wedding invitation website (Lotus Temple Wedding Invitation), the kind of page a family sends to every guest on WhatsApp. Its look: brass lamps, a lotus pond, gold string lights and the temple gopuram in white, gold and lotus pink. It shows the couple's names, the invitation in English and Hindi side by side, both families, a countdown, the couple's story in chapters, every function of the wedding (each with its date, time, venue, map and dress code), a photo gallery, practical notes for guests, an RSVP and a blessings wall, and closes with a 'Shubh Vivah' blessing. The person describing the wedding is the bride, the groom or a family member; the page speaks for both families to their guests. It may be a Hindu, Sikh, Muslim, Christian, South Indian or court/registry wedding: follow the description's customs and words, never assume a Hindu ceremony when it says otherwise." +
-    " Use only facts the description states (names, dates, times, places, people). Where it is silent, leave the field null rather than invent.",
+    "You are writing a couple's wedding invitation website (Lotus Temple Wedding Invitation), the kind of page a family sends to every guest on WhatsApp. Its look: a lotus blooming in a temple pond, brass lamps, gold string lights and the gopuram, in ivory, sage green, lotus pink and gold. It shows the couple's names, the invitation in English and Hindi side by side, both families, a countdown, the couple's story in chapters, every function of the wedding (each with its date, time, venue, map and dress code), a photo gallery, practical notes for guests, family members to call, an RSVP and a blessings wall, and closes with a 'Shubh Vivah' blessing. The person describing the wedding is the bride, the groom or a family member; the page speaks for both families to their guests. It may be a Hindu, Sikh, Muslim, Christian, South Indian or court/registry wedding: follow the description's customs and words, never assume a Hindu ceremony when it says otherwise." +
+    " Use only facts the description states (names, dates, times, places, people). Where it is silent, leave the field null rather than invent." +
+    " The Hindi invitation is the one field that is always in Devanagari; it says nothing about the description's language. A description whose sentences are English is an English description: every other field, the names included, stays in English letters.",
   fields: [
     {
       path: "recipientName",
@@ -106,7 +125,7 @@ export const lotusWeddingInvitation: AiFillTemplateSchema = {
       kind: "text",
       max: 30,
       required: true,
-      guide: "The BRIDE's first name as the description spells it (for two grooms or two brides, the first-named partner). Just the first name, no surname, no title.",
+      guide: "The BRIDE's first name exactly as the description spells it, in the same letters (a name the description writes in English letters stays in English letters, whatever the region). For two grooms or two brides, the first-named partner. Just the first name, no surname, no title.",
     },
     {
       path: "senderName",
@@ -114,7 +133,7 @@ export const lotusWeddingInvitation: AiFillTemplateSchema = {
       kind: "text",
       max: 30,
       required: true,
-      guide: "The GROOM's first name as the description spells it (for two grooms or two brides, the second-named partner). Just the first name.",
+      guide: "The GROOM's first name exactly as the description spells it, in the same letters (English letters stay English letters). For two grooms or two brides, the second-named partner. Just the first name.",
     },
     {
       path: "letter",
@@ -132,7 +151,7 @@ export const lotusWeddingInvitation: AiFillTemplateSchema = {
       kind: "longtext",
       max: 700,
       guide:
-        "The same invitation in Hindi, in Devanagari script (never romanised), 1–2 short sentences in the traditional nimantran style: 'सर्वशक्तिमान की कृपा और बड़ों के आशीर्वाद से, <bride> और <groom> के शुभ विवाह के पावन अवसर पर आप सपरिवार सादर आमंत्रित हैं।' Write the couple's names in Devanagari here. For a church or court wedding keep it simple ('… के विवाह समारोह में आप सादर आमंत्रित हैं।'). Under 300 characters.",
+        "Always write this field, whatever language the rest of the page is in: the same invitation in Hindi, in Devanagari script (never romanised), 1–2 short sentences in the traditional nimantran style: 'सर्वशक्तिमान की कृपा और बड़ों के आशीर्वाद से, <bride> और <groom> के शुभ विवाह के पावन अवसर पर आप सपरिवार सादर आमंत्रित हैं।' Write the couple's names fully transliterated into Devanagari here (Ishaan → ईशान, Tara → तारा); not one Latin letter may remain in this field. For a church or court wedding keep it simple ('… के विवाह समारोह में आप सादर आमंत्रित हैं।'). Under 300 characters.",
     },
     {
       path: "extras.brideFamily",
@@ -157,6 +176,7 @@ export const lotusWeddingInvitation: AiFillTemplateSchema = {
     },
     ...functionFields,
     ...storyFields,
+    ...contactFields,
     {
       path: "extras.things",
       label: "Good to know",
@@ -164,7 +184,7 @@ export const lotusWeddingInvitation: AiFillTemplateSchema = {
       max: 6,
       itemMax: 180,
       guide:
-        "Practical notes for guests, but ONLY lines you could back with a quote from the description: rooms it says are held, a shuttle it mentions, a contact person and phone number it gives. Each line starts with a short heading and a colon ('Contact: …'). Most descriptions contain none of this, and an empty list is the normal answer. Never add a line about hotels nearby, traffic, routes, weather, gifts or the dress code (the functions already show dress codes).",
+        "Practical notes for guests, but ONLY lines you could back with a quote from the description: rooms it says are held, a shuttle it mentions, an early start, a parking note. (Phone numbers go in the family contacts, not here.) Each line starts with a short heading and a colon ('Contact: …'). Most descriptions contain none of this, and an empty list is the normal answer. Never add a line about hotels nearby, traffic, routes, weather, gifts or the dress code (the functions already show dress codes).",
       example: "Stay: Rooms are held at the hotel for out-of-town guests.",
     },
     {

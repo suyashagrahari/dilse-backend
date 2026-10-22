@@ -2,10 +2,12 @@ import type { ValentineDayConfig } from "../valentineDays";
 
 /**
  * lotus-wedding-invitation — Lotus Temple Wedding Invitation 🪷, a wedding design on Royal's limits
- * (config/weddingShared.ts WEDDING_TIER_LIMITS): brass lamps, a lotus pond, gold string lights and the temple gopuram in white, gold and lotus pink.
+ * (config/weddingShared.ts WEDDING_TIER_LIMITS): a lotus blooming in a temple pond, brass lamps,
+ * gold string lights and the gopuram, in ivory, sage, lotus pink and gold.
  *
- * Same fields as royal-wedding-invitation, so the wedding guest routes (RSVP
- * per function, blessings wall) and the owner dashboard work unchanged.
+ * Royal's fields (so the wedding guest routes, RSVP per function, blessings
+ * wall and the owner dashboard work unchanged) plus family contacts, shagun
+ * (UPI) and a livestream link.
  * recipientName = the bride, senderName = the groom, letter = the English
  * invitation, photos = one pool of 40 (story chapters and family cards point
  * into it by 1-based index). No question is asked. Light themes only.
@@ -80,6 +82,22 @@ const config: ValentineDayConfig = {
     { key: "blessings", kind: "bool", default: true },
     /** Open with the Shri Ganesh invocation (false = the couple's monogram). */
     { key: "invocation", kind: "bool", default: true },
+    /** Family members guests can call or WhatsApp (the client renders only valid phone numbers). */
+    {
+      key: "contacts",
+      kind: "objlist",
+      maxItems: 4,
+      item: [
+        { key: "name", kind: "text", max: 40 },
+        { key: "relation", kind: "text", max: 40 },
+        { key: "phone", kind: "text", max: 20 },
+      ],
+    },
+    /** Shagun by UPI, off unless the couple adds an id (the client validates the VPA shape). */
+    { key: "upiId", kind: "text", max: 60 },
+    { key: "upiName", kind: "text", max: 60 },
+    /** A YouTube / Zoom livestream link (https only, enforced on the client). */
+    { key: "liveUrl", kind: "text", max: 300 },
   ],
 };
 
