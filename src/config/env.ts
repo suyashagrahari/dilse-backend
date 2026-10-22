@@ -326,9 +326,17 @@ export const env = {
   // header and no footer — what lands in Gmail's Primary tab. The address
   // must be allowed by the SES IAM policy (ses:FromAddress); until it is, SES
   // refuses and the panel says so. It NEVER silently falls back to another
-  // sender. Reply-To stays INFLUENCER_REPLY_TO_EMAIL so replies reach the app.
+  // sender. There is no Reply-To: a Reply-To pointing somewhere other than
+  // the sender is a bulk-mail signal, so replies go to yash@ itself, and a
+  // GoDaddy forward from yash@ to the SES receiving address
+  // (INFLUENCER_REPLY_TO_EMAIL) brings them into the app.
   PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || PROSPECT_PERSONAL_DEFAULTS.fromAddress).trim().toLowerCase(),
   PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || PROSPECT_PERSONAL_DEFAULTS.fromName,
+  /**
+   * Reply-To on personal mail. Empty (default) = none, replies go to the From
+   * address. Set it only to bring back a separate reply address.
+   */
+  PROSPECT_PERSONAL_REPLY_TO_EMAIL: (process.env.PROSPECT_PERSONAL_REPLY_TO_EMAIL || "").trim().toLowerCase(),
   /**
    * The From display name for Connect emails (the first hello and its
    * follow-ups). Empty (default) = the normal PROSPECT_PERSONAL_FROM_NAME

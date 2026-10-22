@@ -334,6 +334,17 @@ describe("the email with the screenshot inline", () => {
     assert.equal(simple.input.ConfigurationSetName, "outreach");
   });
 
+  it("SES: no Reply-To header when it would only repeat the From address", async () => {
+    const o = { to: "om@example.com", subject: "Hi", fromEmail: "yash@subhsandesh.in", fromName: "Yash", configurationSet: "", messageHeaders: [] };
+    const same: SesEmail = { to: "om@example.com", subject: "Hi", text: "t", html: "<div>h</div>", replyTo: "Yash <Yash@SubhSandesh.in>" };
+    const simple = await buildSendCommand(same, o);
+    assert.equal(simple.input.ReplyToAddresses, undefined);
+    const raw = await buildSendCommand({ ...same, inlineImages: [image] }, o);
+    assert.ok(!/^Reply-To:/im.test(Buffer.from(raw.input.Content!.Raw!.Data!).toString()));
+    const other = await buildSendCommand({ ...same, replyTo: "r@in.subhsandesh.in" }, o);
+    assert.deepEqual(other.input.ReplyToAddresses, ["r@in.subhsandesh.in"]);
+  });
+
   it("the queue's send input carries the image, the note and the quiet lane all the way to the transport", async () => {
     const input = buildProspectSendInput(
       "personal",
