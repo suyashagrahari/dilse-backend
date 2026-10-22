@@ -3,7 +3,8 @@ import type { AiFillField, AiFillTemplateSchema } from "./types";
 /**
  * floral-wedding-invitation — Pampas & Peony Wedding Invitation, a wedding design on Royal's limits
  * (pampas grass, blush peonies and floral drapes on handmade paper, the couple on a swing).
- * Started as a copy of royal-wedding-invitation's schema (same extras).
+ * Same core as royal-wedding-invitation's schema, plus the contact person
+ * guests can call (extras.contacts).
  * Paths resolve against `ValentineDayData` (client
  * app/(templates)/_valentine/types.ts); extras keys are defined in
  * config/weddingDays/floral-wedding-invitation.ts.
@@ -15,12 +16,16 @@ import type { AiFillField, AiFillTemplateSchema } from "./types";
  * story chapters, so those indices always exist. The client drops demo rows
  * the model left untouched, so a short description gives a short page.
  *
- * Budget (field cap 40): 2 names, the invitation in English and Hindi, both
- * families, the grandparents' line, five functions × (name, date, time,
- * venue, dress code), three story chapters × (title, line), good to know and
- * the closing line. Not declared: theme / music / photos (visual choices),
- * map links (the model would invent them), dress colours (the client derives a
- * swatch from the dress-code words), RSVP settings (the sender's decisions).
+ * Budget (field cap 40, all used): 2 names, the invitation in English and
+ * Hindi, both families, the grandparents' line, five functions × (name, date,
+ * time, venue, dress code), two story chapters × (title, line), the closing
+ * line and one contact person (name, relation, phone). The story's last
+ * chapter ("Forever begins") is the template's own words and stays on the
+ * client. Not declared: theme / music / photos (visual choices), map links,
+ * the live-stream link and the UPI id (URLs and payment ids the model must
+ * never invent), dress colours (the client derives a swatch from the
+ * dress-code words), good-to-know notes (descriptions almost never carry them;
+ * the one they do carry, who to call, now has its own field), RSVP settings.
  */
 
 const TONE =
@@ -70,16 +75,13 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
   },
 ]).flat();
 
-const storyFields: AiFillField[] = [0, 1, 2].flatMap((i) => [
+const storyFields: AiFillField[] = [0, 1].flatMap((i) => [
   {
     path: `extras.story[${i}].title`,
     label: `Our story ${i + 1} — title`,
     kind: "text" as const,
     max: 60,
-    guide:
-      i === 2
-        ? "Chapter 3's title: always 'Forever begins' (or the description's own words for it). No emoji."
-        : `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the roka, the families meeting"][i]}), as a short evocative title ('Two strangers at a book fair', 'A ring by the lake'). Only from a moment the description tells; a function of the wedding itself (engagement ceremony, registration) is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
+    guide: `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the roka, the families meeting"][i]}), as a short evocative title ('Two strangers at a book fair', 'A ring by the lake'). Only from a moment the description tells; a function of the wedding itself (engagement ceremony, registration) is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
   },
   {
     path: `extras.story[${i}].line`,
@@ -87,11 +89,33 @@ const storyFields: AiFillField[] = [0, 1, 2].flatMap((i) => [
     kind: "text" as const,
     max: 240,
     guide:
-      (i === 2
-        ? "One warm sentence for the last chapter, the wedding itself, about families becoming one and the guest being part of it. No date, no venue, no time. Under 140 characters."
-        : `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years, and never restate a function's date. Null when the title is null. Under 200 characters.`) + TONE,
+      `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years, and never restate a function's date. Null when the title is null. Under 200 characters.` + TONE,
   },
 ]);
+
+const contactFields: AiFillField[] = [
+  {
+    path: "extras.contacts[0].name",
+    label: "Contact person — name",
+    kind: "text",
+    max: 40,
+    guide: "The person guests should call with questions, by the name the description gives (a brother, an uncle, a planner). Only someone the description names together with a phone number; otherwise null.",
+  },
+  {
+    path: "extras.contacts[0].relation",
+    label: "Contact person — relation",
+    kind: "text",
+    max: 40,
+    guide: "Who that person is to the couple, in a few words, from the description ('Bride's brother', 'Groom's uncle', 'Wedding planner'). Null when the contact name is null or the description does not say.",
+  },
+  {
+    path: "extras.contacts[0].phone",
+    label: "Contact person — phone",
+    kind: "text",
+    max: 20,
+    guide: "That person's phone number exactly as the description writes it, digits and an optional leading +. Null unless the description states a number for them.",
+  },
+];
 
 export const floralWeddingInvitation: AiFillTemplateSchema = {
   slug: "floral-wedding-invitation",
@@ -106,7 +130,7 @@ export const floralWeddingInvitation: AiFillTemplateSchema = {
       kind: "text",
       max: 30,
       required: true,
-      guide: "The BRIDE's first name as the description spells it (for two grooms or two brides, the first-named partner). Just the first name, no surname, no title.",
+      guide: "The BRIDE's first name as the description spells it (for two grooms or two brides, the first-named partner). Just the first name, no surname, no title, in the same script the description writes it in (a name typed in Latin letters stays in Latin letters).",
     },
     {
       path: "senderName",
@@ -114,7 +138,7 @@ export const floralWeddingInvitation: AiFillTemplateSchema = {
       kind: "text",
       max: 30,
       required: true,
-      guide: "The GROOM's first name as the description spells it (for two grooms or two brides, the second-named partner). Just the first name.",
+      guide: "The GROOM's first name as the description spells it (for two grooms or two brides, the second-named partner). Just the first name, in the same script the description writes it in.",
     },
     {
       path: "letter",
@@ -157,16 +181,7 @@ export const floralWeddingInvitation: AiFillTemplateSchema = {
     },
     ...functionFields,
     ...storyFields,
-    {
-      path: "extras.things",
-      label: "Good to know",
-      kind: "list",
-      max: 6,
-      itemMax: 180,
-      guide:
-        "Practical notes for guests, but ONLY lines you could back with a quote from the description: rooms it says are held, a shuttle it mentions, a contact person and phone number it gives. Each line starts with a short heading and a colon ('Contact: …'). Most descriptions contain none of this, and an empty list is the normal answer. Never add a line about hotels nearby, traffic, routes, weather, gifts or the dress code (the functions already show dress codes).",
-      example: "Stay: Rooms are held at the hotel for out-of-town guests.",
-    },
+    ...contactFields,
     {
       path: "endLine",
       label: "Closing line",
