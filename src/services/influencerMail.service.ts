@@ -57,10 +57,13 @@ export function influencerReplyToAddress(): string {
 export function influencerInboundAddresses(
   from: string = env.INFLUENCER_FROM_EMAIL,
   replyTo: string = env.INFLUENCER_REPLY_TO_EMAIL,
-  extra: string = env.INFLUENCER_INBOUND_ADDRESSES
+  extra: string = env.INFLUENCER_INBOUND_ADDRESSES,
+  personalFrom: string = env.PROSPECT_PERSONAL_FROM_EMAIL
 ): string[] {
   const out = new Set<string>();
-  for (const raw of [from, replyTo, ...String(extra || "").split(",")]) {
+  // personalFrom: personal prospect mail has no Reply-To, so replies are
+  // addressed to yash@ and reach SES through the GoDaddy forward.
+  for (const raw of [from, replyTo, personalFrom, ...String(extra || "").split(",")]) {
     const a = cleanAddress(raw);
     if (a) out.add(a);
   }

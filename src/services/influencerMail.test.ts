@@ -26,14 +26,19 @@ describe("influencerInboundAddresses", () => {
       influencerInboundAddresses(
         "Influencer-Support@SubhSandesh.in",
         "",
-        "influencer@reply.subhsandesh.in, influencer-support@subhsandesh.in ,"
+        "influencer@reply.subhsandesh.in, influencer-support@subhsandesh.in ,",
+        ""
       ),
       ["influencer-support@subhsandesh.in", "influencer@reply.subhsandesh.in"]
     );
   });
 
+  it("includes the personal prospect sender, whose replies arrive by forward", () => {
+    assert.ok(influencerInboundAddresses("influencer-support@subhsandesh.in", "", "", "Yash@SubhSandesh.in").includes("yash@subhsandesh.in"));
+  });
+
   it("drops anything that is not an address", () => {
-    assert.deepEqual(influencerInboundAddresses("not-an-address", "", ""), []);
+    assert.deepEqual(influencerInboundAddresses("not-an-address", "", "", ""), []);
   });
 });
 

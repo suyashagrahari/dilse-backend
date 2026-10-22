@@ -895,7 +895,7 @@ export function prospectPersonalHtml(c: { body: string; signature: string; image
 export interface PersonalSender {
   fromAddress: string;
   fromName: string;
-  /** Where replies go: the SES receiving address, else the From address. */
+  /** Where replies go: the From address unless PROSPECT_PERSONAL_REPLY_TO_EMAIL is set. */
   replyToAddress: string;
 }
 
@@ -904,7 +904,7 @@ const ADDR_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 export function personalSender(
   fromAddress: string = env.PROSPECT_PERSONAL_FROM_EMAIL,
   fromName: string = env.PROSPECT_PERSONAL_FROM_NAME,
-  replyTo: string = env.INFLUENCER_REPLY_TO_EMAIL
+  replyTo: string = env.PROSPECT_PERSONAL_REPLY_TO_EMAIL
 ): PersonalSender {
   const from = String(fromAddress || "").trim().toLowerCase();
   const rt = String(replyTo || "").trim().toLowerCase();

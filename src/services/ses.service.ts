@@ -336,18 +336,31 @@ export async function sendSesEmail(email: SesEmail): Promise<SesSendResult> {
  * carries inline images. Exported for tests (the command is inspected, never
  * sent).
  */
+/**
+ * The Reply-To to put on the wire, or undefined for none. A Reply-To that only
+ * repeats the From address says nothing, and a one-to-one email from a person
+ * never carries one — so it is left off rather than echoed.
+ */
+export function replyToHeader(replyTo: string | undefined, fromEmail: string): string | undefined {
+  const rt = String(replyTo || "").trim();
+  if (!rt) return undefined;
+  const bare = (rt.match(/<([^>]+)>/)?.[1] || rt).trim().toLowerCase();
+  return bare === String(fromEmail || "").trim().toLowerCase() ? undefined : rt;
+}
+
 export async function buildSendCommand(
   email: SesEmail,
   o: { to: string; subject: string; fromEmail: string; fromName: string; configurationSet: string; messageHeaders: { Name: string; Value: string }[] }
 ): Promise<SendEmailCommand> {
   const { to, subject, fromEmail, fromName, configurationSet, messageHeaders } = o;
   const fromHeader = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+  const replyTo = replyToHeader(email.replyTo, fromEmail);
   if (email.inlineImages?.length) {
     if (!email.html) throw new SesSendError("An email with inline images needs an HTML part.");
     const raw = await buildRawMime({
       from: fromHeader,
       to,
-      replyTo: email.replyTo || fromEmail,
+      ...(replyTo ? { replyTo } : {}),
       subject,
       text: email.text,
       html: email.html,
@@ -364,7 +377,7 @@ export async function buildSendCommand(
   return new SendEmailCommand({
     FromEmailAddress: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
     Destination: { ToAddresses: [to] },
-    ReplyToAddresses: [email.replyTo || fromEmail],
+    ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
     // Only when set: SES rejects the whole send if it names a configuration set
     // that does not exist, so an empty string must not be passed through.
     ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),

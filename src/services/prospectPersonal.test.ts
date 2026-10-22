@@ -165,6 +165,10 @@ describe("sender: Yash from SubhSandesh <yash@subhsandesh.in>", () => {
     assert.equal(seen[0].configurationSet, "outreach");
   });
 
+  it("personal mail replies to the From address by default (no separate Reply-To)", () => {
+    assert.equal(personalSender("yash@subhsandesh.in", "Yash from SubhSandesh").replyToAddress, "yash@subhsandesh.in");
+  });
+
   it("Reply-To falls back to the From address when no receiving address is set", () => {
     assert.equal(personalSender("yash@subhsandesh.in", "Yash from SubhSandesh", "").replyToAddress, "yash@subhsandesh.in");
     assert.equal(personalSender("a@b.in", "A", "r@reply.b.in").replyToAddress, "r@reply.b.in");
