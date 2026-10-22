@@ -4,8 +4,10 @@ import type { ValentineDayConfig } from "../valentineDays";
  * garden-wedding-invitation — Mughal Garden Wedding Invitation 🦚, a wedding design on Royal's limits
  * (config/weddingShared.ts WEDDING_TIER_LIMITS): pink gazebos, a peacock, lotus fountains and lanterns in a pastel watercolour garden.
  *
- * Same fields as royal-wedding-invitation, so the wedding guest routes (RSVP
- * per function, blessings wall) and the owner dashboard work unchanged.
+ * Royal's fields, so the wedding guest routes (RSVP per function, blessings
+ * wall) and the owner dashboard work unchanged, plus three garden extras:
+ * family contacts (tap to call / WhatsApp), an optional shagun UPI line and an
+ * optional livestream link.
  * recipientName = the bride, senderName = the groom, letter = the English
  * invitation, photos = one pool of 40 (story chapters and family cards point
  * into it by 1-based index). No question is asked. Light themes only.
@@ -80,6 +82,22 @@ const config: ValentineDayConfig = {
     { key: "blessings", kind: "bool", default: true },
     /** Open with the Shri Ganesh invocation (false = the couple's monogram). */
     { key: "invocation", kind: "bool", default: true },
+    /** 1–4 family members guests can call or WhatsApp. The client validates the phone (10 digits, optional +91). */
+    {
+      key: "contacts",
+      kind: "objlist",
+      maxItems: 4,
+      item: [
+        { key: "name", kind: "text", max: 40 },
+        { key: "relation", kind: "text", max: 40 },
+        { key: "phone", kind: "text", max: 16 },
+      ],
+    },
+    /** Optional shagun: a UPI id and the name it belongs to (hidden when empty). Never a payment we handle. */
+    { key: "upiId", kind: "text", max: 60 },
+    { key: "upiName", kind: "text", max: 60 },
+    /** Optional livestream link (https; the client opens it 30 minutes before the main function). */
+    { key: "liveUrl", kind: "text", max: 300 },
   ],
 };
 
