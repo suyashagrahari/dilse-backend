@@ -10,6 +10,10 @@ import { digitalBouquet } from "./aiFill/digital-bouquet";
 import { weddingInvitation } from "./aiFill/wedding-invitation";
 import { weddingInvitationPremium } from "./aiFill/wedding-invitation-premium";
 import { royalWeddingInvitation } from "./aiFill/royal-wedding-invitation";
+import { palaceDoorWeddingInvitation } from "./aiFill/palace-door-wedding-invitation";
+import { gardenWeddingInvitation } from "./aiFill/garden-wedding-invitation";
+import { floralWeddingInvitation } from "./aiFill/floral-wedding-invitation";
+import { lotusWeddingInvitation } from "./aiFill/lotus-wedding-invitation";
 import { isWeddingSlug, WEDDING_TIER_LIMITS, eventIdsOf } from "./weddingShared";
 import {
   BASE_DAY_SLUGS,
@@ -130,6 +134,11 @@ const PINNED_KEYS: Record<string, string[]> = {
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
   "royal-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation"],
+  // The four wedding designs on Royal's limits (config/weddingDays/<slug>.ts); a builder changing one updates its line here.
+  "palace-door-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "contacts", "upiId", "upiName", "liveUrl", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation"],
+  "garden-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
+  "floral-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
+  "lotus-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "cardSize", "question", "yesLine"],
   "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests"],
   "wedding-invitation-premium": [
@@ -1001,4 +1010,33 @@ describe("Royal Wedding Invitation 👑 extras", () => {
       assert.ok(d.extras.some((e) => e.key === key), f.path);
     }
   });
+});
+
+describe("The wedding designs on Royal's limits (palace door, garden, floral, lotus)", () => {
+  const DESIGNS = [
+    { slug: "palace-door-wedding-invitation" as const, schema: palaceDoorWeddingInvitation, theme: "champagne" },
+    { slug: "garden-wedding-invitation" as const, schema: gardenWeddingInvitation, theme: "blush" },
+    { slug: "floral-wedding-invitation" as const, schema: floralWeddingInvitation, theme: "champagne" },
+    { slug: "lotus-wedding-invitation" as const, schema: lotusWeddingInvitation, theme: "champagne" },
+  ];
+  for (const { slug, schema, theme } of DESIGNS) {
+    it(`${slug}: Royal's limits, light themes only, a valid AI schema that writes only declared extras`, () => {
+      const d = VALENTINE_DAYS[slug];
+      const L = WEDDING_TIER_LIMITS[slug];
+      assert.ok(isWeddingSlug(slug));
+      assert.deepEqual(L, WEDDING_TIER_LIMITS["royal-wedding-invitation"]);
+      assert.deepEqual([d.maxPhotos, d.letterMax, d.gifSlots.length, d.asksQuestion], [L.photos, 1500, 0, false]);
+      const max = (k: string) => (d.extras.find((f) => f.key === k) as { maxItems: number }).maxItems;
+      assert.deepEqual([max("events"), max("story"), max("things")], [L.events, L.story, L.faq]);
+      const out = sanitizeExtras(slug, { theme: "noir" });
+      assert.equal(out.theme, theme);
+      assert.equal(schema.slug, slug);
+      assert.deepEqual(validateSchema(schema), []);
+      assert.ok(schema.fields.length <= 40);
+      for (const f of schema.fields.filter((x) => x.path.startsWith("extras."))) {
+        const key = f.path.slice("extras.".length).split(/[.[]/)[0];
+        assert.ok(d.extras.some((e) => e.key === key), f.path);
+      }
+    });
+  }
 });

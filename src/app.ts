@@ -84,7 +84,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     // X-Debug-Country: honoured only for a super admin (pricingQuote.service),
     // so the USD checkout can be tested from India. Ignored for everyone else.
-    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning", "X-Debug-Country"],
+    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning", "X-Debug-Country", "X-Page-Password", "X-Rsvp-Token"],
   })
 );
 
