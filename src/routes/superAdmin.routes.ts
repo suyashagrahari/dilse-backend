@@ -49,6 +49,7 @@ import {
   importProspects,
   listProspects,
   previewProspectMail,
+  improveProspectMailHandler,
   sendProspectMail,
   updateProspect,
 } from "../controllers/prospect.controller";
@@ -136,6 +137,7 @@ router.post("/prospects/import", perAdminKey("prospect-import", 20, 60, "Too man
 router.post("/prospects/status", bulkStatus);
 router.post("/prospects/delete", deleteProspects);
 router.post("/prospects/draft", perAdminKey("prospect-draft", 30, 10, "Too many drafts in a short time. Please wait a few minutes."), draftProspects);
+router.post("/prospects/improve", perAdminKey("prospect-improve", 30, 10, "Too many rewrites in a short time. Please wait a few minutes."), improveProspectMailHandler);
 router.post("/prospects/preview", perAdminKey("prospect-preview", 400, 10, "Too many previews. Please wait."), previewProspectMail);
 router.post("/prospects/send", perAdminKey("prospect-send", 20, 60, "Too many sends in the last hour. Please wait."), sendProspectMail);
 router.post("/prospects/cancel", cancelProspectMail);
