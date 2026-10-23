@@ -40,7 +40,7 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
     path: `events[${i}].date`,
     label: `Function ${i + 1} — date`,
     kind: "date" as const,
-    guide: `The date of function ${i + 1} as YYYY-MM-DD. When the description gives only the day ('the reception on the 17th') take the month and year from the wedding date it states; 'the evening before' is the day before the wedding. Null when the row is empty or the date is unknown.`,
+    guide: `The date of function ${i + 1} as YYYY-MM-DD. When the description gives only the day ('the reception on the 17th') take the month and year from the wedding date it states; 'the evening before' is the day before the wedding. A date needs a day of the month from the description: a month or a season alone ('in March', 'this winter') is not a date yet, so return null and the family picks it. Null when the row is empty or the date is unknown.`,
   },
   {
     path: `events[${i}].time`,
