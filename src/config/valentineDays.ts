@@ -1189,7 +1189,8 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
     asksQuestion: false,
     gifSlots: [],
     extras: [
-      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "maroon" },
+      /** Light themes are offered; the dark ids stay valid for pages published before the 2026-10 redesign. */
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "champagne" },
       /** Which language the page opens in (guests can switch). */
       { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
       { key: "nameOrder", kind: "enum", options: ["bride", "groom"], default: "bride" },
@@ -1203,6 +1204,8 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       /** 1-based index into photos; 0 = none. */
       { key: "bridePhoto", kind: "number", min: 0, max: 40, default: 0 },
       { key: "groomPhoto", kind: "number", min: 0, max: 40, default: 0 },
+      /** The couple's portrait in the courtyard (1-based index into photos; 0 = the illustrated couple). Added 2026-10. */
+      { key: "couplePhoto", kind: "number", min: 0, max: 40, default: 0 },
       { key: "muhurat", kind: "text", max: 60 },
       { key: "hashtag", kind: "text", max: 40 },
       /** The functions; `id` is a short stable slug the guests' RSVPs refer to. All text. */
@@ -1239,6 +1242,22 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       /** Good to know: "Heading: text" lines. */
       { key: "things", kind: "list", maxItems: 6, itemMax: 180 },
       { key: "gettingThere", kind: "longtext", max: 500 },
+      /** Family members guests can call: tap-to-call + WhatsApp (the client validates the phone). Added 2026-10. */
+      {
+        key: "contacts",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "name", kind: "text", max: 40 },
+          { key: "relation", kind: "text", max: 40 },
+          { key: "phone", kind: "text", max: 16 },
+        ],
+      },
+      /** Optional shagun by UPI (off when empty). Only shown as a upi:// link and a copyable id; no payment is handled. */
+      { key: "upiId", kind: "text", max: 60 },
+      { key: "upiName", kind: "text", max: 60 },
+      /** Optional livestream (https only, checked by the client). */
+      { key: "liveUrl", kind: "text", max: 300 },
       /** A YouTube link for the pre-wedding film (the client extracts the id). */
       { key: "videoUrl", kind: "text", max: 200 },
       { key: "rsvpBy", kind: "text", max: 10 },
