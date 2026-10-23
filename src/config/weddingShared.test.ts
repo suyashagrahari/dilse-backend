@@ -80,8 +80,8 @@ describe("wedding kit: blessings", () => {
 
 describe("wedding kit: events per tier", () => {
   const extras = { events: [{ id: "haldi", title: "Haldi" }, { id: "wedding" }, { id: "" }] };
-  it("normal tier has no per-event RSVP; premium reads ids", () => {
-    assert.deepEqual(eventIdsOf(extras, "wedding-invitation"), []);
+  it("every wedding tier reads per-event RSVP ids (classic since the jharokha rebuild)", () => {
+    assert.deepEqual(eventIdsOf(extras, "wedding-invitation"), ["haldi", "wedding"]);
     assert.deepEqual(eventIdsOf(extras, "wedding-invitation-premium"), ["haldi", "wedding"]);
     assert.ok(isWeddingSlug("royal-wedding-invitation") && !isWeddingSlug("happy-rose-day"));
     for (const slug of ["palace-door-wedding-invitation", "garden-wedding-invitation", "floral-wedding-invitation", "lotus-wedding-invitation"]) {
