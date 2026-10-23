@@ -174,7 +174,7 @@ export const weddingInvitation: AiFillTemplateSchema = {
       kind: "longtext",
       max: 700,
       guide:
-        "The same invitation as a short, formal Hindi card text in Devanagari (2–3 sentences, under 60 words) in the traditional register of an Indian wedding card ('…के शुभ विवाह के पावन अवसर पर आप सपरिवार सादर आमंत्रित हैं।'), with the couple's names written in Devanagari ('आन्या एवं विहान के शुभ विवाह…'); refer to the families by surname only ('राठौड़ एवं शेखावत परिवार') — never by the parents' first names — or as 'दोनों परिवार' when no surname is given. Null for a Christian, Muslim or registry wedding unless the description asks for Hindi.",
+        "The same invitation as a short, formal Hindi card text in Devanagari (2–3 sentences, under 60 words) in the traditional register of an Indian wedding card, built on this shape: 'ईश्वर की असीम कृपा और बड़ों के आशीर्वाद से, <surnames> परिवार <bride> एवं <groom> के शुभ विवाह के पावन अवसर पर आपको सपरिवार सादर आमंत्रित करते हैं। आपकी उपस्थिति ही हमारा सौभाग्य होगी।', with every name transliterated into Devanagari letters, the couple's and the surnames alike (Meera → मीरा, Malhotra → मल्होत्रा, Srivastava → श्रीवास्तव), so the whole field reads in one script; refer to the families by surname only ('राठौड़ एवं शेखावत परिवार') — never by the parents' first names — or as 'दोनों परिवार' when no surname is given. Null for a Christian, Muslim or registry wedding unless the description asks for Hindi.",
     },
     {
       path: "extras.brideFamily",
