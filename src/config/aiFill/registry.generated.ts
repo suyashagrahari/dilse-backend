@@ -82,6 +82,7 @@ import { gardenWeddingInvitation } from "./garden-wedding-invitation";
 import { floralWeddingInvitation } from "./floral-wedding-invitation";
 import { lotusWeddingInvitation } from "./lotus-wedding-invitation";
 import { reception } from "./reception";
+import { christianWedding } from "./christian-wedding";
 import { call } from "./call";
 import { challan } from "./challan";
 import { nutrition } from "./nutrition";
@@ -163,6 +164,7 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   floralWeddingInvitation,
   lotusWeddingInvitation,
   reception,
+  christianWedding,
   call,
   challan,
   nutrition,

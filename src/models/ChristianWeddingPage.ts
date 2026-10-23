@@ -14,6 +14,15 @@ export interface IChristianWeddingEvent {
   details: string;
   accent: string;
   disabled: boolean;
+  // ── Added by the chapel-door rebuild (2026-10); absent on older pages ──
+  /** Stable id the RSVPs refer to; generated once, never from the name. */
+  id?: string;
+  /** "2026-12-12" — the old `date` ("21 Jul") stays as the display text. */
+  isoDate?: string;
+  address?: string;
+  mapUrl?: string;
+  dressCode?: string;
+  dressColor?: string;
 }
 
 export interface IChristianWeddingBlessing {
@@ -50,6 +59,34 @@ export interface IChristianWeddingPage extends Document {
   viewCount: number;
   isPublished: boolean;
   templateVariant: "tabs" | "scroll";
+  // ── Chapel-door rebuild extras (config/christianWedding.ts). All optional:
+  //    pages published before it carry none of them and still render. ──
+  theme?: string;
+  invitation?: string;
+  scripture?: { text: string; ref: string };
+  secondLang?: string;
+  altInvitation?: string;
+  altVerse?: string;
+  couplePhoto?: string;
+  couplePhotoCrop?: { x: number; y: number; scale: number };
+  story?: { when: string; title: string; line: string; photo: string; cropX: number; cropY: number; scale: number }[];
+  orderOfService?: { time: string; title: string; note: string }[];
+  videoUrl?: string;
+  contacts?: { name: string; relation: string; phone: string }[];
+  liveUrl?: string;
+  upiId?: string;
+  upiName?: string;
+  music?: { mode: string; youtubeId: string; start: number };
+  rsvpOn?: boolean;
+  rsvpBy?: string;
+  rsvpMeal?: boolean;
+  maxGuests?: number;
+  things?: { head: string; text: string }[];
+  gettingThere?: string;
+  hashtag?: string;
+  closingLine?: string;
+  blessingsOf?: string;
+  churchName?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -66,6 +103,12 @@ const christianWeddingEventSchema = new Schema<IChristianWeddingEvent>(
     details: { type: String, default: "", trim: true },
     accent: { type: String, default: "from-amber-500/20 to-amber-600/5 border-amber-500/30" },
     disabled: { type: Boolean, default: false },
+    id: { type: String },
+    isoDate: { type: String },
+    address: { type: String },
+    mapUrl: { type: String },
+    dressCode: { type: String },
+    dressColor: { type: String },
   },
   { _id: false }
 );
@@ -117,7 +160,8 @@ const christianWeddingPageSchema = new Schema<IChristianWeddingPage>(
       ],
     },
     galleryImages: {
-      type: [{ src: String, alt: String }],
+      // cropX/cropY/scale/size/w/h: the masonry editor's framing (absent on older pages).
+      type: [{ _id: false, src: String, alt: String, cropX: Number, cropY: Number, scale: Number, size: String, w: Number, h: Number }],
       default: [],
     },
     blessings: {
@@ -130,6 +174,35 @@ const christianWeddingPageSchema = new Schema<IChristianWeddingPage>(
     viewCount: { type: Number, default: 0 },
     isPublished: { type: Boolean, default: false },
     templateVariant: { type: String, enum: ["tabs", "scroll"], default: "tabs" },
+
+    // ── Chapel-door rebuild extras: no defaults, so an older page reads them as
+    //    undefined and the client falls back to what that page always showed. ──
+    theme: { type: String },
+    invitation: { type: String },
+    scripture: { type: new Schema({ text: String, ref: String }, { _id: false }) },
+    secondLang: { type: String },
+    altInvitation: { type: String },
+    altVerse: { type: String },
+    couplePhoto: { type: String },
+    couplePhotoCrop: { type: new Schema({ x: Number, y: Number, scale: Number }, { _id: false }) },
+    story: { type: [new Schema({ when: String, title: String, line: String, photo: String, cropX: Number, cropY: Number, scale: Number }, { _id: false })], default: undefined },
+    orderOfService: { type: [new Schema({ time: String, title: String, note: String }, { _id: false })], default: undefined },
+    videoUrl: { type: String },
+    contacts: { type: [new Schema({ name: String, relation: String, phone: String }, { _id: false })], default: undefined },
+    liveUrl: { type: String },
+    upiId: { type: String },
+    upiName: { type: String },
+    music: { type: new Schema({ mode: String, youtubeId: String, start: Number }, { _id: false }) },
+    rsvpOn: { type: Boolean },
+    rsvpBy: { type: String },
+    rsvpMeal: { type: Boolean },
+    maxGuests: { type: Number },
+    things: { type: [new Schema({ head: String, text: String }, { _id: false })], default: undefined },
+    gettingThere: { type: String },
+    hashtag: { type: String },
+    closingLine: { type: String },
+    blessingsOf: { type: String },
+    churchName: { type: String },
   },
   { timestamps: true, collection: "christian_wedding_pages" }
 );
