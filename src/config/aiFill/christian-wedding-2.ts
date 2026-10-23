@@ -47,7 +47,7 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
     label: `Function ${i + 1} — start time`,
     kind: "text" as const,
     max: 5,
-    guide: `The start time of function ${i + 1} in 24-hour HH:mm ('15:30' for 3:30 pm, '10:00' for 10 am). Only a time the description states; otherwise null.`,
+    guide: `The start time of function ${i + 1} in 24-hour HH:mm ('15:30' for 3:30 pm, '10:00' for 10 am), copied from a clock time the description writes for THIS function ('at 4 pm', '7:30 in the evening'). A function given only a day has no time yet: return null and the family adds it later.`,
     example: "15:30",
   },
   {
@@ -55,7 +55,7 @@ const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, 
     label: `Function ${i + 1} — venue`,
     kind: "text" as const,
     max: 80,
-    guide: `Where function ${i + 1} happens: the church, chapel, hall or home and the city as the description names them ('St. Thomas Cathedral, Kochi'; 'Bride's home, Thrissur'). When a function has no venue of its own but follows the ceremony at the same place, repeat that venue. Null when the description names no place at all — never make up a church or a hotel.`,
+    guide: `Where function ${i + 1} happens: a NAMED church, chapel, hall, hotel or home, with its city, as the description writes it ('St. Thomas Cathedral, Kochi'; 'Bride's home, Thrissur'). When a function has no venue of its own but follows the ceremony at the same place, repeat that venue. When the description names only a city or a region, write just that city as written ('Shillong'); the family adds the church's name later.`,
   },
   {
     path: `events[${i}].dressCode`,
@@ -73,7 +73,7 @@ const storyFields: AiFillField[] = [0, 1].flatMap((i) => [
     label: `Our story ${i + 1} — title`,
     kind: "text" as const,
     max: 60,
-    guide: `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the families meeting, the betrothal at church"][i]}), as a short evocative title ('A choir practice in Kochi', 'A yes by the sea'). Only from a moment the description tells; a function of the wedding itself is NOT a story chapter. With no such moment, return null. No emoji. Under 40 characters.`,
+    guide: `Chapter ${i + 1} of the couple's story (${["how they met", "a moment between meeting and the wedding: the proposal, the families meeting, the betrothal at church"][i]}). First check: does the description itself tell ${["how or where they met", "a proposal or another moment after they met"][i]}? If not, return null. If it does, write a short evocative title from that moment's own place or detail ('A choir practice in Kochi', 'A yes by the sea'). No emoji. Under 40 characters.`,
   },
   {
     path: `story[${i}].line`,
@@ -81,7 +81,7 @@ const storyFields: AiFillField[] = [0, 1].flatMap((i) => [
     kind: "text" as const,
     max: 240,
     guide:
-      `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), with one specific detail from the description (the place, the year). Never invent events, places or years. Null when the title is null. Under 200 characters.` + TONE,
+      `One or two sentences for chapter ${i + 1}, told about the couple in the third person ('They met…', 'He asked…'), retelling only what the description says of that moment (its place, its year), in warmer words. Null when the title is null. Under 200 characters.` + TONE,
   },
 ]);
 
@@ -117,7 +117,7 @@ export const christianWedding2: AiFillTemplateSchema = {
       max: 900,
       required: true,
       guide:
-        "The invitation guests read under the verse, 2 short paragraphs (blank line between), 45–100 words. Paragraph 1 invites the guest in the church register, naming both partners and, when the description names them, their parents ('Together with their families…' or 'By the grace of God and with the blessings of our parents, … request the honour of your presence at their Holy Matrimony'). Paragraph 2 says in one or two warm lines what the day will be (the church, the celebration after) and that the guest's presence and prayers matter. Leave every date, time and address out (the page shows them right below): name the church or the city instead. No greeting line, no signature, plain text only." +
+        "The invitation guests read under the verse: exactly 2 short paragraphs separated by one blank line, 45–100 words in all. Paragraph 1 invites the guest in the church register, naming both partners and, when the description names them, their parents ('Together with their families…' or 'By the grace of God and with the blessings of our parents, … request the honour of your presence at their Holy Matrimony'). Paragraph 2 says in one or two warm lines what the day will be (the church, the celebration after) and that the guest's presence and prayers matter. Leave every date, time and address out (the page shows them right below): name the church or the city instead. No greeting line, no signature, plain text only." +
         TONE,
     },
     {
@@ -125,14 +125,14 @@ export const christianWedding2: AiFillTemplateSchema = {
       label: "A line about the bride",
       kind: "text",
       max: 140,
-      guide: "One warm sentence about the bride, from what the description says about her (her work, her faith, what she loves). Third person. Under 120 characters. Null when it says nothing about her beyond her name." + TONE,
+      guide: "First check: does the description state a fact about the BRIDE herself (her work, her studies, a hobby, where she grew up)? If not, return null. If it does, write one warm third-person sentence around that fact, giving her nothing it does not say. Under 120 characters." + TONE,
     },
     {
       path: "groom.description",
       label: "A line about the groom",
       kind: "text",
       max: 140,
-      guide: "One warm sentence about the groom, from what the description says about him. Third person. Under 120 characters. Null when it says nothing about him beyond his name." + TONE,
+      guide: "First check: does the description state a fact about the GROOM himself (his work, a hobby, the instrument he plays, where he grew up)? If not, return null. If it does, write one warm third-person sentence around that fact, giving him nothing it does not say. Under 120 characters." + TONE,
     },
     {
       path: "brideFamily.parents",
@@ -177,7 +177,7 @@ export const christianWedding2: AiFillTemplateSchema = {
       label: "Closing line",
       kind: "text",
       max: 120,
-      guide: "The closing line under the final blessing, signed by the two families by their SURNAMES from the parents' names in the description (Kurian + Varghese → 'With love and prayers, the Kurian & Varghese families'). Under 90 characters, no emoji; without parents' names, sign it from the couple's first names ('With love and prayers, Anna & Joel').",
+      guide: "The closing line under the final blessing, signed in one of two ways. (a) When the description gives the parents' names on BOTH sides, take each side's family name from them and sign 'With love and prayers, the <bride's family name> & <groom's family name> families'. (b) Otherwise sign with this couple's own first names: 'With love and prayers, <bride> & <groom>'. Under 90 characters, no emoji.",
     },
   ],
 };
