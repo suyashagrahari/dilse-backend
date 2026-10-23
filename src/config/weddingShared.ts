@@ -24,7 +24,7 @@ import { createHash, randomBytes } from "crypto";
 /** Single source of truth for tier limits (scratchpad research/tiers.md). */
 export const WEDDING_TIER_LIMITS = {
   "wedding-invitation": { events: 5, photos: 12, story: 3, faq: 3, icsAllEvents: false, rsvpPerEvent: true, blessings: true },
-  "wedding-invitation-premium": { events: 5, photos: 20, story: 5, faq: 3, icsAllEvents: false, rsvpPerEvent: true, blessings: false },
+  "wedding-invitation-premium": { events: 5, photos: 20, story: 5, faq: 3, icsAllEvents: false, rsvpPerEvent: true, blessings: true },
   "royal-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   // The four designs on Royal's limits (palace door, Mughal garden, pampas & peony, lotus temple).
   "palace-door-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
