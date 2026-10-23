@@ -138,8 +138,9 @@ describe("wedding guests: RSVP + owner", () => {
   });
 
   it("blessings are off on a tier without them", async () => {
-    const w2 = world("wedding-invitation");
-    const s2 = await serve("wedding-invitation", w2);
+    // Every invitation tier has the wall now; reception keeps its own wall, so the kit's is off there.
+    const w2 = world("reception");
+    const s2 = await serve("reception", w2);
     try {
       assert.equal((await s2.call("POST", "/share/share-1/blessing", { name: "A", message: "Bless" })).status, 404);
     } finally {
