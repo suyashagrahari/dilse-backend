@@ -191,9 +191,9 @@ describe("extraction (stubbed vision model)", () => {
 
 describe("the linter lets through the proof's numbers — and only those", () => {
   const body = (numbers: string) =>
-    `Hey Om and Diya,\n\nI'm Yash from SubhSandesh. Your Hindi couple reels from Jaipur are so warm and easy to watch.\n\nWe make little interactive pages people send someone they love: birthday surprises, miss-you notes, proposals. ${numbers}\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link your followers can use.\n\nWould you be up for trying one together?`;
+    `Hey Om and Diya,\n\nI'm Suyash from SubhSandesh. Your Hindi couple reels from Jaipur are so warm and easy to watch.\n\nWe make little interactive pages people send someone they love: birthday surprises, miss-you notes, proposals. ${numbers}\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link your followers can use.\n\nWould you be up for trying one together?`;
   const lint = (b: string, allowedNumbers?: string[]) =>
-    lintOutreach("Om & Diya, a reel idea from SubhSandesh", b, { commissionPercent: 30, kind: "initial", style: "personal", writer: "Yash", allowedNumbers });
+    lintOutreach("Om & Diya, a reel idea from SubhSandesh", b, { commissionPercent: 30, kind: "initial", style: "personal", writer: "Suyash", allowedNumbers });
   const LINE = "In the last 3 months about 52K people found us through Google Search alone, looking for something special for a birthday or an anniversary.";
 
   it("allows 52K / 3 months with the proof", () => {
@@ -249,7 +249,7 @@ describe("the parse step: a model draft with numbers passes only with the proof"
   const raw = JSON.stringify({
     reading: "Intro with numbers",
     subject: "x",
-    body: "Hey Om and Diya,\n\nI'm Yash from SubhSandesh. Your Hindi couple reels from Jaipur are lovely.\n\nWe make little interactive pages people send someone they love — birthday surprises, miss-you notes, proposals. In the last 3 months about 52K people found us through Google Search alone, looking for something special for a birthday or an anniversary.\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link to share.\n\nWould you be up for trying one together?",
+    body: "Hey Om and Diya,\n\nI'm Suyash from SubhSandesh. Your Hindi couple reels from Jaipur are lovely.\n\nWe make little interactive pages people send someone they love — birthday surprises, miss-you notes, proposals. In the last 3 months about 52K people found us through Google Search alone, looking for something special for a birthday or an anniversary.\n\nI'd love to make a reel with you two where one of you surprises the other with a page on camera. Happy to pay for it, of course, and you'd get your own link to share.\n\nWould you be up for trying one together?",
   });
 
   it("passes with the proof in the context", () => {
@@ -274,28 +274,28 @@ describe("the parse step: a model draft with numbers passes only with the proof"
 
 describe("the email with the screenshot inline", () => {
   const image = { cid: "proof-dd33ee44@subhsandesh.in", filename: "google-search-stats.png", contentType: "image/png", content: Buffer.from("89504e470d0a1a0a0000000d49484452", "hex") };
-  const BODY = "Hey Om and Diya,\n\nI'm Yash from SubhSandesh. About 52K people found us through Google Search in the last 3 months.\n\nWould you be up for a reel together?";
+  const BODY = "Hey Om and Diya,\n\nI'm Suyash from SubhSandesh. About 52K people found us through Google Search in the last 3 months.\n\nWould you be up for a reel together?";
 
   it("preview and send render the same text; preview shows the CDN image, send uses cid", () => {
-    const pv = personalEmailParts({ body: BODY, signature: "Yash\nSubhSandesh", proof: PROOF, imageSrc: PROOF.imageUrl });
-    const sd = personalEmailParts({ body: BODY, signature: "Yash\nSubhSandesh", proof: PROOF, imageSrc: `cid:${image.cid}` });
+    const pv = personalEmailParts({ body: BODY, signature: "Suyash\nSubhSandesh", proof: PROOF, imageSrc: PROOF.imageUrl });
+    const sd = personalEmailParts({ body: BODY, signature: "Suyash\nSubhSandesh", proof: PROOF, imageSrc: `cid:${image.cid}` });
     assert.equal(pv.text, sd.text);
-    assert.match(pv.text, /\n\n\(screenshot of our Google Search stats attached\)\n\nYash\nSubhSandesh$/);
+    assert.match(pv.text, /\n\n\(screenshot of our Google Search stats attached\)\n\nSuyash\nSubhSandesh$/);
     assert.match(pv.html, new RegExp(`<img src="${PROOF.imageUrl.replace(/[.]/g, "\\.")}"`));
     assert.match(sd.html, /<img src="cid:proof-dd33ee44@subhsandesh\.in"/);
     assert.ok(!/<table|<style|<a /i.test(sd.html), "not a designed template");
-    const none = personalEmailParts({ body: BODY, signature: "Yash", proof: null });
+    const none = personalEmailParts({ body: BODY, signature: "Suyash", proof: null });
     assert.equal(none.html, "");
     assert.ok(!/screenshot/.test(none.text));
   });
 
   it("MIME: multipart/alternative → text/plain + multipart/related (html + inline image by cid), threading kept", async () => {
-    const parts = personalEmailParts({ body: BODY, signature: "Yash\nSubhSandesh", proof: PROOF, imageSrc: `cid:${image.cid}` });
+    const parts = personalEmailParts({ body: BODY, signature: "Suyash\nSubhSandesh", proof: PROOF, imageSrc: `cid:${image.cid}` });
     const raw = (
       await buildRawMime({
-        from: "Yash from SubhSandesh <yash@subhsandesh.in>",
+        from: "Suyash <suyash@subhsandesh.in>",
         to: "om@example.com",
-        replyTo: "Yash from SubhSandesh <reply@in.subhsandesh.in>",
+        replyTo: "Suyash <reply@in.subhsandesh.in>",
         subject: "Re: Om & Diya, a reel idea from SubhSandesh",
         text: parts.text,
         html: parts.html,
@@ -315,8 +315,8 @@ describe("the email with the screenshot inline", () => {
     assert.match(raw, /^Content-Disposition: inline; filename=google-search-stats\.png/m);
     assert.match(raw, /^In-Reply-To: <abc@email\.amazonses\.com>/m);
     assert.match(raw, /^References: <abc@email\.amazonses\.com>/m);
-    assert.match(raw, /^Reply-To: Yash from SubhSandesh <reply@in\.subhsandesh\.in>/m);
-    assert.match(raw, /^From: Yash from SubhSandesh <yash@subhsandesh\.in>/m);
+    assert.match(raw, /^Reply-To: Suyash <reply@in\.subhsandesh\.in>/m);
+    assert.match(raw, /^From: Suyash <suyash@subhsandesh\.in>/m);
     assert.ok(!/X-Mailer/i.test(raw));
     // the related part comes after the text part (clients show the last alternative they can render)
     assert.ok(raw.indexOf("text/plain") < raw.indexOf("multipart/related"));
@@ -324,7 +324,7 @@ describe("the email with the screenshot inline", () => {
 
   it("SES: Raw content with the configuration set; Simple when there is no image", async () => {
     const base: SesEmail = { to: "om@example.com", subject: "Hi", text: "t", html: "<div>h</div>", replyTo: "r@in.subhsandesh.in", configurationSet: "outreach" };
-    const o = { to: "om@example.com", subject: "Hi", fromEmail: "yash@subhsandesh.in", fromName: "Yash from SubhSandesh", configurationSet: "outreach", messageHeaders: [{ Name: "In-Reply-To", Value: "<a@b>" }] };
+    const o = { to: "om@example.com", subject: "Hi", fromEmail: "suyash@subhsandesh.in", fromName: "Suyash", configurationSet: "outreach", messageHeaders: [{ Name: "In-Reply-To", Value: "<a@b>" }] };
     const raw = await buildSendCommand({ ...base, inlineImages: [image] }, o);
     assert.equal(raw.input.ConfigurationSetName, "outreach");
     assert.ok(raw.input.Content?.Raw?.Data);
@@ -335,8 +335,8 @@ describe("the email with the screenshot inline", () => {
   });
 
   it("SES: no Reply-To header when it would only repeat the From address", async () => {
-    const o = { to: "om@example.com", subject: "Hi", fromEmail: "yash@subhsandesh.in", fromName: "Yash", configurationSet: "", messageHeaders: [] };
-    const same: SesEmail = { to: "om@example.com", subject: "Hi", text: "t", html: "<div>h</div>", replyTo: "Yash <Yash@SubhSandesh.in>" };
+    const o = { to: "om@example.com", subject: "Hi", fromEmail: "suyash@subhsandesh.in", fromName: "Suyash", configurationSet: "", messageHeaders: [] };
+    const same: SesEmail = { to: "om@example.com", subject: "Hi", text: "t", html: "<div>h</div>", replyTo: "Suyash <Suyash@SubhSandesh.in>" };
     const simple = await buildSendCommand(same, o);
     assert.equal(simple.input.ReplyToAddresses, undefined);
     const raw = await buildSendCommand({ ...same, inlineImages: [image] }, o);
@@ -349,7 +349,7 @@ describe("the email with the screenshot inline", () => {
     const input = buildProspectSendInput(
       "personal",
       { to: "om@example.com", subject: "Re: x", body: BODY, token: "INF-ABCDEFGH", instagram: "theecouple__", unsubscribeUrl: "https://x", inReplyTo: "<a@b>", references: "<a@b>", proofImage: { image, source: "search_console", width: 1600, height: 820 } },
-      { fromAddress: "yash@subhsandesh.in", fromName: "Yash from SubhSandesh", replyToAddress: "reply@in.subhsandesh.in" },
+      { fromAddress: "suyash@subhsandesh.in", fromName: "Suyash", replyToAddress: "reply@in.subhsandesh.in" },
       "outreach"
     );
     let got: SesEmail | null = null;
@@ -380,13 +380,13 @@ describe("the email with the screenshot inline", () => {
   });
 
   it("Inbox check warns about the image and names the numbers", () => {
-    const r = lintOutreach("Om & Diya, a reel idea from SubhSandesh", "Hey Om,\n\nI'm Yash.", { commissionPercent: 30, kind: "initial", style: "personal", writer: "Yash" });
-    const items = inboxCheck({ style: "personal", kind: "initial", body: "", lint: r, sender: { fromAddress: "yash@subhsandesh.in", fromName: "Yash" }, writer: "Yash", numbers: true, image: true });
+    const r = lintOutreach("Om & Diya, a reel idea from SubhSandesh", "Hey Om,\n\nI'm Suyash.", { commissionPercent: 30, kind: "initial", style: "personal", writer: "Suyash" });
+    const items = inboxCheck({ style: "personal", kind: "initial", body: "", lint: r, sender: { fromAddress: "suyash@subhsandesh.in", fromName: "Suyash" }, writer: "Suyash", numbers: true, image: true });
     const img = items.find((i) => /Screenshot attached/.test(i.label));
     assert.ok(img && img.warn && !img.ok);
     assert.match(img!.label, /Promotions/);
     assert.ok(items.some((i) => /confirmed traction numbers/.test(i.label)));
-    const off = inboxCheck({ style: "personal", kind: "initial", body: "", lint: r, sender: { fromAddress: "yash@subhsandesh.in", fromName: "Yash" }, writer: "Yash" });
+    const off = inboxCheck({ style: "personal", kind: "initial", body: "", lint: r, sender: { fromAddress: "suyash@subhsandesh.in", fromName: "Suyash" }, writer: "Suyash" });
     assert.ok(off.some((i) => i.label === "Plain text — no HTML or images"));
   });
 });

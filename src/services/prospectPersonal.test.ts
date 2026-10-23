@@ -1,4 +1,4 @@
-// ─── Personal mode: a note from Yash that lands in Primary ──────────────────
+// ─── Personal mode: a note from Suyash that lands in Primary ──────────────────
 //
 // No Mongo, no SES, no OpenAI: the model is a stub, the transport records what
 // it was given. Real email is never sent from here.
@@ -53,12 +53,12 @@ import type { IEmailThread } from "../models/EmailThread";
 
 const JOIN = "https://subhsandesh.in/influencer";
 const PRIYA = { name: "Priya Sharma", instagram: "priya.reels" };
-const YASH = { fromAddress: "yash@subhsandesh.in", fromName: "Yash from SubhSandesh", replyToAddress: "influencer@reply.subhsandesh.in" };
+const YASH = { fromAddress: "suyash@subhsandesh.in", fromName: "Suyash", replyToAddress: "influencer@reply.subhsandesh.in" };
 const SUBJ = "Loved your couple reels";
 
 const FIRST_NOTE = `Hey {{firstName}},
 
-I'm Yash from SubhSandesh. I came across {{instagram}} on Instagram and really liked how you tell little stories in your couple videos.
+I'm Suyash from SubhSandesh. I came across {{instagram}} on Instagram and really liked how you tell little stories in your couple videos.
 
 We make small interactive pages people send their partner — birthday surprises, miss-you notes, proposals.
 
@@ -73,59 +73,59 @@ const plint = (s: string, b: string, kind: "initial" | "followup" | "fresh" | "r
     kind,
     style: "personal",
     priorFollowups,
-    writer: "Yash",
+    writer: "Suyash",
   });
 
 const codes = (r: { errors: { code: string }[] }) => r.errors.map((e) => e.code);
 
-describe("sender: Yash from SubhSandesh <yash@subhsandesh.in>", () => {
+describe("sender: Suyash <suyash@subhsandesh.in>", () => {
   const body = renderMergeFields(FIRST_NOTE, PRIYA);
 
-  it("defaults: Yash's address, name and signature; classic keeps the team", () => {
+  it("defaults: Suyash's address, name and signature; classic keeps the team", () => {
     assert.deepEqual(PROSPECT_PERSONAL_DEFAULTS, {
-      fromAddress: "yash@subhsandesh.in",
-      fromName: "Yash from SubhSandesh",
-      signature: "Yash",
+      fromAddress: "suyash@subhsandesh.in",
+      fromName: "Suyash",
+      signature: "Suyash",
       companyLine: "SubhSandesh",
       configurationSet: "outreach",
     });
     assert.deepEqual(PROSPECT_TEAM_DEFAULTS, { fromAddress: "team@subhsandesh.in", fromName: "SubhSandesh Team", signature: "Team SubhSandesh" });
-    if (!process.env.PROSPECT_PERSONAL_FROM_EMAIL) assert.equal(env.PROSPECT_PERSONAL_FROM_EMAIL, "yash@subhsandesh.in");
-    if (!process.env.PROSPECT_PERSONAL_FROM_NAME) assert.equal(env.PROSPECT_PERSONAL_FROM_NAME, "Yash from SubhSandesh");
-    if (!process.env.PROSPECT_PERSONAL_SIGNATURE) assert.equal(env.PROSPECT_PERSONAL_SIGNATURE, "Yash");
+    if (!process.env.PROSPECT_PERSONAL_FROM_EMAIL) assert.equal(env.PROSPECT_PERSONAL_FROM_EMAIL, "suyash@subhsandesh.in");
+    if (!process.env.PROSPECT_PERSONAL_FROM_NAME) assert.equal(env.PROSPECT_PERSONAL_FROM_NAME, "Suyash");
+    if (!process.env.PROSPECT_PERSONAL_SIGNATURE) assert.equal(env.PROSPECT_PERSONAL_SIGNATURE, "Suyash");
     if (!process.env.PROSPECT_SIGNATURE_COMPANY_LINE) assert.equal(env.PROSPECT_SIGNATURE_COMPANY_LINE, true);
     if (!process.env.PROSPECT_SIGNATURE_SITE_LINE) assert.equal(env.PROSPECT_SIGNATURE_SITE_LINE, false);
     if (!process.env.PROSPECT_SES_CONFIGURATION_SET) assert.equal(env.PROSPECT_SES_CONFIGURATION_SET, "outreach");
     if (!process.env.PROSPECT_FROM_NAME) assert.equal(env.PROSPECT_FROM_NAME, "SubhSandesh Team");
   });
 
-  it("the signature is “Yash” + a plain “SubhSandesh” line; no URL unless asked", () => {
-    assert.equal(personalSignature("Yash", false, false, true), "Yash\nSubhSandesh");
-    assert.equal(personalSignature("Yash", false, false, false), "Yash");
-    assert.equal(personalSignature("Yash", false, true, true), "Yash\nSubhSandesh\nsubhsandesh.in");
-    assert.equal(personalSignature("Yash from SubhSandesh", false, false, true), "Yash from SubhSandesh", "no doubled company");
-    assert.match(personalSignature("Yash", true, false, true), /^Yash\nSubhSandesh\nSubhSandesh, Ward No\. 06/);
-    assert.ok(!/https?:|\.in\b/.test(personalSignature("Yash", false, false, true)));
+  it("the signature is “Suyash” + a plain “SubhSandesh” line; no URL unless asked", () => {
+    assert.equal(personalSignature("Suyash", false, false, true), "Suyash\nSubhSandesh");
+    assert.equal(personalSignature("Suyash", false, false, false), "Suyash");
+    assert.equal(personalSignature("Suyash", false, true, true), "Suyash\nSubhSandesh\nsubhsandesh.in");
+    assert.equal(personalSignature("Suyash from SubhSandesh", false, false, true), "Suyash from SubhSandesh", "no doubled company");
+    assert.match(personalSignature("Suyash", true, false, true), /^Suyash\nSubhSandesh\nSubhSandesh, Ward No\. 06/);
+    assert.ok(!/https?:|\.in\b/.test(personalSignature("Suyash", false, false, true)));
   });
 
   it("the writer is the signature's first name; a team signature has none", () => {
-    assert.equal(personalWriterName("Yash"), "Yash");
-    assert.equal(personalWriterName("yash\nSubhSandesh"), "Yash");
+    assert.equal(personalWriterName("Suyash"), "Suyash");
+    assert.equal(personalWriterName("suyash\nSubhSandesh"), "Suyash");
     assert.equal(personalWriterName("Team SubhSandesh"), "");
-    assert.ok(introducesWriter("Hey Priya,\n\nI'm Yash from SubhSandesh.", "Yash"));
-    assert.ok(introducesWriter("Hey Priya,\n\nYash here, from SubhSandesh.", "Yash"));
-    assert.ok(introducesWriter("Hey Priya,\n\nThis is Yash.", "Yash"));
-    assert.ok(!introducesWriter("Hey Priya,\n\nWe are SubhSandesh.", "Yash"));
+    assert.ok(introducesWriter("Hey Priya,\n\nI'm Suyash from SubhSandesh.", "Suyash"));
+    assert.ok(introducesWriter("Hey Priya,\n\nSuyash here, from SubhSandesh.", "Suyash"));
+    assert.ok(introducesWriter("Hey Priya,\n\nThis is Suyash.", "Suyash"));
+    assert.ok(!introducesWriter("Hey Priya,\n\nWe are SubhSandesh.", "Suyash"));
   });
 
   it("text = body + signature, nothing else (no footer, no unsubscribe, no address, no Ref)", () => {
-    const t = prospectPersonalText({ body, signature: "Yash\nSubhSandesh" });
+    const t = prospectPersonalText({ body, signature: "Suyash\nSubhSandesh" });
     assert.ok(t.startsWith("Hey Priya,"));
-    assert.ok(t.endsWith("\n\nYash\nSubhSandesh"));
+    assert.ok(t.endsWith("\n\nSuyash\nSubhSandesh"));
     assert.ok(!/unsubscribe|Ref:|INF-|Ward No|You're receiving|reply\s+"?no|Team SubhSandesh/i.test(t), t);
   });
 
-  it("sends as Yash, plain text only, no List-Unsubscribe, Reply-To = the SES receiving address", async () => {
+  it("sends as Suyash, plain text only, no List-Unsubscribe, Reply-To = the SES receiving address", async () => {
     const seen: SesEmail[] = [];
     const input = buildProspectSendInput(
       "personal",
@@ -139,14 +139,14 @@ describe("sender: Yash from SubhSandesh <yash@subhsandesh.in>", () => {
     });
     assert.equal(seen.length, 1);
     const e = seen[0];
-    assert.equal(e.from, "yash@subhsandesh.in");
-    assert.equal(e.fromName, "Yash from SubhSandesh");
-    assert.equal(e.replyTo, "Yash from SubhSandesh <influencer@reply.subhsandesh.in>");
+    assert.equal(e.from, "suyash@subhsandesh.in");
+    assert.equal(e.fromName, "Suyash");
+    assert.equal(e.replyTo, "Suyash <influencer@reply.subhsandesh.in>");
     assert.equal(e.html, "", "no HTML part");
     assert.equal(e.configurationSet, "outreach", "the quiet lane");
     assert.ok(!Object.keys(e.headers || {}).some((h) => /list-unsubscribe/i.test(h)), JSON.stringify(e.headers));
     assert.ok(!/INF-7K2Q9MXA|unsubscribe|Ref:|<img|https?:\/\//i.test(e.text), "no visible token / footer / image / link");
-    assert.equal(r.fromAddress, "yash@subhsandesh.in");
+    assert.equal(r.fromAddress, "suyash@subhsandesh.in");
     assert.equal(r.quietLane, "used");
   });
 
@@ -166,20 +166,20 @@ describe("sender: Yash from SubhSandesh <yash@subhsandesh.in>", () => {
   });
 
   it("personal mail replies to the From address by default (no separate Reply-To)", () => {
-    assert.equal(personalSender("yash@subhsandesh.in", "Yash from SubhSandesh").replyToAddress, "yash@subhsandesh.in");
+    assert.equal(personalSender("suyash@subhsandesh.in", "Suyash").replyToAddress, "suyash@subhsandesh.in");
   });
 
   it("Reply-To falls back to the From address when no receiving address is set", () => {
-    assert.equal(personalSender("yash@subhsandesh.in", "Yash from SubhSandesh", "").replyToAddress, "yash@subhsandesh.in");
+    assert.equal(personalSender("suyash@subhsandesh.in", "Suyash", "").replyToAddress, "suyash@subhsandesh.in");
     assert.equal(personalSender("a@b.in", "A", "r@reply.b.in").replyToAddress, "r@reply.b.in");
   });
 
-  it("yash@ is a trustworthy, personal sender; no-reply and foreign domains are not", () => {
+  it("suyash@ is a trustworthy, personal sender; no-reply and foreign domains are not", () => {
     assert.ok(isTrustworthySender(YASH));
     assert.ok(!isRoleAddress(YASH.fromAddress));
     assert.ok(!isTrustworthySender({ fromAddress: "noreply@subhsandesh.in", fromName: "SubhSandesh" }));
-    assert.ok(!isTrustworthySender({ fromAddress: "yash@gmail.com", fromName: "Yash" }));
-    assert.ok(!isTrustworthySender({ fromAddress: "yash@subhsandesh.in", fromName: "" }));
+    assert.ok(!isTrustworthySender({ fromAddress: "suyash@gmail.com", fromName: "Suyash" }));
+    assert.ok(!isTrustworthySender({ fromAddress: "suyash@subhsandesh.in", fromName: "" }));
     assert.ok(isRoleAddress("noreply@x.in"));
   });
 });
@@ -225,7 +225,7 @@ describe("quiet sending lane: PROSPECT_SES_CONFIGURATION_SET", () => {
     assert.equal(seen.length, 2, "exactly one retry");
     assert.equal(seen[0].configurationSet, "outreach");
     assert.equal(seen[1].configurationSet, undefined, "the retry does not override (SES default lane)");
-    assert.equal(seen[1].from, "yash@subhsandesh.in", "same sender on the retry");
+    assert.equal(seen[1].from, "suyash@subhsandesh.in", "same sender on the retry");
     assert.equal(r.quietLane, "fallback");
     assert.match(String(r.quietLaneError), /no configuration set "outreach"/);
     noteQuietLane(r);
@@ -314,7 +314,7 @@ describe("follow-ups stay in the same thread", () => {
   });
 
   it("a new email (fresh) needs its own short subject — never “Re:”", () => {
-    const body = "Hey {{firstName}},\n\nYash here again — I wrote a little while back. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be up for making that together?";
+    const body = "Hey {{firstName}},\n\nSuyash here again — I wrote a little while back. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be up for making that together?";
     assert.deepEqual(plint("One more reel idea", body, "fresh").errors, []);
     assert.ok(codes(plint("Re: one more reel idea", body, "fresh")).includes("subject_fake_reply"));
   });
@@ -445,7 +445,7 @@ describe("personal: the linter profile", () => {
     ["paying mentioned twice", SUBJ, FIRST_NOTE.replace("of course.", "of course. It's a paid reel."), "pay_twice"],
     ["an emoji", SUBJ, FIRST_NOTE.replace("of course.", "of course 🙂"), "emoji"],
     ["two exclamation marks", SUBJ, FIRST_NOTE.replace("couple videos.", "couple videos!").replace("of course.", "of course!"), "bangs"],
-    ["no “I'm Yash”", SUBJ, FIRST_NOTE.replace("I'm Yash from SubhSandesh. I came", "I came"), "no_intro"],
+    ["no “I'm Suyash”", SUBJ, FIRST_NOTE.replace("I'm Suyash from SubhSandesh. I came", "I came"), "no_intro"],
     ["a team sign-off", SUBJ, `${FIRST_NOTE}\n\nTeam SubhSandesh`, "team_signoff"],
     ["no question", SUBJ, FIRST_NOTE.replace("Would you be up for making a reel together with one of them?", "I'd love to make a reel together with one of them."), "no_question"],
     ["too long", SUBJ, FIRST_NOTE.replace("of course.", "of course. " + "I really mean it. ".repeat(15)), "too_long"],
@@ -472,7 +472,7 @@ describe("personal: the linter profile", () => {
         commissionPercent: 30,
         template: { subject: SUBJ, body: FIRST_NOTE },
         style: "personal",
-        writer: "Yash",
+        writer: "Suyash",
       });
       assert.deepEqual(r.errors, [], `${ig}: ${JSON.stringify(r.errors)}`);
     }
@@ -494,12 +494,12 @@ describe("personal: the linter profile", () => {
   });
 
   it("the inbox check states the real rules, and flags what breaks them", () => {
-    const good = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: YASH, subject: SUBJ, writer: "Yash", quietLane: { configurationSet: "outreach", state: "ready", message: "" } });
+    const good = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: YASH, subject: SUBJ, writer: "Suyash", quietLane: { configurationSet: "outreach", state: "ready", message: "" } });
     assert.ok(good.every((i) => i.ok), JSON.stringify(good));
     const labels = good.map((i) => i.label).join(" | ");
     for (const want of [
-      "From Yash from SubhSandesh <yash@subhsandesh.in>",
-      "Written by Yash, first person",
+      "From Suyash <suyash@subhsandesh.in>",
+      "Written by Suyash, first person",
       "Plain text",
       "No unsubscribe header",
       "Quiet sending lane (no open tracking)",
@@ -510,25 +510,25 @@ describe("personal: the linter profile", () => {
       assert.ok(labels.includes(want), `${want} in ${labels}`);
     }
     const withLink = FIRST_NOTE.replace("Happy to pay for it, of course.", `Details: ${JOIN}`);
-    const bad = inboxCheck({ style: "personal", kind: "initial", body: withLink, lint: plint("quick question", withLink), sender: YASH, writer: "Yash" });
+    const bad = inboxCheck({ style: "personal", kind: "initial", body: withLink, lint: plint("quick question", withLink), sender: YASH, writer: "Suyash" });
     assert.equal(bad.find((i) => /No links/.test(i.label))?.ok, false);
     assert.equal(bad.find((i) => /human subject/.test(i.label))?.ok, false);
     const pitchy = FIRST_NOTE.replace("making a reel together", "a paid collab");
-    const p = inboxCheck({ style: "personal", kind: "initial", body: pitchy, lint: plint(SUBJ, pitchy), sender: YASH, writer: "Yash" });
+    const p = inboxCheck({ style: "personal", kind: "initial", body: pitchy, lint: plint(SUBJ, pitchy), sender: YASH, writer: "Suyash" });
     assert.equal(p.find((i) => /No pitch words/.test(i.label))?.ok, false);
-    const noIntro = FIRST_NOTE.replace("I'm Yash from SubhSandesh. I came", "I came");
-    assert.equal(inboxCheck({ style: "personal", kind: "initial", body: noIntro, lint: plint(SUBJ, noIntro), sender: YASH, writer: "Yash" }).find((i) => /Written by Yash/.test(i.label))?.ok, false);
-    const missing = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: YASH, writer: "Yash", quietLane: { configurationSet: "outreach", state: "missing", message: "m" } });
+    const noIntro = FIRST_NOTE.replace("I'm Suyash from SubhSandesh. I came", "I came");
+    assert.equal(inboxCheck({ style: "personal", kind: "initial", body: noIntro, lint: plint(SUBJ, noIntro), sender: YASH, writer: "Suyash" }).find((i) => /Written by Suyash/.test(i.label))?.ok, false);
+    const missing = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: YASH, writer: "Suyash", quietLane: { configurationSet: "outreach", state: "missing", message: "m" } });
     const lane = missing.find((i) => /Quiet lane/.test(i.label));
     assert.ok(lane && lane.warn && !lane.ok, JSON.stringify(lane));
-    const fu = inboxCheck({ style: "personal", kind: "followup", body: NUDGE, lint: plint("Re: x y", NUDGE, "followup"), sender: YASH, subject: "Re: x y", writer: "Yash" });
+    const fu = inboxCheck({ style: "personal", kind: "followup", body: NUDGE, lint: plint("Re: x y", NUDGE, "followup"), sender: YASH, subject: "Re: x y", writer: "Suyash" });
     assert.ok(fu.find((i) => /same thread/.test(i.label))?.ok);
-    const noreply = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: { fromAddress: "noreply@subhsandesh.in", fromName: "SubhSandesh" }, writer: "Yash" });
+    const noreply = inboxCheck({ style: "personal", kind: "initial", body: FIRST_NOTE, lint: plint(SUBJ, FIRST_NOTE), sender: { fromAddress: "noreply@subhsandesh.in", fromName: "SubhSandesh" }, writer: "Suyash" });
     assert.equal(noreply[0].ok, false);
   });
 });
 
-describe("drafting as Yash (stubbed model)", () => {
+describe("drafting as Suyash (stubbed model)", () => {
   const programme = { commissionPercent: 30, attributionDays: 60, joinUrl: JOIN, today: "2026-10-16" };
   const person = { name: "Priya Sharma", instagram: "priya.reels", niche: "couple comedy reels", note: "" };
   const ctx: ProspectDraftContext = { mode: "personal", style: "personal", person, programme };
@@ -547,22 +547,22 @@ describe("drafting as Yash (stubbed model)", () => {
     assert.equal(d.subject, "Priya, a reel idea from SubhSandesh");
   });
 
-  it("the personal prompt writes as Yash in the first person; classic stays the team", () => {
-    const p = personalSystemPrompt("Yash", "Yash\nSubhSandesh");
-    assert.match(p, /You write AS Yash, in the first person/);
-    assert.match(p, /I'm Yash/);
+  it("the personal prompt writes as Suyash in the first person; classic stays the team", () => {
+    const p = personalSystemPrompt("Suyash", "Suyash\nSubhSandesh");
+    assert.match(p, /You write AS Suyash, in the first person/);
+    assert.match(p, /I'm Suyash/);
     assert.ok(!/Team SubhSandesh|as the team/i.test(p), "no team voice");
-    assert.match(p, /Yash \/ SubhSandesh/, "the signature it is told about");
+    assert.match(p, /Suyash \/ SubhSandesh/, "the signature it is told about");
     assert.match(PROSPECT_SYSTEM_PROMPT, /as the team — "we", "our team"/);
     assert.match(PROSPECT_SYSTEM_PROMPT, /Team SubhSandesh/);
-    assert.ok(!/suyash/i.test(buildProspectPrompt({ ...ctx, adminNote: "mention Diwali" }, "english")));
+    assert.ok(!/agrahari/i.test(buildProspectPrompt({ ...ctx, adminNote: "mention Diwali" }, "english")), "first name only, never the surname");
   });
 
-  it("drops an opt-out line and a Yash sign-off the model added, keeps the rest", async () => {
+  it("drops an opt-out line and a Suyash sign-off the model added, keeps the rest", async () => {
     let d = await draftProspectMail(ctx, stub(`${NOTE}\n\nIf it's not for you, just reply "no" and I won't email again.`));
     assert.equal(d.body, NOTE);
     assert.ok(!hasOptOutLine(d.body));
-    for (const tail of ["\n\nCheers,\nYash", "\n\nYash\nSubhSandesh", "\n\n— Yash from SubhSandesh"]) {
+    for (const tail of ["\n\nCheers,\nSuyash", "\n\nSuyash\nSubhSandesh", "\n\n— Suyash from SubhSandesh"]) {
       d = await draftProspectMail(ctx, stub(`${NOTE}${tail}`));
       assert.equal(d.body, NOTE, JSON.stringify(tail));
     }
@@ -609,17 +609,17 @@ describe("drafting as Yash (stubbed model)", () => {
     assert.ok(oneBad.length >= 1, "one good draft is enough");
   });
 
-  it("the first-touch prompt: I'm Yash, then the light ask; no %, link, scheme name or pitch word; 50–100 words", () => {
+  it("the first-touch prompt: I'm Suyash, then the light ask; no %, link, scheme name or pitch word; 50–100 words", () => {
     const p = buildProspectPrompt(ctx, "english");
     assert.ok(!p.includes("30%") && !p.includes(JOIN) && !/programme/i.test(p), p);
     assert.match(p, /couple comedy reels/);
-    assert.match(p, /I'm Yash from SubhSandesh/);
+    assert.match(p, /I'm Suyash from SubhSandesh/);
     assert.match(p, /Hey <first name>,/);
     assert.match(p, /came across their page on Instagram/);
     assert.match(p, /50 to 100 words/);
     assert.match(p, /little interactive pages people send/);
     assert.match(p, /Happy to pay for it, of course/);
-    const sys = personalSystemPrompt("Yash", "Yash\nSubhSandesh");
+    const sys = personalSystemPrompt("Suyash", "Suyash\nSubhSandesh");
     for (const banned of [...PERSONAL_PITCH_WORDS, "guaranteed", "click here", "unsubscribe", "reply no"]) {
       const re = new RegExp(`(^|[^a-z])${banned.replace(/[-]/g, "\\-")}($|[^a-z])`, "i");
       assert.ok(!re.test(sys), `system prompt names “${banned}”`);
@@ -638,7 +638,7 @@ describe("drafting as Yash (stubbed model)", () => {
     assert.ok(!buildProspectPrompt(fu(0), "english").includes(JOIN));
     assert.ok(buildProspectPrompt(fu(1), "english").includes(JOIN));
     assert.match(buildProspectPrompt(fu(0), "english"), /20 to 60 words/);
-    assert.match(buildProspectPrompt(fu(0), "english"), /from Yash/);
+    assert.match(buildProspectPrompt(fu(0), "english"), /from Suyash/);
   });
 
   it("the reply prompt does carry the real % and the join link", () => {
@@ -665,7 +665,7 @@ describe("drafting as Yash (stubbed model)", () => {
     await assert.rejects(draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: msgs }, stub(linked, "")), ThreadAiRefusedError);
     const ok2 = await draftProspectMail({ mode: "followup", style: "personal", person, programme, messages: msgs, priorFollowups: 1 }, stub(linked, ""));
     assert.ok(ok2.body.includes(JOIN));
-    const freshBody = "Hey Priya,\n\nYash here again — I wrote a little while back. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be up for making that together?";
+    const freshBody = "Hey Priya,\n\nSuyash here again — I wrote a little while back. One idea: a reel where one of you surprises the other with an anniversary page on camera.\n\nWould you be up for making that together?";
     const fr = await draftProspectMail({ mode: "fresh", style: "personal", person, programme, messages: msgs }, stub(freshBody, "One more reel idea"));
     assert.equal(fr.subject, "One more reel idea for Priya");
   });
@@ -827,12 +827,12 @@ describe("personal: SES refusing the sender is said plainly", () => {
       ),
       (err: unknown) => err instanceof SesSendError && isSenderNotAllowedError((err as Error).message)
     );
-    assert.deepEqual(tried, ["yash@subhsandesh.in"], "exactly one attempt, from Yash's address — not retried on another lane or sender");
-    const msg = personalSenderBlockedMessage("yash@subhsandesh.in");
-    assert.match(msg, /Sender isn't allowed yet: SES refused to send as yash@subhsandesh\.in/);
+    assert.deepEqual(tried, ["suyash@subhsandesh.in"], "exactly one attempt, from Suyash's address — not retried on another lane or sender");
+    const msg = personalSenderBlockedMessage("suyash@subhsandesh.in");
+    assert.match(msg, /Sender isn't allowed yet: SES refused to send as suyash@subhsandesh\.in/);
     assert.match(msg, /add-personal-sender\.sh/);
     assert.match(msg, /Nothing was sent from another address/);
-    const raw = personalSenderBlockedMessage("yash@subhsandesh.in", "User arn:aws:iam::1:user/x is not authorized to perform: ses:SendRawEmail on resource …");
+    const raw = personalSenderBlockedMessage("suyash@subhsandesh.in", "User arn:aws:iam::1:user/x is not authorized to perform: ses:SendRawEmail on resource …");
     assert.match(raw, /^Sender isn't allowed yet: SES refused the email with the screenshot/, "keeps the prefix the Send-button release matches");
     assert.match(raw, /ses:SendRawEmail/);
   });

@@ -134,8 +134,8 @@ export async function pacingNow(now: Date = new Date()): Promise<PacingInput> {
  * rules are tested without Mongo:
  *
  *   personal  plain text (body + signature), NO html part, NO List-Unsubscribe,
- *             NO footer, NO visible Ref token; From = Yash from SubhSandesh
- *             <yash@subhsandesh.in>; Reply-To = the SES receiving address
+ *             NO footer, NO visible Ref token; From = Suyash
+ *             <suyash@subhsandesh.in>; Reply-To = the SES receiving address
  *             (else the From address).
  *   classic   the original multipart email with footer + RFC 8058 headers.
  *
@@ -291,7 +291,7 @@ export async function processProspectQueueOnce(
       );
   const token = existing?.threadToken || newThreadToken();
   const unsub = unsubscribeUrl(p.unsubscribeToken);
-  // A Connect note and its follow-ups: PROSPECT_CONNECT_FROM_NAME (when set) + "Yash" signature.
+  // A Connect note and its follow-ups: PROSPECT_CONNECT_FROM_NAME (when set) + "Suyash" signature.
   const dress = personalDress(job.touch, job.kind);
   const person = dress.sender;
 

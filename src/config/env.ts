@@ -92,14 +92,14 @@ export const PROSPECT_TEAM_DEFAULTS = {
 
 /**
  * Who a personal-style invite (the default) comes from when the box sets
- * nothing: Yash, one real person, writing in the first person. The second
+ * nothing: Suyash, one real person, writing in the first person. The second
  * signature line is plain text — a person signing with their company — never
  * a URL. Exported so the tests pin the defaults.
  */
 export const PROSPECT_PERSONAL_DEFAULTS = {
-  fromAddress: "yash@subhsandesh.in",
-  fromName: "Yash from SubhSandesh",
-  signature: "Yash",
+  fromAddress: "suyash@subhsandesh.in",
+  fromName: "Suyash",
+  signature: "Suyash",
   companyLine: "SubhSandesh",
   configurationSet: "outreach",
 } as const;
@@ -320,15 +320,15 @@ export const env = {
   PROSPECT_SEND_END_HOUR: Math.min(24, Math.max(0, Number.parseInt(process.env.PROSPECT_SEND_END_HOUR ?? "21", 10) || 0)),
   PROSPECT_SEND_TZ_OFFSET_MINUTES: Number.parseInt(process.env.PROSPECT_SEND_TZ_OFFSET_MINUTES ?? "330", 10) || 0,
 
-  // ── Personal invite mode (the default style): a note from Yash ───────────
+  // ── Personal invite mode (the only style for first emails): a note from Suyash
   //
-  // A plain-text note from Yash's own address, with no List-Unsubscribe
+  // A plain-text note from Suyash's own address, with no List-Unsubscribe
   // header and no footer — what lands in Gmail's Primary tab. The address
   // must be allowed by the SES IAM policy (ses:FromAddress); until it is, SES
   // refuses and the panel says so. It NEVER silently falls back to another
   // sender. There is no Reply-To: a Reply-To pointing somewhere other than
-  // the sender is a bulk-mail signal, so replies go to yash@ itself, and a
-  // GoDaddy forward from yash@ to the SES receiving address
+  // the sender is a bulk-mail signal, so replies go to suyash@ itself, and a
+  // GoDaddy forward from suyash@ to the SES receiving address
   // (INFLUENCER_REPLY_TO_EMAIL) brings them into the app.
   PROSPECT_PERSONAL_FROM_EMAIL: (process.env.PROSPECT_PERSONAL_FROM_EMAIL || PROSPECT_PERSONAL_DEFAULTS.fromAddress).trim().toLowerCase(),
   PROSPECT_PERSONAL_FROM_NAME: process.env.PROSPECT_PERSONAL_FROM_NAME || PROSPECT_PERSONAL_DEFAULTS.fromName,
@@ -340,11 +340,10 @@ export const env = {
   /**
    * The From display name for Connect emails (the first hello and its
    * follow-ups). Empty (default) = the normal PROSPECT_PERSONAL_FROM_NAME
-   * ("Yash from SubhSandesh"); set it to "Yash" to make the hello come from
-   * plain "Yash". The address and everything else stay the same.
+   * ("Suyash"). The address and everything else stay the same.
    */
   PROSPECT_CONNECT_FROM_NAME: (process.env.PROSPECT_CONNECT_FROM_NAME || "").replace(/[\r\n"<>]+/g, " ").trim(),
-  /** Signature under personal mail ("Yash"). `\n` becomes a line break. Plain text. */
+  /** Signature under personal mail ("Suyash"). `\n` becomes a line break. Plain text. */
   PROSPECT_PERSONAL_SIGNATURE: (process.env.PROSPECT_PERSONAL_SIGNATURE || PROSPECT_PERSONAL_DEFAULTS.signature).replace(/\\n/g, "\n"),
   /**
    * A second plain line under the personal signature — "SubhSandesh", the

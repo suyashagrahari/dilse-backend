@@ -7,9 +7,9 @@
 //
 // ── WHO WRITES ─────────────────────────────────────────────────────────────
 //
-// Personal style (the default): Yash, in the first person — "I'm Yash from
-// SubhSandesh", "I", and "we" only for the company — sent as "Yash from
-// SubhSandesh" <yash@subhsandesh.in>, signed "Yash" / "SubhSandesh". A note
+// Personal style (the default): Suyash, in the first person — "I'm Suyash from
+// SubhSandesh", "I", and "we" only for the company — sent as "Suyash from
+// SubhSandesh" <suyash@subhsandesh.in>, signed "Suyash" / "SubhSandesh". A note
 // from a person, then a light pitch; never a promotion. Classic style keeps
 // the team's voice ("we"), signed "Team SubhSandesh".
 //
@@ -29,7 +29,7 @@
 // ── TWO STYLES ─────────────────────────────────────────────────────────────
 //
 //   classic    the original: explains the programme, the %, the join link.
-//   personal   (default) a short plain-text note from Yash — no link, no
+//   personal   (default) a short plain-text note from Suyash — no link, no
 //              numbers, no sales vocabulary, one soft question about making a
 //              reel together. The details (link, real %) come in the REPLY,
 //              once they have written back (the link also in follow-up #2+).
@@ -37,15 +37,15 @@
 //
 // ── CONNECT (the default personal first email) ─────────────────────────────
 //
-//   connect    a short hello from Yash: a genuine line about THEIR content,
-//              "I'm Yash", that he'd love to connect and has something to run
+//   connect    a short hello from Suyash: a genuine line about THEIR content,
+//              "I'm Suyash", that he'd love to connect and has something to run
 //              by them, and one easy question. Nothing about the company, what
 //              it makes, numbers, links or money — the prompt is not even told
-//              the company's name, so it cannot say it. Signed "Yash".
+//              the company's name, so it cannot say it. Signed "Suyash".
 //              Its follow-up is a gentle bump in the same thread.
 //   reply      once they answer a Connect note, the reply is the first time
 //              they hear what SubhSandesh is: it answers them first, then who
-//              Yash works for, what it makes, why it fits them, the real
+//              Suyash works for, what it makes, why it fits them, the real
 //              numbers, the paid reel idea, their link + commission, a next step.
 //
 // ── TWO ANGLES ─────────────────────────────────────────────────────────────
@@ -204,9 +204,9 @@ export function renderPerson(p: PersonFacts, greet: "Hi" | "Hey" = "Hi"): string
     .join("\n");
 }
 
-/** The first name personal mail is written by — "Yash" unless the box says otherwise. */
+/** The first name personal mail is written by — "Suyash" unless the box says otherwise. */
 export function writerName(): string {
-  return personalWriterName() || "Yash";
+  return personalWriterName();
 }
 
 /** Personal first touch / follow-up: who is writing, with nothing to sell. */
@@ -453,8 +453,8 @@ function prospectLanguage(lang: MailLanguage, ctx: ProspectDraftContext): string
 }
 
 /** Reply after a Connect note: the paid reel, alongside PROGRAMME FACTS. */
-const REEL_FACT =
-  "- What Yash would like from them: one reel made with one of these pages, in their own style (for example one of them surprising the other with a page, and the reaction). SubhSandesh pays them for that reel; the amount is agreed together once they're keen.";
+const reelFact = () =>
+  `- What ${writerName()} would like from them: one reel made with one of these pages, in their own style (for example one of them surprising the other with a page, and the reaction). SubhSandesh pays them for that reel; the amount is agreed together once they're keen.`;
 
 export function buildProspectPrompt(ctx: ProspectDraftContext, language: MailLanguage): string {
   // A personal first touch / follow-up is not told the %; the link only when
@@ -468,7 +468,7 @@ export function buildProspectPrompt(ctx: ProspectDraftContext, language: MailLan
       ? renderWhoWeAre(ctx.programme, personalLinkAllowed(kind, ctx.priorFollowups || 0))
       : renderProgramme(ctx.programme);
   const parts: string[] = [brief(ctx), angleLine(ctx), "", prospectLanguage(language, ctx), "", facts];
-  if (personal && ctx.mode === "reply" && ctx.afterConnect) parts.push(REEL_FACT);
+  if (personal && ctx.mode === "reply" && ctx.afterConnect) parts.push(reelFact());
   if (hasProof(ctx)) parts.push("", proofFactsForPrompt(ctx.proof!));
   if (ctx.person) parts.push("", connect ? renderConnectPerson(ctx.person) : renderPerson(ctx.person, personal ? "Hey" : "Hi"));
   if (ctx.firstEmail) {
@@ -524,7 +524,7 @@ export function personalSubjectRule(w: string = writerName()): string {
 }
 
 /**
- * Personal style: a note from Yash, in the first person. Positive voice only
+ * Personal style: a note from Suyash, in the first person. Positive voice only
  * — the words to refuse live in the linter (PERSONAL_PITCH_WORDS,
  * SPAM_PHRASES, the opt-out pattern), never here.
  */
@@ -630,7 +630,7 @@ export function parseProspectDraft(raw: string, ctx: ProspectDraftContext, langu
   const connect = isConnectCtx(ctx);
   if (connect && kind === "initial") {
     // A Connect note always carries the deterministic hello subject:
-    // "Om & Diya, would love to connect" / "Hey Om & Diya, quick hello from Yash".
+    // "Om & Diya, would love to connect" / "Hey Om & Diya, quick hello from Suyash".
     subject = connectSubject({ person: ctx.person, variant: angle === "b" ? 1 : 0, template: isTemplateCtx(ctx) });
   } else if (personal && (kind === "initial" || kind === "fresh")) {
     // Personal first / new emails always carry the deterministic subject that

@@ -149,9 +149,9 @@ async function deploymentStatus() {
       fromName: person.fromName,
       replyToAddress: person.replyToAddress,
       blocked: blocked ? { message: blocked.message, at: blocked.at } : null,
-      /** The signature exactly as it is appended ("Yash\nSubhSandesh"). */
+      /** The signature exactly as it is appended ("Suyash\nSubhSandesh"). */
       signature: personalSignature(),
-      /** Who writes in the first person ("Yash"); "" for a team signature. */
+      /** Who writes in the first person ("Suyash"); "" for a team signature. */
       writer: personalWriterName(),
       /** Connect notes: the From name (PROSPECT_CONNECT_FROM_NAME, else the normal one) and signature. */
       connectFromName: connectSender().fromName,
@@ -425,10 +425,12 @@ async function resolveSelection(ids: mongoose.Types.ObjectId[], intent: JobKind 
 }
 
 /** What the admin asked for. Personal is the default; anything else is classic only when said. */
-const readStyle = (req: Request): OutreachStyle => (req.body?.style === "classic" ? "classic" : "personal");
+// First emails are always a personal Connect note: the classic team email and
+// the Pitch first touch read as promotions, so a request for either is ignored.
+// The pitch only comes after they reply (see touchFor).
+const readStyle = (_req: Request): OutreachStyle => "personal";
 
-/** Personal first email: Connect (default) or Pitch. */
-const readTouch = (req: Request): FirstTouch => (req.body?.touch === "pitch" ? "pitch" : "connect");
+const readTouch = (_req: Request): FirstTouch => "connect";
 
 /** The first-touch profile one recipient's email is held to (see touchFor). */
 const touchOf = (e: { p: IInfluencerProspect; kind: JobKind }, style: OutreachStyle, requested: FirstTouch): FirstTouch =>

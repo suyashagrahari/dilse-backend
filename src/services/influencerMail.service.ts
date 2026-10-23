@@ -62,7 +62,7 @@ export function influencerInboundAddresses(
 ): string[] {
   const out = new Set<string>();
   // personalFrom: personal prospect mail has no Reply-To, so replies are
-  // addressed to yash@ and reach SES through the GoDaddy forward.
+  // addressed to suyash@ and reach SES through the GoDaddy forward.
   for (const raw of [from, replyTo, personalFrom, ...String(extra || "").split(",")]) {
     const a = cleanAddress(raw);
     if (a) out.add(a);

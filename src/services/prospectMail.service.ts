@@ -174,7 +174,7 @@ const RANGES: Record<JobKind, { min: number; max: number; ideal: readonly [numbe
   reply: { min: 10, max: 220, ideal: [30, 160] },
 };
 /**
- * Personal (a note from Yash) style: a first note is 50–100 words, a
+ * Personal (a note from Suyash) style: a first note is 50–100 words, a
  * follow-up is a 20–60 word nudge, a new email sits in between, a reply is a
  * conversation.
  */
@@ -363,12 +363,12 @@ function personalFallbackSubject(o: { kind: "initial" | "fresh"; person?: { name
  * The Connect subject. Deterministic, human, names them, says nothing about
  * the company or an idea — it is a hello:
  *   A: "Om & Diya, would love to connect"
- *   B: "Hey Om & Diya, quick hello from Yash"
+ *   B: "Hey Om & Diya, quick hello from Suyash"
  * A template (several recipients) uses {{firstName}} in place of the name.
  */
 export function connectSubject(o: { person?: { name?: string } | null; variant?: number; template?: boolean; writer?: string }): string {
   const names = o.template ? "{{firstName}}" : o.person?.name ? subjectNames(o.person.name) : "";
-  const w = o.writer ?? (personalWriterName() || "Yash");
+  const w = o.writer ?? personalWriterName();
   const v = Math.abs(o.variant || 0) % 2;
   const candidates: string[] =
     v === 0
@@ -380,7 +380,7 @@ export function connectSubject(o: { person?: { name?: string } | null; variant?:
 }
 
 /**
- * Words that turn a note from Yash into a promotion. Personal first emails,
+ * Words that turn a note from Suyash into a promotion. Personal first emails,
  * follow-ups and new emails carry none of them (a reply, once they wrote
  * back, may) — the details come after they reply. Kept in code, never in the
  * AI prompt (naming a word to a model invites it). "partner" alone is fine —
@@ -412,7 +412,7 @@ const CONNECT_PREFIXES = ["collab", "partner", "promot", "sponsor", "brand"];
 
 /**
  * The first name the personal emails are written and signed by — the first
- * word of the signature ("Yash"). Empty when the signature is a team's
+ * word of the signature ("Suyash"). Empty when the signature is a team's
  * ("Team SubhSandesh"), which switches the "I'm <name>" check off.
  */
 export function personalWriterName(signature: string = env.PROSPECT_PERSONAL_SIGNATURE): string {
@@ -422,7 +422,7 @@ export function personalWriterName(signature: string = env.PROSPECT_PERSONAL_SIG
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-/** Does the note introduce its writer — "I'm Yash", "Yash here", "this is Yash"? */
+/** Does the note introduce its writer — "I'm Suyash", "Suyash here", "this is Suyash"? */
 export function introducesWriter(body: string, writer: string): boolean {
   if (!writer) return true;
   const w = escRe(writer);
@@ -501,7 +501,7 @@ export interface LintOptions {
   style?: OutreachStyle;
   /** Follow-ups already sent to this person. The first carries no link; later ones may. */
   priorFollowups?: number;
-  /** Personal: who writes it ("Yash"). Defaults to personalWriterName(). */
+  /** Personal: who writes it ("Suyash"). Defaults to personalWriterName(). */
   writer?: string;
   /**
    * The confirmed traction numbers this email may quote ("52.2K", "52K",
@@ -677,7 +677,7 @@ export function lintOutreach(subject: string, body: string, o: LintOptions): Lin
       // The company stays out of the hello entirely; so does anything about
       // what it makes or money. The subject is checked by subjectIssues.
       const company = b.match(/subh\s*-?\s*sandesh/i);
-      if (company) err("connect_company", "Leave “SubhSandesh” out of a Connect note — it's just a hello from Yash. Who you are and what you make come after they reply.");
+      if (company) err("connect_company", "Leave “SubhSandesh” out of a Connect note — it's just a hello from you. Who you are and what you make come after they reply.");
       const pitch = b.replace(URL_RE, " ").replace(/subh\s*-?\s*sandesh/gi, " ").match(CONNECT_RE);
       if (pitch) err("pitch_word", `“${pitch[1]}” turns a hello into a pitch. Talk only about them and wanting to connect — the details come after they reply.`);
     } else {
@@ -823,20 +823,20 @@ export function prospectHeaders(unsubUrl: string, replyTo: string): Record<strin
   };
 }
 
-// ── Personal style: a plain note from Yash ──────────────────────────────────
+// ── Personal style: a plain note from Suyash ──────────────────────────────────
 //
 // What Gmail files as Promotions is mostly decided by signals a one-to-one
 // email never has: a List-Unsubscribe header, a newsletter footer, an HTML
 // part, a brand or no-reply sender, sales vocabulary, links and numbers in a
 // cold email, and open tracking. Personal style removes every one of them.
-// It is written by Yash — "Yash from SubhSandesh" <yash@subhsandesh.in> — in
-// the first person ("I'm Yash"; "we" only for the company), and goes out on
+// It is written by Suyash — "Suyash" <suyash@subhsandesh.in> — in
+// the first person ("I'm Suyash"; "we" only for the company), and goes out on
 // the quiet SES lane (PROSPECT_SES_CONFIGURATION_SET: no open tracking).
 // Opt-out is silent: a short "no" / "stop" reply is read by
 // classifyProspectReply and suppresses them for good — no "reply no" line.
 
 /**
- * The signature under personal mail: "Yash", then a plain "SubhSandesh" line
+ * The signature under personal mail: "Suyash", then a plain "SubhSandesh" line
  * (the company, on by default — PROSPECT_SIGNATURE_COMPANY_LINE), optionally
  * "subhsandesh.in" (PROSPECT_SIGNATURE_SITE_LINE, off) and the postal line.
  */
@@ -856,13 +856,13 @@ export function personalSignature(
 
 /**
  * The signature under a Connect note and its follow-ups: just the writer's
- * first name ("Yash") — no company line, no site, no address. The company is
+ * first name ("Suyash") — no company line, no site, no address. The company is
  * introduced in the reply, once they have written back.
  */
 export function connectSignature(signature: string = env.PROSPECT_PERSONAL_SIGNATURE): string {
   const writer = personalWriterName(signature);
   if (writer) return writer;
-  return String(signature || "").replace(/\r\n/g, "\n").trim().split("\n")[0].trim() || "Yash";
+  return String(signature || "").replace(/\r\n/g, "\n").trim().split("\n")[0].trim() || "Suyash";
 }
 
 /**
@@ -918,7 +918,7 @@ export function personalSender(
 /**
  * The sender of a Connect note and its follow-ups: the personal sender, with
  * the display name PROSPECT_CONNECT_FROM_NAME when it is set (e.g. plain
- * "Yash"); empty keeps the normal name ("Yash from SubhSandesh").
+ * "Suyash"); empty keeps the normal name ("Suyash").
  */
 export function connectSender(connectFromName: string = env.PROSPECT_CONNECT_FROM_NAME, base: PersonalSender = personalSender()): PersonalSender {
   const name = String(connectFromName || "").replace(/[\r\n"<>]+/g, " ").trim();
@@ -959,7 +959,7 @@ export function isRoleAddress(addr: string): boolean {
 /**
  * Is this a sender someone can write back to and trust? Our own domain, a
  * display name, and not a no-reply / notifications / marketing mailbox.
- * yash@subhsandesh.in "Yash from SubhSandesh" is fine; noreply@ is not.
+ * suyash@subhsandesh.in "Suyash" is fine; noreply@ is not.
  */
 export function isTrustworthySender(s: { fromAddress: string; fromName: string }): boolean {
   const addr = String(s.fromAddress || "").toLowerCase();
