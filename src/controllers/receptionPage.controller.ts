@@ -5,6 +5,12 @@ import { env } from "../config/env";
 import { transformMediaPayload } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import {
+  RECEPTION_EXTRA_FIELDS,
+  sanitizeReceptionExtras,
+  sanitizeReceptionGallery,
+  sanitizeReceptionPerson,
+} from "../config/receptionPage";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -26,12 +32,14 @@ export const createReceptionPage = async (req: Request, res: Response): Promise<
         venueTimings: venueTimings || "7:00 PM — 11:30 PM",
         tagline: tagline || "Request the pleasure of your company",
         heroImage: heroImage || "/assets/Reception/reception.png",
-        bride: bride || { name: "", role: "The Bride", description: "", photo: "", tags: [] },
-        groom: groom || { name: "", role: "The Groom", description: "", photo: "", tags: [] },
+        bride: sanitizeReceptionPerson(bride) || { name: "", role: "The Bride", description: "", photo: "", tags: [] },
+        groom: sanitizeReceptionPerson(groom) || { name: "", role: "The Groom", description: "", photo: "", tags: [] },
         families: families || { bride: "", groom: "" },
-        galleryImages: galleryImages || [],
+        galleryImages: sanitizeReceptionGallery(galleryImages) || [],
         sharePhoto: sharePhoto || "",
         password: password || "",
+        // The light ballroom rebuild's fields (events, story, music…). Absent = the model's defaults.
+        ...sanitizeReceptionExtras(req.body),
       },
       { template: "reception", userId: req.userId }
     );
@@ -77,6 +85,7 @@ export const updateReceptionPage = async (req: Request, res: Response): Promise<
     const fields = [
       "brideName", "groomName", "receptionDate", "venue", "venueAddress", "venueMapQuery",
       "venueTimings", "tagline", "heroImage", "bride", "groom", "families", "galleryImages", "sharePhoto",
+      ...RECEPTION_EXTRA_FIELDS,
     ];
 
     const page = await ReceptionPage.findOne({ _id: req.params.id, userId: req.userId });
@@ -85,7 +94,14 @@ export const updateReceptionPage = async (req: Request, res: Response): Promise<
       return;
     }
 
-    const updates = await transformMediaPayload(req.body as Record<string, unknown>, {
+    // Coerce + clamp first (only keys the body carries), then upload any inline photos.
+    const raw: Record<string, unknown> = { ...(req.body as Record<string, unknown>) };
+    for (const k of RECEPTION_EXTRA_FIELDS) delete raw[k];
+    Object.assign(raw, sanitizeReceptionExtras(req.body));
+    if (raw.bride !== undefined) raw.bride = sanitizeReceptionPerson(raw.bride);
+    if (raw.groom !== undefined) raw.groom = sanitizeReceptionPerson(raw.groom);
+    if (raw.galleryImages !== undefined) raw.galleryImages = sanitizeReceptionGallery(raw.galleryImages);
+    const updates = await transformMediaPayload(raw, {
       template: "reception",
       userId: req.userId,
     });
