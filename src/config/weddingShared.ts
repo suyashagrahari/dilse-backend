@@ -31,6 +31,8 @@ export const WEDDING_TIER_LIMITS = {
   "garden-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   "floral-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   "lotus-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  // Standalone /shaadi-card-pages: the kit's RSVP routes only (it keeps its own blessings wall with voice notes).
+  "shaadi-card": { events: 8, photos: 16, story: 4, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false },
 } as const;
 
 export type WeddingSlug = keyof typeof WEDDING_TIER_LIMITS;
