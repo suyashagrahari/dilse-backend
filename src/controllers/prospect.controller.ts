@@ -52,6 +52,8 @@ import {
   unsubscribeUrl,
   type ContactVerdict,
 } from "../services/prospectMail.service";
+import { firstNameOf, scoreDeliverability } from "../services/deliverability.service";
+import { improveProspectMail } from "../services/prospectImprove.service";
 import {
   addProspect,
   cancelQueued,
@@ -586,44 +588,42 @@ const subjectFor = (kind: JobKind, typed: string, thread: IEmailThread | null) =
   return base ? replySubject(base) : typed ? replySubject(typed) : "Re: Would love to connect";
 };
 
-/** POST /admin/super/prospects/preview — { ids, intent?, prospectId?, subject, body, style?, allowNotInterested? } */
-export const previewProspectMail = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const ids = idList(req.body?.ids);
-    if (!ids) {
-      res.status(400).json({ success: false, error: "Select at least one prospect." });
-      return;
-    }
-    const { subject, body } = readContent(req);
-    const sel = await resolveSelection(ids, readIntent(req), readAllowNotInterested(req));
-    const pick =
-      sel.eligible.find((e) => String(e.p._id) === String(req.body?.prospectId)) || sel.eligible[0];
-    const { commissionPercent } = await programmeFacts();
-    const planOut = { intent: sel.intent, reach: sel.reach, needsConfirm: sel.needsConfirm, skipped: sel.skipped };
-    if (!pick) {
-      res.json({ success: true, data: { lint: null, eligible: [], ...planOut } });
-      return;
-    }
-    const style = styleFor(pick, readStyle(req));
-    const touch = touchOf(pick, style, readTouch(req));
-    const connect = touch === "connect";
-    const target = { name: pick.p.name, instagram: pick.p.instagram };
+/**
+ * Everything one recipient's email is built from, and `render`, which turns a
+ * subject + body into what they would receive: the rendered text/HTML, the
+ * linter verdict and the spam / Promotions scores. Shared by preview and
+ * "Make it more personal" so both judge exactly the same email.
+ */
+async function prepareOne(req: Request) {
+  const ids = idList(req.body?.ids);
+  if (!ids) return { error: "Select at least one prospect." as const };
+  const sel = await resolveSelection(ids, readIntent(req), readAllowNotInterested(req));
+  const pick = sel.eligible.find((e) => String(e.p._id) === String(req.body?.prospectId)) || sel.eligible[0];
+  const { commissionPercent } = await programmeFacts();
+  const planOut = { intent: sel.intent, reach: sel.reach, needsConfirm: sel.needsConfirm, skipped: sel.skipped };
+  if (!pick) return { sel, planOut, pick: null };
+  const style = styleFor(pick, readStyle(req));
+  const touch = touchOf(pick, style, readTouch(req));
+  const connect = touch === "connect";
+  const target = { name: pick.p.name, instagram: pick.p.instagram };
+  const priorFollowups = priorFollowupsOf(pick.p);
+  // A Connect note carries no numbers and no screenshot, whatever is toggled.
+  const choice = connect ? null : await readProofChoice(req.body);
+  const allowedNumbers = choice ? proofAllowedNumbers(choice.proof) : undefined;
+  // The screenshot goes inline only in personal mail (classic has its own HTML).
+  const attach = !!choice?.attach && style === "personal";
+  const dress = personalDress(touch, pick.kind);
+  const signature = dress.signature;
+  const sender =
+    style === "personal"
+      ? dress.sender
+      : { fromAddress: influencerFromAddress(), fromName: env.PROSPECT_FROM_NAME, replyToAddress: influencerReplyToAddress() };
+  const threaded = pick.kind === "followup" || pick.kind === "reply";
+  const headers = [...(style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"]), ...(threaded && pick.thread ? ["In-Reply-To", "References"] : [])];
+  const render = (subject: string, body: string) => {
     const subj = renderMergeFields(subjectFor(pick.kind, subject, pick.thread), target);
     const text = renderMergeFields(body, target);
-    const priorFollowups = priorFollowupsOf(pick.p);
-    // A Connect note carries no numbers and no screenshot, whatever is toggled.
-    const choice = connect ? null : await readProofChoice(req.body);
-    const allowedNumbers = choice ? proofAllowedNumbers(choice.proof) : undefined;
     const lint = lintOutreach(subj, text, { commissionPercent, template: { subject, body }, kind: pick.kind, style, priorFollowups, allowedNumbers, touch });
-    // The screenshot goes inline only in personal mail (classic has its own HTML).
-    const attach = !!choice?.attach && style === "personal";
-    const dress = personalDress(touch, pick.kind);
-    const signature = dress.signature;
-    const person = dress.sender;
-    const sender =
-      style === "personal"
-        ? person
-        : { fromAddress: influencerFromAddress(), fromName: env.PROSPECT_FROM_NAME, replyToAddress: influencerReplyToAddress() };
     const content = {
       body: text,
       signature: env.PROSPECT_SIGNATURE,
@@ -631,7 +631,92 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
       unsubscribeUrl: unsubscribeUrl("preview-token-not-real"),
       token: pick.thread?.threadToken || "INF-XXXXXXXX",
     };
-    const threaded = pick.kind === "followup" || pick.kind === "reply";
+    // Personal + screenshot: the text and HTML twin exactly as sent, with
+    // the CDN URL standing in for "cid:" so the preview shows the image.
+    const parts: { text: string; html?: string } =
+      style === "personal"
+        ? personalEmailParts({ body: text, signature, proof: attach ? choice!.proof : null, imageSrc: attach ? choice!.proof.imageUrl : "" })
+        : { text: prospectMailText(content), html: prospectMailHtml(content) };
+    const deliverability = scoreDeliverability({
+      subject: subj,
+      text: parts.text,
+      html: parts.html,
+      fromName: sender.fromName,
+      fromAddress: sender.fromAddress,
+      headers,
+      image: attach,
+      firstName: firstNameOf(pick.p.name),
+      reply: pick.kind === "reply",
+    });
+    return { subj, text, lint, parts, deliverability };
+  };
+  return { sel, planOut, pick, style, touch, connect, choice, allowedNumbers, attach, signature, sender, threaded, headers, priorFollowups, render };
+}
+
+/**
+ * POST /admin/super/prospects/improve — same body as preview. Rewrites the
+ * subject + body with the prospect model so they read as a personal note,
+ * and returns the rewrite only when it passes the linter and scores lower on
+ * spam + Promotions for the previewed recipient.
+ */
+export const improveProspectMailHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, body } = readContent(req);
+    if (!body) {
+      res.status(400).json({ success: false, error: "Write or generate an email first." });
+      return;
+    }
+    const prep = await prepareOne(req);
+    if ("error" in prep) {
+      res.status(400).json({ success: false, error: prep.error });
+      return;
+    }
+    if (!prep.pick) {
+      res.status(400).json({ success: false, error: "No one selected can be emailed right now." });
+      return;
+    }
+    const result = await improveProspectMail({
+      subject,
+      body,
+      subjectLocked: prep.threaded || prep.connect,
+      writer: personalWriterName(prep.signature) || personalWriterName(),
+      connect: prep.connect,
+      check: (s, b) => {
+        const r = prep.render(s, b);
+        return { errors: r.lint.errors.map((e) => ({ code: e.code, message: e.message })), score: r.deliverability };
+      },
+    });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    if (error instanceof ThreadAiUnavailableError) {
+      res.status(503).json({ success: false, error: error.message, code: "AI_UNAVAILABLE" });
+      return;
+    }
+    if (error instanceof ThreadAiRefusedError) {
+      res.status(422).json({ success: false, error: error.message });
+      return;
+    }
+    console.error("Improve prospect mail error:", (error as Error)?.message);
+    res.status(500).json({ success: false, error: "Failed to rewrite the email" });
+  }
+};
+
+/** POST /admin/super/prospects/preview — { ids, intent?, prospectId?, subject, body, style?, allowNotInterested? } */
+export const previewProspectMail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, body } = readContent(req);
+    const prep = await prepareOne(req);
+    if ("error" in prep) {
+      res.status(400).json({ success: false, error: prep.error });
+      return;
+    }
+    const { sel, planOut, pick } = prep;
+    if (!pick) {
+      res.json({ success: true, data: { lint: null, eligible: [], ...planOut } });
+      return;
+    }
+    const { style, touch, choice, allowedNumbers, attach, signature, sender, threaded, headers, priorFollowups } = prep;
+    const { subj, text, lint, parts, deliverability } = prep.render(subject, body);
     res.json({
       success: true,
       data: {
@@ -645,18 +730,15 @@ export const previewProspectMail = async (req: Request, res: Response): Promise<
         replyTo: sender.replyToAddress,
         subject: subj,
         threaded,
-        // Personal + screenshot: the text and HTML twin exactly as sent, with
-        // the CDN URL standing in for "cid:" so the preview shows the image.
-        ...(style === "personal"
-          ? personalEmailParts({ body: text, signature, proof: attach ? choice!.proof : null, imageSrc: attach ? choice!.proof.imageUrl : "" })
-          : { text: prospectMailText(content), html: prospectMailHtml(content) }),
-        headers: [...(style === "personal" ? [] : ["List-Unsubscribe", "List-Unsubscribe-Post"]), ...(threaded && pick.thread ? ["In-Reply-To", "References"] : [])],
+        ...parts,
+        headers,
         /** What goes inline, for the preview's attachment line. */
         image: attach
           ? { url: choice!.proof.imageUrl, alt: screenshotAlt(choice!.proof.source), source: SOURCE_NAME[choice!.proof.source], mime: "multipart/alternative: text/plain + multipart/related (text/html + inline image, cid)" }
           : null,
         proof: choice ? { id: choice.proof.id, allowedNumbers, attach } : null,
         lint,
+        deliverability,
         inboxCheck: inboxCheck({ style, kind: pick.kind, body: text, lint, sender, subject: subj, priorFollowups, quietLane: quietLaneStatus(), numbers: !!allowedNumbers?.length && style === "personal", image: attach, touch }),
         personalBlocked: style === "personal" ? personalSenderStatus()?.message || "" : "",
         eligible: sel.eligible.map((e) => {
