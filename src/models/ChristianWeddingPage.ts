@@ -50,6 +50,8 @@ export interface IChristianWeddingPage extends Document {
   viewCount: number;
   isPublished: boolean;
   templateVariant: "tabs" | "scroll";
+  /** Scroll edition only (christian-wedding-2); optional, see services/christianScrollExtras. */
+  scrollExtras?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -130,6 +132,8 @@ const christianWeddingPageSchema = new Schema<IChristianWeddingPage>(
     viewCount: { type: Number, default: 0 },
     isPublished: { type: Boolean, default: false },
     templateVariant: { type: String, enum: ["tabs", "scroll"], default: "tabs" },
+    // Scroll edition extras (christian-wedding-2). Optional: absent on older pages.
+    scrollExtras: { type: Schema.Types.Mixed, default: undefined },
   },
   { timestamps: true, collection: "christian_wedding_pages" }
 );
