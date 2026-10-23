@@ -133,7 +133,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   ],
   "miss-you": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "meetDate", "missThings", "openWhen", "hugLine", "question", "yesLine", "answerMode", "noTries"],
   "miss-you-premium": ["palette", "tone", "openingLine", "yourCity", "myCity", "distanceKm", "unit", "meetDate", "voiceNotes", "picnicLines", "heartLine", "missThings", "question", "yesLine", "answerMode"],
-  "royal-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation"],
+  "royal-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "contacts", "upiId", "upiName", "liveUrl", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation"],
   // The four wedding designs on Royal's limits (config/weddingDays/<slug>.ts); a builder changing one updates its line here.
   "palace-door-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "contacts", "upiId", "upiName", "liveUrl", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation"],
   "garden-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
@@ -993,7 +993,9 @@ describe("Royal Wedding Invitation 👑 extras", () => {
     assert.equal((ev[0].venue as string).length, 80);
     assert.equal("evil" in ev[0], false);
     assert.deepEqual(eventIdsOf(out, "royal-wedding-invitation"), ["f0", "f1", "f3", "f4", "f5", "f6", "f7", "f8"]);
-    assert.equal(out.theme, "maroon");
+    // Light by default since the 2026-10 redesign; a page published on maroon keeps it.
+    assert.equal(out.theme, "champagne");
+    assert.equal(sanitizeExtras("royal-wedding-invitation", { theme: "maroon" }).theme, "maroon");
     assert.equal(out.maxGuests, 10);
     assert.equal(out.rsvpMeal, true);
     const st = out.story as Record<string, unknown>[];
