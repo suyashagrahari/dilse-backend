@@ -34,7 +34,7 @@ describe("influencerInboundAddresses", () => {
   });
 
   it("includes the personal prospect sender, whose replies arrive by forward", () => {
-    assert.ok(influencerInboundAddresses("influencer-support@subhsandesh.in", "", "", "Yash@SubhSandesh.in").includes("yash@subhsandesh.in"));
+    assert.ok(influencerInboundAddresses("influencer-support@subhsandesh.in", "", "", "Suyash@SubhSandesh.in").includes("suyash@subhsandesh.in"));
   });
 
   it("drops anything that is not an address", () => {

@@ -1,4 +1,4 @@
-// ─── Connect: a hello from Yash, no pitch ───────────────────────────────────
+// ─── Connect: a hello from Suyash, no pitch ───────────────────────────────────
 //
 // The default personal first email. No Mongo, no SES, no OpenAI: the model is
 // a stub and nothing is sent from here.
@@ -33,7 +33,7 @@ import type { ProofSnapshot } from "./outreachProof.service";
 
 const JOIN = "https://subhsandesh.in/influencer";
 const programme = { commissionPercent: 30, attributionDays: 60, joinUrl: JOIN, today: "2026-10-19" };
-const YASH = { fromAddress: "yash@subhsandesh.in", fromName: "Yash from SubhSandesh", replyToAddress: "influencer@reply.subhsandesh.in" };
+const YASH = { fromAddress: "suyash@subhsandesh.in", fromName: "Suyash", replyToAddress: "influencer@reply.subhsandesh.in" };
 const PROOF: ProofSnapshot = {
   id: "6720aa00bb11cc22dd33ee44",
   imageUrl: "https://cdn.subhsandesh.in/gifts-media/outreach-proof/0123456789abcdef0123.png",
@@ -49,7 +49,7 @@ const HELLO = `Hey Om and Diya,
 
 Your couple videos from Assam are so warm and funny, and the way you two tease each other made my day.
 
-I'm Yash. I'd love to connect — there's something I'd like to run by you that I think you'd both enjoy.
+I'm Suyash. I'd love to connect — there's something I'd like to run by you that I think you'd both enjoy.
 
 Would you be open to a quick chat this week?`;
 
@@ -61,7 +61,7 @@ Open to a quick chat?`;
 
 const SUBJ = "Om & Diya, would love to connect";
 const lintC = (subject: string, body: string, extra: Partial<Parameters<typeof lintOutreach>[2]> = {}) =>
-  lintOutreach(subject, body, { commissionPercent: 30, kind: "initial", style: "personal", touch: "connect", writer: "Yash", ...extra });
+  lintOutreach(subject, body, { commissionPercent: 30, kind: "initial", style: "personal", touch: "connect", writer: "Suyash", ...extra });
 const codes = (r: { errors: { code: string }[] }) => r.errors.map((e) => e.code);
 
 describe("connect linter", () => {
@@ -72,13 +72,13 @@ describe("connect linter", () => {
   });
 
   it("refuses “SubhSandesh” anywhere in the body", () => {
-    const r = lintC(SUBJ, HELLO.replace("I'm Yash.", "I'm Yash from SubhSandesh."));
+    const r = lintC(SUBJ, HELLO.replace("I'm Suyash.", "I'm Suyash from SubhSandesh."));
     assert.ok(codes(r).includes("connect_company"), JSON.stringify(r.errors));
-    assert.ok(!lintC(SUBJ, HELLO.replace("I'm Yash.", "I'm Yash from Subh Sandesh.")).ok);
+    assert.ok(!lintC(SUBJ, HELLO.replace("I'm Suyash.", "I'm Suyash from Subh Sandesh.")).ok);
   });
 
   it("the same body that passes as a Pitch first email is refused as Connect", () => {
-    const pitch = HELLO.replace("I'm Yash.", "I'm Yash from SubhSandesh. We make little pages people send to someone they love.");
+    const pitch = HELLO.replace("I'm Suyash.", "I'm Suyash from SubhSandesh. We make little pages people send to someone they love.");
     assert.ok(!lintC(SUBJ, pitch).ok);
   });
 
@@ -131,13 +131,13 @@ describe("connect linter", () => {
     assert.ok(codes(lintC(SUBJ, HELLO.replace("Would you be open to a quick chat this week?", "Let me know if you'd be open to a quick chat this week."))).includes("no_question"));
   });
 
-  it("holds the 35–70 word range, and asks for “I'm Yash” without the company", () => {
-    const short = "Hey Om and Diya,\n\nI'm Yash. Loved your videos. Would love to connect — open to a quick chat?";
+  it("holds the 35–70 word range, and asks for “I'm Suyash” without the company", () => {
+    const short = "Hey Om and Diya,\n\nI'm Suyash. Loved your videos. Would love to connect — open to a quick chat?";
     assert.ok(codes(lintC(SUBJ, short)).includes("too_short"));
     const long = HELLO.replace("made my day.", `made my day. ${"Your little moments together feel real and honest. ".repeat(6)}`);
     assert.ok(codes(lintC(SUBJ, long)).includes("too_long"));
-    const noIntro = lintC(SUBJ, HELLO.replace("I'm Yash. ", ""));
-    assert.match(noIntro.errors.find((e) => e.code === "no_intro")!.message, /I'm Yash\.”/);
+    const noIntro = lintC(SUBJ, HELLO.replace("I'm Suyash. ", ""));
+    assert.match(noIntro.errors.find((e) => e.code === "no_intro")!.message, /I'm Suyash\.”/);
   });
 
   it("only personal first emails / follow-ups use the profile", () => {
@@ -157,7 +157,7 @@ describe("connect linter", () => {
       programme,
       person: { name: "Om & Diya", instagram: "theecouple__", niche: "couple vlogs", note: "47K followers · Couple love & lifestyle (Assam)" },
     };
-    const prompts = [connectSystemPrompt("Yash", "Yash"), buildProspectPrompt(ctx, "english"), buildProspectPrompt({ ...ctx, mode: "followup" }, "english")].join("\n").toLowerCase();
+    const prompts = [connectSystemPrompt("Suyash", "Suyash"), buildProspectPrompt(ctx, "english"), buildProspectPrompt({ ...ctx, mode: "followup" }, "english")].join("\n").toLowerCase();
     for (const w of CONNECT_BANNED_WORDS) assert.ok(!new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(prompts), `prompt names “${w}”`);
     for (const pre of ["collab", "partner", "promot", "sponsor", "brand"]) assert.ok(!prompts.includes(pre), `prompt names “${pre}…”`);
     assert.ok(!/47k|\b47\b/.test(prompts), "the follower count is scrubbed");
@@ -166,24 +166,24 @@ describe("connect linter", () => {
 });
 
 describe("connect subject", () => {
-  it("A: “<Names>, would love to connect” · B: “Hey <Names>, quick hello from Yash”", () => {
-    assert.equal(connectSubject({ person: { name: "Om & Diya" }, variant: 0, writer: "Yash" }), "Om & Diya, would love to connect");
-    assert.equal(connectSubject({ person: { name: "Om & Diya" }, variant: 1, writer: "Yash" }), "Hey Om & Diya, quick hello from Yash");
-    assert.equal(connectSubject({ person: { name: "Priya Sharma" }, variant: 0, writer: "Yash" }), "Priya, would love to connect");
-    assert.equal(connectSubject({ template: true, variant: 0, writer: "Yash" }), "{{firstName}}, would love to connect");
-    assert.equal(connectSubject({ template: true, variant: 1, writer: "Yash" }), "Hey {{firstName}}, quick hello from Yash");
+  it("A: “<Names>, would love to connect” · B: “Hey <Names>, quick hello from Suyash”", () => {
+    assert.equal(connectSubject({ person: { name: "Om & Diya" }, variant: 0, writer: "Suyash" }), "Om & Diya, would love to connect");
+    assert.equal(connectSubject({ person: { name: "Om & Diya" }, variant: 1, writer: "Suyash" }), "Hey Om & Diya, quick hello from Suyash");
+    assert.equal(connectSubject({ person: { name: "Priya Sharma" }, variant: 0, writer: "Suyash" }), "Priya, would love to connect");
+    assert.equal(connectSubject({ template: true, variant: 0, writer: "Suyash" }), "{{firstName}}, would love to connect");
+    assert.equal(connectSubject({ template: true, variant: 1, writer: "Suyash" }), "Hey {{firstName}}, quick hello from Suyash");
     assert.equal(fallbackSubject({ kind: "initial", style: "personal", touch: "connect", person: { name: "Om and Diya Sharma" } }), "Om & Diya, would love to connect");
   });
 
   it("every built subject passes the connect subject rules (3–7 words)", () => {
     for (const name of ["Om & Diya", "Priya Sharma", "Kabir", "Aarav and Meera Kapoor"]) {
       for (const variant of [0, 1]) {
-        const s = connectSubject({ person: { name }, variant, writer: "Yash" });
+        const s = connectSubject({ person: { name }, variant, writer: "Suyash" });
         assert.deepEqual(subjectIssues(s, "personal", "connect"), [], s);
         assert.deepEqual(lintC(s, HELLO).errors, [], s);
       }
     }
-    assert.deepEqual(subjectIssues(renderMergeFields("Hey {{firstName}}, quick hello from Yash", { name: "Asha Verma", instagram: "" }), "personal", "connect"), []);
+    assert.deepEqual(subjectIssues(renderMergeFields("Hey {{firstName}}, quick hello from Suyash", { name: "Asha Verma", instagram: "" }), "personal", "connect"), []);
   });
 
   it("refuses the company, a pitch, “quick question”, numbers and spam words", () => {
@@ -228,15 +228,15 @@ describe("default intent and first touch", () => {
 
 describe("connect follow-up, sender and signature", () => {
   it("a 20–45 word bump in the same thread passes; a pitch in it does not", () => {
-    const r = lintOutreach("Re: Om & Diya, would love to connect", BUMP, { commissionPercent: 30, kind: "followup", style: "personal", touch: "connect", writer: "Yash" });
+    const r = lintOutreach("Re: Om & Diya, would love to connect", BUMP, { commissionPercent: 30, kind: "followup", style: "personal", touch: "connect", writer: "Suyash" });
     assert.deepEqual(r.errors, []);
-    const pitch = lintOutreach("Re: Om & Diya, would love to connect", BUMP.replace("Open to a quick chat?", "It's a paid reel idea. Open to a quick chat?"), { commissionPercent: 30, kind: "followup", style: "personal", touch: "connect", writer: "Yash", priorFollowups: 3 });
+    const pitch = lintOutreach("Re: Om & Diya, would love to connect", BUMP.replace("Open to a quick chat?", "It's a paid reel idea. Open to a quick chat?"), { commissionPercent: 30, kind: "followup", style: "personal", touch: "connect", writer: "Suyash", priorFollowups: 3 });
     assert.ok(codes(pitch).includes("pitch_word"));
-    const link = lintOutreach("Re: x", `${BUMP}\n\nhttps://subhsandesh.in/influencer`, { commissionPercent: 30, kind: "followup", style: "personal", touch: "connect", writer: "Yash", priorFollowups: 3 });
+    const link = lintOutreach("Re: x", `${BUMP}\n\nhttps://subhsandesh.in/influencer`, { commissionPercent: 30, kind: "followup", style: "personal", touch: "connect", writer: "Suyash", priorFollowups: 3 });
     assert.ok(codes(link).includes("personal_link"), "never a link while it is still a hello");
   });
 
-  it("threads under the Connect note (In-Reply-To + References) and is signed “Yash” only", () => {
+  it("threads under the Connect note (In-Reply-To + References) and is signed “Suyash” only", () => {
     const input = buildProspectSendInput(
       "personal",
       { to: "om@x.in", subject: "Re: Om & Diya, would love to connect", body: BUMP, token: "INF-7K2Q9MXA", instagram: "theecouple__", unsubscribeUrl: "https://api.subhsandesh.in/u/t", inReplyTo: "<a@subhsandesh.in>", references: "<a@subhsandesh.in>", kind: "followup", touch: "connect" },
@@ -246,31 +246,31 @@ describe("connect follow-up, sender and signature", () => {
     assert.equal(input.inReplyTo, "<a@subhsandesh.in>");
     assert.equal(input.references, "<a@subhsandesh.in>");
     const text = input.render!({ fromAddress: YASH.fromAddress, replyToAddress: YASH.replyToAddress }).text;
-    assert.ok(text.trim().endsWith("\n\nYash"), text);
+    assert.ok(text.trim().endsWith("\n\nSuyash"), text);
     assert.ok(!/subhsandesh/i.test(text), "no company line under a hello");
     // A pitch first email keeps the company line.
     const pitch = buildProspectSendInput("personal", { to: "om@x.in", subject: "x", body: BUMP, token: "t", instagram: "", unsubscribeUrl: "u", kind: "initial", touch: "pitch" }, YASH, "outreach");
-    assert.match(pitch.render!({ fromAddress: YASH.fromAddress, replyToAddress: YASH.replyToAddress }).text, /Yash\nSubhSandesh$/);
+    assert.match(pitch.render!({ fromAddress: YASH.fromAddress, replyToAddress: YASH.replyToAddress }).text, /Suyash\nSubhSandesh$/);
   });
 
   it("PROSPECT_CONNECT_FROM_NAME switches the From name; empty keeps the normal one", () => {
-    assert.equal(connectSender("", YASH).fromName, "Yash from SubhSandesh");
-    assert.equal(connectSender("Yash", YASH).fromName, "Yash");
-    assert.equal(connectSender("Yash", YASH).fromAddress, "yash@subhsandesh.in");
-    assert.equal(connectSignature("Yash"), "Yash");
-    assert.equal(connectSignature("Yash Agrahari\nSubhSandesh"), "Yash");
-    assert.equal(personalDress("connect", "reply").signature.includes("SubhSandesh") || personalDress("connect", "reply").signature === "Yash", true);
+    assert.equal(connectSender("", YASH).fromName, "Suyash");
+    assert.equal(connectSender("Suyash", YASH).fromName, "Suyash");
+    assert.equal(connectSender("Suyash", YASH).fromAddress, "suyash@subhsandesh.in");
+    assert.equal(connectSignature("Suyash"), "Suyash");
+    assert.equal(connectSignature("Suyash Agrahari\nSubhSandesh"), "Suyash");
+    assert.equal(personalDress("connect", "reply").signature.includes("SubhSandesh") || personalDress("connect", "reply").signature === "Suyash", true);
   });
 
   it("the Inbox check for Connect", () => {
     const lint = lintC(SUBJ, HELLO);
     const items = inboxCheck({ style: "personal", kind: "initial", body: HELLO, lint, sender: YASH, subject: SUBJ, touch: "connect" });
     const labels = items.map((i) => i.label);
-    assert.ok(labels.includes("From Yash from SubhSandesh <yash@subhsandesh.in>"));
+    assert.ok(labels.includes("From Suyash <suyash@subhsandesh.in>"));
     for (const l of ["No company pitch — just a hello", "No links, numbers or images", "Ends with one easy question", "Short (35–70 words)"]) {
       assert.ok(items.find((i) => i.label === l)?.ok, l);
     }
-    const bad = lintC(SUBJ, HELLO.replace("I'm Yash.", "I'm Yash from SubhSandesh."));
+    const bad = lintC(SUBJ, HELLO.replace("I'm Suyash.", "I'm Suyash from SubhSandesh."));
     const badItems = inboxCheck({ style: "personal", kind: "initial", body: "", lint: bad, sender: YASH, subject: SUBJ, touch: "connect" });
     assert.equal(badItems.find((i) => i.label === "No company pitch — just a hello")?.ok, false);
     const fu = inboxCheck({ style: "personal", kind: "followup", body: BUMP, lint: lintC("Re: x", BUMP, { kind: "followup" }), sender: YASH, subject: "Re: x", touch: "connect" });
@@ -309,14 +309,14 @@ describe("drafting a Connect note (stub model)", () => {
       sys = s;
       return JSON.stringify({ reading: "r", subject: "Hey there", body: HELLO });
     });
-    assert.equal(d.subject, "Hey Om & Diya, quick hello from Yash");
+    assert.equal(d.subject, "Hey Om & Diya, quick hello from Suyash");
     assert.ok(!/subhsandesh/i.test(sys));
   });
 
   it("a model that slips the company in is refused (and retried by the caller)", async () => {
     await assert.rejects(
       draftProspectMail({ mode: "personal", style: "personal", touch: "connect", person, programme }, async () =>
-        JSON.stringify({ reading: "r", subject: "x", body: HELLO.replace("I'm Yash.", "I'm Yash from SubhSandesh.") })
+        JSON.stringify({ reading: "r", subject: "x", body: HELLO.replace("I'm Suyash.", "I'm Suyash from SubhSandesh.") })
       ),
       /spam check/
     );
@@ -327,7 +327,7 @@ describe("reply after a Connect note", () => {
   const person = { name: "Om & Diya", instagram: "theecouple__", niche: "", note: "Couple love & lifestyle (Assam)" };
   const messages = [
     { direction: "outbound" as const, body: HELLO, at: new Date("2026-10-15") },
-    { direction: "inbound" as const, body: "Hey Yash, sure — what's it about?", at: new Date("2026-10-18") },
+    { direction: "inbound" as const, body: "Hey Suyash, sure — what's it about?", at: new Date("2026-10-18") },
   ];
   it("tells the model the earlier email was only a hello, and gives it the full context", () => {
     const p = buildProspectPrompt({ mode: "reply", style: "personal", person, programme, messages, afterConnect: true, proof: PROOF }, "english");

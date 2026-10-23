@@ -34,8 +34,8 @@ export type OutreachStyle = (typeof OUTREACH_STYLES)[number];
 /**
  * What a personal first email (and its follow-ups) is for.
  *
- * connect  (default) a short hello from Yash asking to connect: no company,
- *          no product, no numbers, no links — just them, "I'm Yash", and one
+ * connect  (default) a short hello from Suyash asking to connect: no company,
+ *          no product, no numbers, no links — just them, "I'm Suyash", and one
  *          easy question. Its follow-ups stay a gentle bump. The real context
  *          (what SubhSandesh makes, the numbers, the paid reel) comes in the
  *          REPLY, once they have written back.
