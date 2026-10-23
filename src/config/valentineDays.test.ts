@@ -140,7 +140,8 @@ const PINNED_KEYS: Record<string, string[]> = {
   "floral-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
   "lotus-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "cardSize", "question", "yesLine"],
-  "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests"],
+  // Classic: the ten keys published pages already store, then the jharokha rebuild's additive ones.
+  "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests", "lang", "hindiMessage", "brideNote", "groomNote", "blessingsOf", "couplePhoto", "muhurat", "hashtag", "story", "things", "gettingThere", "contacts", "upiId", "upiName", "liveUrl", "videoUrl", "rsvpMeal", "blessings", "invocation"],
   "wedding-invitation-premium": [
     "theme", "order", "motif", "hindi", "date", "time", "city", "hashtag", "brideParents", "brideNote", "groomParents", "groomNote", "events", "story", "faqs", "rsvpBy", "maxGuests", "rsvpMeal",
   ],
@@ -899,27 +900,49 @@ describe("Digital Bouquet ✦ Premium extras", () => {
 
 describe("Wedding Invitation (Classic)", () => {
   const d = VALENTINE_DAYS["wedding-invitation"];
-  it("tier limits: 6 photos, 2 events, no stickers, no question", () => {
+  it("tier limits: 12 photos, 5 events, 3 chapters, no stickers, no question", () => {
     assert.equal(d.maxPhotos, WEDDING_TIER_LIMITS["wedding-invitation"].photos);
     const ev = d.extras.find((f) => f.key === "events");
     assert.ok(ev && ev.kind === "objlist" && ev.maxItems === WEDDING_TIER_LIMITS["wedding-invitation"].events);
     assert.deepEqual([...d.gifSlots], []);
     assert.equal(d.asksQuestion, false);
     assert.notEqual(d.premium, true);
+    const story = d.extras.find((f) => f.key === "story");
+    assert.ok(story && story.kind === "objlist" && story.maxItems === WEDDING_TIER_LIMITS["wedding-invitation"].story);
   });
-  it("keeps two events (text leaves, ids intact), drops a third and empty rows; theme falls back", () => {
+  it("keeps five events (text leaves, ids intact), drops a sixth and empty rows; theme falls back", () => {
     const row = (id: string, title: string) => ({ id, title, date: "2026-12-12", time: "19:30", venue: "The Lake Palace", address: "Udaipur", mapUrl: "https://maps.app.goo.gl/x" });
     const out = sanitizeExtras("wedding-invitation", {
       theme: "neon",
-      events: [row("wedding", "Wedding"), {}, row("reception", "Reception"), row("x", "Extra")],
+      events: [row("wedding", "Wedding"), {}, row("reception", "Reception"), row("mehendi", "Mehendi"), row("haldi", "Haldi"), row("sangeet", "Sangeet"), row("x", "Extra")],
       maxGuests: 40,
     });
     const events = out.events as Record<string, string>[];
-    assert.deepEqual(events.map((e) => e.id), ["wedding", "reception"]);
+    assert.deepEqual(events.map((e) => e.id), ["wedding", "reception", "mehendi", "haldi", "sangeet"]);
     assert.equal(events[0].mapUrl, "https://maps.app.goo.gl/x");
-    assert.equal(out.theme, "champagne");
+    assert.equal(out.theme, "blush");
     assert.equal(out.maxGuests, 10);
     assert.equal(out.rsvp, true);
+  });
+  it("a page published before the rebuild keeps every stored value, dark theme included, and new switches stay off", () => {
+    const old = {
+      theme: "noir",
+      namesOrder: "groom",
+      date: "2026-12-12",
+      time: "19:30",
+      brideFamily: "Mrs. Meera & Mr. Raghav Rathore",
+      groomFamily: "Mrs. Kavita & Mr. Arjun Singhania",
+      events: [{ id: "wedding", title: "Wedding", date: "2026-12-12", time: "19:30", endTime: "", venue: "The Lake Palace", address: "Lake Pichola, Udaipur", mapUrl: "", dressCode: "Traditional festive", dressColor: "", note: "" }],
+      rsvp: false,
+      rsvpBy: "2026-11-30",
+      maxGuests: 4,
+    };
+    const out = sanitizeExtras("wedding-invitation", old);
+    for (const [k, v] of Object.entries(old)) assert.deepEqual(out[k], v, k);
+    assert.equal(out.rsvpMeal, false);
+    assert.equal(out.blessings, false);
+    assert.equal(out.invocation, false);
+    assert.equal(out.couplePhoto, 0);
   });
   it("AI schema validates and never writes ids, map links or the theme", () => {
     assert.deepEqual(validateSchema(weddingInvitation), []);

@@ -962,32 +962,40 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "yesLine", kind: "text", max: 80 },
     ],
   },
-  // ── Wedding Invitation (Classic, $5) ── one elegant page that opens like a
-  //    wax-sealed envelope: names in gold script, the date + countdown, the
-  //    invitation (letter), the families, up to two functions with maps, six
-  //    photos (masonry), one-tap RSVP for every guest (weddingGuest routes,
-  //    WEDDING_TIER_LIMITS) and a closing line (endLine). recipientName = the
-  //    bride, senderName = the groom. No question, no stickers. ─────────────
+  // ── Wedding Invitation (Classic) · the Gulabi Jharokha ── a carved jharokha
+  //    window at pink dawn opens onto a blush-and-ivory invitation: names in
+  //    rose-gold script, the date + countdown, the invitation in English and
+  //    Hindi (letter + hindiMessage), the families, the story, up to five
+  //    functions with maps / dress codes, twelve photos (one pool: the portrait
+  //    and story chapters point into it by 1-based index, the rest is the
+  //    gallery), guest info, contacts, livestream, shagun, RSVP per function and
+  //    a blessings wall (weddingGuest routes, WEDDING_TIER_LIMITS). recipientName
+  //    = the bride, senderName = the groom, endLine = the closing line.
+  //    DATA COMPATIBILITY: pages published before the rebuild store only theme
+  //    (dark ids included) … maxGuests; every key after them is additive and the
+  //    switches that would change an old page (rsvpMeal, blessings, invocation)
+  //    default to false. Client mirror: _valentine/days/wedding-invitation.ts. ─
   "wedding-invitation": {
     title: "Wedding Invitation",
-    maxPhotos: 6,
+    maxPhotos: 12,
     letterMax: 900,
     asksQuestion: false,
     gifSlots: [],
     extras: [
-      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "champagne" },
+      /** Every id stays valid (old pages may store a dark one); the client renders them on a light palette. */
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "blush" },
       { key: "namesOrder", kind: "enum", options: ["bride", "groom"], default: "bride" },
       /** "YYYY-MM-DD" — the big day (countdown). */
       { key: "date", kind: "text", max: 10 },
       /** "HH:mm" — the muhurat / start time. */
       { key: "time", kind: "text", max: 5 },
-      { key: "brideFamily", kind: "text", max: 90 },
-      { key: "groomFamily", kind: "text", max: 90 },
-      /** The functions (≤ 2 on this tier); every leaf is text, `id` is the stable RSVP key. */
+      { key: "brideFamily", kind: "text", max: 120 },
+      { key: "groomFamily", kind: "text", max: 120 },
+      /** The functions (≤ 5); every leaf is text, `id` is the stable RSVP key. */
       {
         key: "events",
         kind: "objlist",
-        maxItems: 2,
+        maxItems: 5,
         item: [
           { key: "id", kind: "text", max: 40 },
           { key: "title", kind: "text", max: 40 },
@@ -996,7 +1004,7 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
           { key: "endTime", kind: "text", max: 5 },
           { key: "venue", kind: "text", max: 80 },
           { key: "address", kind: "text", max: 140 },
-          { key: "mapUrl", kind: "text", max: 300 },
+          { key: "mapUrl", kind: "text", max: 400 },
           { key: "dressCode", kind: "text", max: 60 },
           { key: "dressColor", kind: "text", max: 9 },
           { key: "note", kind: "text", max: 200 },
@@ -1005,6 +1013,55 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "rsvp", kind: "bool", default: true },
       { key: "rsvpBy", kind: "text", max: 10 },
       { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+      // ── added in the jharokha rebuild ──
+      /** Which language the page opens in (guests can switch). */
+      { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
+      { key: "hindiMessage", kind: "longtext", max: 700 },
+      { key: "brideNote", kind: "text", max: 100 },
+      { key: "groomNote", kind: "text", max: 100 },
+      /** "With the blessings of" — grandparents. */
+      { key: "blessingsOf", kind: "text", max: 160 },
+      /** The couple's portrait (1-based index into photos; 0 = the illustrated couple). */
+      { key: "couplePhoto", kind: "number", min: 0, max: 12, default: 0 },
+      { key: "muhurat", kind: "text", max: 60 },
+      { key: "hashtag", kind: "text", max: 40 },
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 60 },
+          { key: "line", kind: "text", max: 240 },
+          { key: "photo", kind: "number", min: 0, max: 12, default: 0 },
+        ],
+      },
+      /** Good to know: "Heading: text" lines. */
+      { key: "things", kind: "list", maxItems: 3, itemMax: 180 },
+      { key: "gettingThere", kind: "longtext", max: 500 },
+      /** Family members guests can call: tap-to-call + WhatsApp (the client validates the phone). */
+      {
+        key: "contacts",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "name", kind: "text", max: 40 },
+          { key: "relation", kind: "text", max: 40 },
+          { key: "phone", kind: "text", max: 16 },
+        ],
+      },
+      /** Optional shagun by UPI (off when empty): a upi:// link + a copyable id; no payment is handled. */
+      { key: "upiId", kind: "text", max: 60 },
+      { key: "upiName", kind: "text", max: 60 },
+      /** Optional livestream (https only, checked by the client). */
+      { key: "liveUrl", kind: "text", max: 300 },
+      /** A YouTube link for the pre-wedding film (the client extracts the id). */
+      { key: "videoUrl", kind: "text", max: 200 },
+      /** Read by weddingGuest.controller: the RSVP accepts a meal choice only when true. */
+      { key: "rsvpMeal", kind: "bool", default: false },
+      { key: "blessings", kind: "bool", default: false },
+      /** The gold Shri Ganesh on the invitation. */
+      { key: "invocation", kind: "bool", default: false },
     ],
   },
   // ── Wedding Invitation ✦ Premium ── a scroll-told wedding website: an
