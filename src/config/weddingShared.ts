@@ -34,6 +34,8 @@ export const WEDDING_TIER_LIMITS = {
   // Reception Night (standalone /reception-pages): RSVPs per part of the evening; it keeps its own blessings wall.
   reception: { events: 4, photos: 24, story: 4, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false },
   "christian-wedding": { events: 8, photos: 40, story: 6, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false }, // standalone; its blessings wall (with voice notes) is its own
+  // Christian Wedding — Scroll Edition (standalone; RSVPs only, its blessings wall is the page's own with voice notes).
+  "christian-wedding-2": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false },
 } as const;
 
 export type WeddingSlug = keyof typeof WEDDING_TIER_LIMITS;

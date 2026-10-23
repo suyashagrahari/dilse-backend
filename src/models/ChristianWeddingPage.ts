@@ -87,6 +87,8 @@ export interface IChristianWeddingPage extends Document {
   closingLine?: string;
   blessingsOf?: string;
   churchName?: string;
+  /** Scroll edition only (christian-wedding-2); optional, see services/christianScrollExtras. */
+  scrollExtras?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -203,6 +205,8 @@ const christianWeddingPageSchema = new Schema<IChristianWeddingPage>(
     closingLine: { type: String },
     blessingsOf: { type: String },
     churchName: { type: String },
+    // Scroll edition extras (christian-wedding-2). Optional: absent on older pages.
+    scrollExtras: { type: Schema.Types.Mixed, default: undefined },
   },
   { timestamps: true, collection: "christian_wedding_pages" }
 );

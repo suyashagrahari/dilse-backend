@@ -6,6 +6,7 @@ import { transformMediaPayload, uploadAudioDataUrl } from "../services/mediaProc
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
 import { CW_EXTRA_KEYS, cleanChristianExtras, cleanGallery, normalizeChristianEvents } from "../config/christianWedding";
+import { cleanScrollExtras, mirrorScrollExtras } from "../services/christianScrollExtras";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
@@ -51,9 +52,18 @@ export const createChristianWeddingPage = async (req: Request, res: Response): P
       { template: "christian-wedding", userId: req.userId }
     );
 
+    // Scroll edition (christian-wedding-2): its extras, photos uploaded, mirrored into the flat fields.
+    const scrollExtras = cleanScrollExtras(req.body.scrollExtras);
+    const extraFields: Record<string, unknown> = {};
+    if (scrollExtras) {
+      extraFields.scrollExtras = await transformMediaPayload(scrollExtras, { template: "christian-wedding", userId: req.userId });
+      mirrorScrollExtras(extraFields, extraFields.scrollExtras as Record<string, unknown>);
+    }
+
     const page = await ChristianWeddingPage.create({
       userId: req.userId,
       ...payload,
+      ...extraFields,
       templateVariant: templateVariant === "scroll" ? "scroll" : "tabs",
     });
 
@@ -128,6 +138,13 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
         }
         (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
+    }
+
+    // Scroll edition (christian-wedding-2): whitelisted extras + their photos mirrored into the flat fields.
+    const scrollExtras = cleanScrollExtras(updates.scrollExtras);
+    if (scrollExtras) {
+      page.scrollExtras = scrollExtras;
+      mirrorScrollExtras(page as unknown as Record<string, unknown>, scrollExtras);
     }
 
     // Never through the loop: an empty value there would silently remove

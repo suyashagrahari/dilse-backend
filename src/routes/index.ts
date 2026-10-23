@@ -16,6 +16,7 @@ import weddingPageRoutes from "./weddingPage.routes";
 import receptionPageRoutes from "./receptionPage.routes";
 import shaadiCardPageRoutes from "./shaadiCardPage.routes";
 import christianWeddingPageRoutes from "./christianWeddingPage.routes";
+import christianWedding2GuestRoutes from "./christianWedding2Guest.routes";
 import loveGfPageRoutes from "./loveGfPage.routes";
 import birthdayGfPageRoutes from "./birthdayGfPage.routes";
 import darlingPageRoutes from "./darlingPage.routes";
@@ -121,6 +122,7 @@ router.use("/wedding-pages", weddingPageRoutes);
 router.use("/reception-pages", receptionPageRoutes);
 router.use("/shaadi-card-pages", shaadiCardPageRoutes);
 router.use("/christian-wedding-pages", christianWeddingPageRoutes);
+router.use("/christian-wedding-2-pages", christianWedding2GuestRoutes); // scroll edition: RSVPs + guest list
 router.use("/love-gf-pages", loveGfPageRoutes);
 router.use("/birthday-gf-pages", birthdayGfPageRoutes);
 router.use("/darling-pages", darlingPageRoutes);
