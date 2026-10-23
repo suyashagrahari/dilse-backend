@@ -1,70 +1,88 @@
 import type { AiFillField, AiFillTemplateSchema } from "./types";
 
 /**
- * wedding-invitation-premium — "Wedding Invitation ✦ Premium" on the
- * Valentine engine (client app/(templates)/wedding-invitation-premium). Paths
- * resolve against `ValentineDayData`; extras keys are defined in
- * server/src/config/valentineDays.ts. recipientName = the bride, senderName =
- * the groom, letter = the invitation message, endLine = the closing thank-you.
+ * wedding-invitation-premium — "Wedding Invitation ✦ Premium", rebuilt in
+ * 2026-10 as "The Lake Terrace" (client app/(templates)/wedding-invitation-premium):
+ * gold French doors open onto a watercolour lake terrace. Paths resolve
+ * against `ValentineDayData`; extras keys are defined in
+ * server/src/config/valentineDays.ts. recipientName = the BRIDE, senderName =
+ * the GROOM, letter = the English invitation, endLine = the closing line.
  *
- * The editor's "Describe your wedding" box sends the sender's few lines here.
- * Before it does, it blanks every function / story row that still holds the
- * demo, so a wedding with three functions ends with three (empty rows are
- * dropped after the fill). Dress codes and function descriptions are filled
- * on the client from the function's name when the model leaves them out —
- * which keeps this schema under the 40-field ceiling.
+ * Two ways in: the studio's guided questions (names, date, city, functions,
+ * families, how they met, tone, language, a contact) composed into one plain
+ * description, or the sender's own few lines. The client then drops demo rows
+ * the model left untouched, clears the demo's words from rows it did touch,
+ * fills dress codes / colours / notes from a function's name when the model
+ * left them out, and writes the facts typed into the questions (names, date,
+ * time, city, families, the contact) straight into the form.
  *
- * Not declared: theme, order, map links, photos, RSVP settings — choices, not words.
+ * Budget (field cap 40): 2 names, the invitation in English + Hindi, both
+ * parents + the grandparents' line, the main date / time / city / muhurat /
+ * blessing ornament, five functions × (name, date, time, venue) with a dress
+ * code on the first two, two story moments and the closing line.
+ * Not declared: theme / music / photos, map links (the model would invent
+ * them), dress colours (derived from the dress-code words), RSVP settings,
+ * contacts, shagun, the livestream and the hashtag (the client builds one
+ * from the names).
  */
 
-const TIME_GUIDE =
-  " 24-hour \"HH:mm\" (\"19:30\"), only when the description gives a time or the custom is unmistakable (a haldi is a morning function); otherwise leave it empty.";
+const TONE =
+  " Write in the register the description asks for (traditional, royal, warm and modern, faith-filled, fun); without a cue, warm and gracious. Never cheesy, no exclamation-mark spam, no emoji. Write in English unless the description is written in Hindi or Hinglish; never mix scripts inside one field.";
 
-const EVENT_FIELDS: AiFillField[] = [0, 1, 2, 3, 4].flatMap((i): AiFillField[] => {
-  const n = i + 1;
-  const first = i === 0;
-  return [
-    {
-      path: `extras.events[${i}].title`,
-      label: `Function ${n} — name`,
-      kind: "text",
-      max: 30,
-      required: first,
-      guide:
-        `The name of function ${n} in date order, exactly as the family would print it: Haldi, Mehendi, Sangeet, Wedding (or Pheras / Anand Karaj / Nikah / Church Ceremony / Muhurtham), Reception, Engagement, Cocktail, Tilak, Baraat. ` +
-        "Use only functions the description mentions or clearly implies; a Christian or court wedding usually has just a ceremony and a reception. " +
-        (first ? "Always fill this one (the wedding itself when nothing else is named)." : "LEAVE EMPTY when the wedding has fewer functions — never invent one to fill the slot."),
-      example: first ? "Haldi" : undefined,
-    },
-    {
-      path: `extras.events[${i}].date`,
-      label: `Function ${n} — date`,
-      kind: "date",
-      guide: `The date of function ${n}, from the description. Empty when that function is empty or the date is not given.`,
-    },
-    {
-      path: `extras.events[${i}].time`,
-      label: `Function ${n} — time`,
-      kind: "text",
-      max: 5,
-      guide: `When function ${n} starts:` + TIME_GUIDE,
-    },
-    {
-      path: `extras.events[${i}].venue`,
-      label: `Function ${n} — venue`,
-      kind: "text",
-      max: 80,
-      guide:
-        `Where function ${n} happens: the venue name and city as the description gives it ("The Leela Palace, Udaipur", "St. Mary's Church, Kochi", "Sharma Niwas lawns"). Never invent a venue; when the description names only a city for the whole wedding, write that city. Empty when that function is empty.`,
-    },
-  ];
-});
+const FUNCTION_ROWS = 5;
+const DRESS_ROWS = 2;
+
+const functionFields: AiFillField[] = Array.from({ length: FUNCTION_ROWS }, (_, i) => [
+  {
+    path: `extras.events[${i}].title`,
+    label: `Function ${i + 1} — name`,
+    kind: "text" as const,
+    max: 30,
+    guide:
+      i === 0
+        ? "The FIRST function of the wedding in date order. Use the description's own word for each function (a description that says 'muhurtham' gets 'Muhurtham', 'nikah' gets 'Nikah'); otherwise its usual name: Roka, Tilak, Haldi, Mehendi, Sangeet, Baraat, 'Wedding (Pheras)', Nikah, 'Anand Karaj', Muhurtham, 'Holy Matrimony', 'Registry Wedding', Cocktail, Reception… The ceremony row takes the faith's own name: 'Anand Karaj' for a Sikh wedding (gurudwara), 'Nikah' for a Muslim wedding, 'Holy Matrimony' for a church wedding, 'Muhurtham' for a Tamil wedding, 'Wedding (Pheras)' for a Hindu North Indian wedding. Rows run in date order, one function per row. List ONLY functions the description mentions; when it mentions none, write just the wedding ceremony itself in this row. Under 30 characters."
+        : `Function ${i + 1} in date order, by its usual name (see function 1). Only a function the description mentions. If the wedding has fewer than ${i + 1} functions, return null for this row and every field of it — never invent one. Under 30 characters.`,
+  },
+  {
+    path: `extras.events[${i}].date`,
+    label: `Function ${i + 1} — date`,
+    kind: "date" as const,
+    guide: `The date of function ${i + 1} as YYYY-MM-DD. When the description gives only the day ('Haldi on the 10th') take the month and year from the wedding date it states. Null when the row is empty or the date is unknown.`,
+  },
+  {
+    path: `extras.events[${i}].time`,
+    label: `Function ${i + 1} — start time`,
+    kind: "text" as const,
+    max: 5,
+    guide: `The start time of function ${i + 1} in 24-hour HH:mm ('19:30' for 7:30 pm, '07:00' for 7 am). Only a time the description states; otherwise null.`,
+  },
+  {
+    path: `extras.events[${i}].venue`,
+    label: `Function ${i + 1} — venue`,
+    kind: "text" as const,
+    max: 80,
+    guide: `Where function ${i + 1} happens: the venue name and city from the description, always in English letters ('The Leela Palace, Udaipur'; 'Bride's home, Kanpur' for 'ghar pe'). When a function has no venue of its own, repeat the venue the description gives for the neighbouring functions. Null when the description names no place at all.`,
+  },
+  ...(i >= DRESS_ROWS
+    ? []
+    : [
+        {
+          path: `extras.events[${i}].dressCode`,
+          label: `Function ${i + 1} — dress code`,
+          kind: "text" as const,
+          max: 50,
+          guide: `A short dress-code line for function ${i + 1}, naming clothes or colours only: the description's own when it gives one, else the custom for that function (Haldi 'Shades of yellow', Mehendi 'Greens and bright florals', Sangeet 'Indo-western glam', Hindu wedding 'Traditional festive', church wedding 'Formal, pastels', Reception or Cocktail 'Black tie' / 'Cocktail chic'). Mention a colour when it is customary. Under 40 characters. Null for an empty row.`,
+        },
+      ]),
+]).flat();
 
 export const weddingInvitationPremium: AiFillTemplateSchema = {
   slug: "wedding-invitation-premium",
-  audience: "partner",
+  audience: "friend",
   premise:
-    "A premium wedding invitation website that a couple (or their family) sends to guests on WhatsApp. It opens on a sealed envelope and a gold monogram, then shows the couple's names, the date with a countdown, the invitation message, a short 'our story' timeline, both families, a card for every wedding function (Haldi, Mehendi, Sangeet, the wedding, the reception… each with date, time and venue), a photo gallery and an RSVP. You are filling it from the few lines the couple wrote about their wedding. Indian weddings are the norm (Hindu, Sikh, Muslim, South Indian), but follow the description: a Christian church wedding or a court marriage gets its own words and functions. Elegant, warm and gracious — never cute or jokey — and every fact (names, dates, venues, cities) comes from the description, never invented. Write in the language and script of the couple's own sentences: English stays English, Hinglish stays Hinglish in Latin letters, Devanagari stays Devanagari.",
+    "You are writing a couple's wedding invitation website (Wedding Invitation Premium, 'The Lake Terrace'), the kind of page a family sends to every guest on WhatsApp. Its look: tall gold French doors open onto a sunlit watercolour terrace over a lake, with flamingos, a pink gazebo, a peacock and lanterns, in powder blue, ivory and champagne gold. It shows the couple's names, the invitation in English and Hindi, both families, a countdown, the couple's story in short moments, every function of the wedding (each with its date, time, venue, map and dress code), a photo gallery, notes for guests, an RSVP and a blessings wall. The person describing the wedding is the bride, the groom or a family member; the page speaks for both families to their guests. It may be a Hindu, Sikh, Muslim, Christian, South Indian or court/registry wedding: follow the description's customs and words, never assume a Hindu ceremony when it says otherwise." +
+    " Use only facts the description states (names, dates, times, places, people). Where it is silent, leave the field null rather than invent." +
+    " The Hindi invitation is the one field that is always in Devanagari; it says nothing about the description's language. A description whose sentences are English is an English description: every other field, the names included, stays in English letters.",
   fields: [
     {
       path: "recipientName",
@@ -72,8 +90,7 @@ export const weddingInvitationPremium: AiFillTemplateSchema = {
       kind: "text",
       max: 30,
       required: true,
-      guide: "The bride's first name as it should be printed (\"Ananya\"). From the description; never a surname alone, never a nickname unless that is all it gives. For two grooms or two brides, the first-named partner.",
-      example: "Ananya",
+      guide: "The BRIDE's first name exactly as the description spells it, in the same letters (a name the description writes in English letters stays in English letters, whatever the region). For two grooms or two brides, the first-named partner. Just the first name, no surname, no title.",
     },
     {
       path: "senderName",
@@ -81,131 +98,125 @@ export const weddingInvitationPremium: AiFillTemplateSchema = {
       kind: "text",
       max: 30,
       required: true,
-      guide: "The groom's first name as it should be printed (\"Arjun\"). From the description. For two brides or two grooms, the second-named partner.",
-      example: "Arjun",
+      guide: "The GROOM's first name exactly as the description spells it, in the same letters (English letters stay English letters). For two grooms or two brides, the second-named partner. Just the first name.",
     },
     {
-      path: "extras.date",
-      label: "The wedding date",
-      kind: "date",
+      path: "letter",
+      label: "The invitation (English)",
+      kind: "longtext",
+      max: 1200,
       required: true,
-      guide: "The date of the wedding itself (the pheras / ceremony — not the haldi or the reception), from the description. It drives the countdown.",
+      guide:
+        "The invitation guests read first, in English, 2 short paragraphs (blank line between), 50–110 words. Paragraph 1 invites the guest, naming both partners and, when the description names them, the families ('Together with their families…', or for a royal register 'By the grace of the Almighty and with the blessings of our elders…'; for a church wedding 'request the honour of your presence', for a court marriage keep it simple and modern). Paragraph 2 says in one or two warm lines what the celebration will be (the place, the functions) and that the guest's presence matters. Never write a date, a day, a time or a venue address in it (the page shows every function's details right below); naming the city is fine. No greeting line, no signature. Plain text only: paragraphs separated by one blank line, never HTML tags." +
+        TONE,
     },
     {
-      path: "extras.time",
-      label: "The wedding time",
-      kind: "text",
-      max: 5,
-      guide: "When the wedding ceremony itself begins (the muhurat / pheras / church service):" + TIME_GUIDE,
-    },
-    {
-      path: "extras.city",
-      label: "The city",
-      kind: "text",
-      max: 40,
-      guide: "The wedding's city (\"Udaipur\", \"Kochi\", \"New Delhi\"), printed under the names. Only from the description; empty if none is given.",
-      example: "Udaipur",
-    },
-    {
-      path: "extras.hashtag",
-      label: "Wedding hashtag",
-      kind: "text",
-      max: 40,
-      guide: "A wedding hashtag only when the description gives one, or a simple one built from both first names (\"#AnanyaWedsArjun\"). No spaces, starts with #, under 32 characters.",
-      example: "#AnanyaWedsArjun",
+      path: "extras.hindiMessage",
+      label: "The invitation (Hindi)",
+      kind: "longtext",
+      max: 700,
+      guide:
+        "Always write this field, whatever language the rest of the page is in. Copy this Hindi sentence letter for letter and change only the two names: 'ईश्वर की असीम कृपा और बड़ों के आशीर्वाद से, <bride> और <groom> के शुभ विवाह के पावन अवसर पर आप सपरिवार सादर आमंत्रित हैं।' For a church, nikah or court wedding copy this one instead: '<bride> और <groom> के विवाह समारोह में आप सपरिवार सादर आमंत्रित हैं।' Write the two names in Devanagari (Ishaan → ईशान, Tara → तारा, Harsh → हर्ष); not one Latin letter may remain in this field.",
     },
     {
       path: "extras.brideParents",
       label: "Bride's parents",
       kind: "text",
       max: 90,
-      guide: "The bride's parents as an invitation prints them: \"Mrs. Kavita & Mr. Rajesh Sharma\". Only names the description gives; when it gives just the surname, write \"The Sharma family\". Empty when the description says nothing about her family.",
-      example: "Mrs. Kavita & Mr. Rajesh Sharma",
+      guide: "The bride's parents as an invitation prints them: 'Mrs. Meera & Mr. Rajesh Sharma'. Only names the description gives; with only a surname, 'The Sharma family'. Null when it names neither.",
     },
     {
       path: "extras.groomParents",
       label: "Groom's parents",
       kind: "text",
       max: 90,
-      guide: "The groom's parents, printed the same way (\"Mrs. Sunita & Mr. Anil Mehta\", or \"The Mehta family\"). Only from the description; empty when it says nothing.",
-      example: "The Mehta family",
+      guide: "The groom's parents, printed the same way ('Mrs. Sunita & Mr. Anil Mehta', or 'The Mehta family'). Only from the description; null when it names neither.",
+    },
+    {
+      path: "extras.blessingsOf",
+      label: "With the blessings of",
+      kind: "text",
+      max: 160,
+      guide: "The elders whose blessings the invitation carries (grandparents, usually), as the description names them: 'Smt. Kamla Devi & Late Shri Ram Prasad Sharma'. Null when the description names no grandparents or elders.",
+    },
+    {
+      path: "extras.date",
+      label: "The wedding date",
+      kind: "date",
+      required: true,
+      guide: "The date of the wedding ceremony itself (the pheras / muhurtham / nikah / church service, not the haldi or the reception), as YYYY-MM-DD, from the description. It drives the countdown.",
+    },
+    {
+      path: "extras.time",
+      label: "The wedding time",
+      kind: "text",
+      max: 5,
+      guide: "When the wedding ceremony itself begins, in 24-hour HH:mm ('20:40' for 8:40 pm). Only a time the description states; otherwise null.",
+    },
+    {
+      path: "extras.city",
+      label: "The city",
+      kind: "text",
+      max: 40,
+      guide: "The wedding's city, printed under the names ('Udaipur', 'Kochi', 'New Delhi'). Only a city the description names; null otherwise.",
+    },
+    {
+      path: "extras.muhurat",
+      label: "Muhurat",
+      kind: "text",
+      max: 60,
+      guide: "A short muhurat line when the description gives an auspicious time for the ceremony ('Shubh muhurat 8:40 pm', 'Muhurtham 9:05 to 10:15 am'). Null when it gives none or for a church, nikah or court wedding.",
     },
     {
       path: "extras.motif",
       label: "Blessing ornament",
       kind: "enum",
       options: ["ganesha", "lotus", "rings", "none"],
-      guide: "The small ornament above the invitation: 'ganesha' for a Hindu wedding (the default for an Indian wedding when the faith is not said), 'lotus' for a Sikh, Jain or Buddhist wedding or when the couple wants something non-religious but Indian, 'rings' for a Christian, court or civil wedding, 'none' for a Muslim wedding or when they ask for no religious symbols.",
-    },
-    {
-      path: "letter",
-      label: "Your invitation",
-      kind: "longtext",
-      max: 700,
       required: true,
-      guide:
-        "The invitation message guests read first, under the couple's names: 3 to 5 sentences in exactly two short paragraphs separated by a blank line, in the couple's own voice and the tone they ask for (formal and royal, or warm and modern; formal when they say nothing). The first paragraph invites the guest to the wedding of the bride and groom by first name, with the blessings of their families, and names the wedding date as \"6 December 2026\" (digits for the day and year, and never a weekday — the page prints that itself) and the city. The second paragraph says in a fresh, specific way what the guest's presence means to them — draw on a detail from the description when there is one. Write it in the language the description is written in — an English description gets an English message, whatever the couple's region. Never list the functions (the page shows each one), no emoji, no hashtags, and do not open with the stock phrase most invitations use; write it the way this couple would.",
+      guide: "The small blessing on the doors: 'ganesha' for a Hindu wedding (the default for an Indian wedding when the faith is not said), 'lotus' for a Sikh, Jain or Buddhist wedding, 'rings' for a Christian, court or civil wedding, 'none' for a Muslim wedding or when they ask for no religious symbols.",
     },
-    ...EVENT_FIELDS,
+    ...functionFields,
     {
       path: "extras.story[0].when",
       label: "Our story 1 — when",
       kind: "text",
       max: 30,
-      guide: "When the couple first met, as a short label (\"2018\", \"College, Pune\", \"Summer 2019\"). From the description; empty if it does not say how they met.",
-      example: "2018",
+      guide: "When and where the couple first met, as a short label ('2017 · Bengaluru', 'College, Pune'), only when the description tells how they met. Most descriptions don't: then this and the next two fields are null and the page simply leaves the story out.",
     },
     {
       path: "extras.story[0].title",
       label: "Our story 1 — title",
       kind: "text",
       max: 50,
-      guide: "Two to five words naming how they met (\"Where it began\", \"A college library\", \"A wrong number\"). Empty when the description says nothing about how they met.",
-      example: "Where it began",
+      guide: "How the couple first met, as a short evocative title ('Two strangers at a bus stop', 'A college library'), only when the description tells that meeting. A description that only announces the wedding has no story yet: null. No emoji. Under 40 characters.",
     },
     {
       path: "extras.story[0].text",
-      label: "Our story 1 — the moment",
+      label: "Our story 1 — what happened",
       kind: "longtext",
       max: 320,
-      guide: "One or two warm sentences about how they met, in the couple's voice ('we'), using ONLY what the description says — never add feelings, places or details it does not give. Empty when it says nothing.",
+      guide: "One or two sentences about how they met, told about the couple in the third person ('They met…', 'She…'), built only from the words of the description: its place, its year, its detail, and nothing added about what they felt, said or shared. Null when the title is null. Under 220 characters." + TONE,
     },
     {
       path: "extras.story[1].title",
       label: "Our story 2 — title",
       kind: "text",
       max: 50,
-      guide: "A second moment the description mentions (the proposal, the roka, moving cities, meeting the families), in two to five words. Empty when there is no second moment in the description — never invent one.",
-      example: "The proposal",
+      guide: "A second moment between meeting and the wedding that the description tells (the proposal, the roka, the families meeting), as a short title ('A ring by the lake'). A function of the wedding itself is NOT a story moment. Null when the description tells no such moment.",
     },
     {
       path: "extras.story[1].text",
-      label: "Our story 2 — the moment",
+      label: "Our story 2 — what happened",
       kind: "longtext",
       max: 320,
-      guide: "One or two sentences about that second moment in the couple's voice ('we'), only from the description — no invented details. Empty when story 2's title is empty.",
-    },
-    {
-      path: "extras.story[2].title",
-      label: "Our story 3 — title",
-      kind: "text",
-      max: 50,
-      guide: "The last moment of the story, which is always the wedding itself coming up (\"Forever begins\", \"Saat phere\", \"I do\"). Fill it whenever story 1 is filled.",
-      example: "Forever begins",
-    },
-    {
-      path: "extras.story[2].text",
-      label: "Our story 3 — the moment",
-      kind: "longtext",
-      max: 320,
-      guide: "One gracious sentence in the couple's voice inviting the guest into this last chapter — the wedding itself, its city or date if given. Write it fresh for this couple. Fill it whenever story 3's title is filled.",
+      guide: "One or two sentences for that moment, in the third person, built only from the description's own details, with nothing added about feelings. Null when story 2's title is null. Under 220 characters." + TONE,
     },
     {
       path: "endLine",
       label: "The closing line",
       kind: "text",
       max: 90,
-      guide: "The thank-you at the very end of the page, beneath a photo of the couple: one short line, under 80 characters, in the invitation's language and tone, written for this couple (it may name their city or the season). No emoji, no hashtags.",
+      guide: "The thank-you at the very end of the page, one short line under 80 characters, signed by the families when the description names them ('With love, the Sharma & Mehta families'), otherwise a warm line written for this couple. No emoji, no hashtags.",
     },
   ],
 };

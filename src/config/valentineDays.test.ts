@@ -143,6 +143,7 @@ const PINNED_KEYS: Record<string, string[]> = {
   "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests"],
   "wedding-invitation-premium": [
     "theme", "order", "motif", "hindi", "date", "time", "city", "hashtag", "brideParents", "brideNote", "groomParents", "groomNote", "events", "story", "faqs", "rsvpBy", "maxGuests", "rsvpMeal",
+    "lang", "hindiMessage", "blessingsOf", "muhurat", "gettingThere", "videoUrl", "contacts", "upiId", "upiName", "liveUrl", "blessings",
   ],
   "sorry-premium": ["palette", "tone", "togetherSince", "knockLine", "confession", "feelings", "lessons", "stars", "promises", "question", "yesLine", "answerMode"],
   // The premium twins (config/premiumDays/<slug>.ts) — each started as a copy
@@ -951,7 +952,7 @@ describe("Wedding Invitation ✦ Premium extras", () => {
       faqs: Array.from({ length: 5 }, () => ({ title: "Parking", text: "At the gate" })),
       maxGuests: 40,
     });
-    assert.equal(out.theme, "blush");
+    assert.equal(out.theme, "powder");
     const ev = out.events as Record<string, unknown>[];
     assert.equal(ev.length, 5);
     assert.equal(ev[0].id, "e0");

@@ -133,8 +133,18 @@ describe("wedding guests: RSVP + owner", () => {
     assert.ok(csv.text.includes("Kabir"));
   });
 
+  it("premium has the blessings wall (since the 2026-10 rebuild)", async () => {
+    assert.notEqual((await s.call("POST", "/share/share-1/blessing", { name: "Asha", message: "Bless you both" })).status, 404);
+  });
+
   it("blessings are off on a tier without them", async () => {
-    assert.equal((await s.call("POST", "/share/share-1/blessing", { name: "A", message: "Bless" })).status, 404);
+    const w2 = world("wedding-invitation");
+    const s2 = await serve("wedding-invitation", w2);
+    try {
+      assert.equal((await s2.call("POST", "/share/share-1/blessing", { name: "A", message: "Bless" })).status, 404);
+    } finally {
+      s2.server.close();
+    }
   });
 });
 

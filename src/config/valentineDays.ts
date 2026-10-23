@@ -1007,14 +1007,18 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
     ],
   },
-  // ── Wedding Invitation ✦ Premium ── a scroll-told wedding website: an
-  //    envelope opens on a gold-foil monogram, then the couple, a flip-digit
-  //    countdown, the invitation, "our story" moments, both families, up to
-  //    five functions (dress code, map, timings), a 20-photo masonry gallery,
-  //    good-to-know notes and an RSVP where guests tick each function (the
-  //    wedding kit's own routes: config/weddingShared.ts). recipientName =
-  //    the bride, senderName = the groom, letter = the invitation, endLine =
-  //    the closing thank-you. photos[0] is the cover. No yes/no question. ─
+  // ── Wedding Invitation ✦ Premium ── "The Lake Terrace" (rebuilt 2026-10):
+  //    gold French doors swing inward onto a watercolour lake terrace, then
+  //    the couple, the invitation in English + Hindi, families, a flip
+  //    countdown, "our story" moments, up to five functions (dress code +
+  //    colour, map, timings), a 20-photo masonry, good-to-know notes, family
+  //    contacts, an RSVP where guests tick each function, a blessings wall,
+  //    optional shagun (UPI) and a livestream (the wedding kit's own routes:
+  //    config/weddingShared.ts). recipientName = the bride, senderName = the
+  //    groom, letter = the invitation, endLine = the closing thank-you.
+  //    photos[0] is the cover. No yes/no question.
+  //    Pages published before the rebuild keep every stored key below as it
+  //    was; the keys after `rsvpMeal` are new and optional. ─
   "wedding-invitation-premium": {
     title: "Wedding Invitation ✦ Premium",
     maxPhotos: 20,
@@ -1022,12 +1026,13 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
     asksQuestion: false,
     gifSlots: [],
     extras: [
-      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "blush" },
+      /** All six ids stay valid (old pages); the editor offers the three light ones and the page renders dark ids light. */
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "powder" },
       /** Whose name is printed first. */
       { key: "order", kind: "enum", options: ["bride", "groom"], default: "bride" },
       /** The blessing ornament over the invitation (a Christian or court wedding picks rings or none). */
       { key: "motif", kind: "enum", options: ["ganesha", "lotus", "rings", "none"], default: "ganesha" },
-      /** Small Hindi lines under the section titles. */
+      /** Offer the guests an EN / Hindi switch (false = an English-only invitation). */
       { key: "hindi", kind: "bool", default: true },
       /** The main day, "YYYY-MM-DD" + "HH:mm" (countdown + calendar). */
       { key: "date", kind: "text", max: 10 },
@@ -1052,6 +1057,7 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
           { key: "address", kind: "text", max: 140 },
           { key: "mapUrl", kind: "text", max: 300 },
           { key: "dressCode", kind: "text", max: 50 },
+          { key: "dressColor", kind: "text", max: 7 },
           { key: "note", kind: "text", max: 220 },
         ],
       },
@@ -1080,6 +1086,34 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "rsvpBy", kind: "text", max: 10 },
       { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
       { key: "rsvpMeal", kind: "bool", default: false },
+      // ── Added in the rebuild: all optional ──
+      /** Which language the page opens in (guests can switch when `hindi` is on). */
+      { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
+      { key: "hindiMessage", kind: "longtext", max: 700 },
+      /** "With the blessings of" — grandparents. */
+      { key: "blessingsOf", kind: "text", max: 160 },
+      { key: "muhurat", kind: "text", max: 60 },
+      { key: "gettingThere", kind: "longtext", max: 500 },
+      /** A YouTube link for the pre-wedding film (the client extracts the id). */
+      { key: "videoUrl", kind: "text", max: 200 },
+      /** Family members guests can call or WhatsApp (the client renders only valid phone numbers). */
+      {
+        key: "contacts",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "name", kind: "text", max: 40 },
+          { key: "relation", kind: "text", max: 40 },
+          { key: "phone", kind: "text", max: 20 },
+        ],
+      },
+      /** Shagun by UPI, off unless the couple adds an id (the client validates the VPA shape). */
+      { key: "upiId", kind: "text", max: 60 },
+      { key: "upiName", kind: "text", max: 60 },
+      /** A YouTube / Zoom livestream link (https only, enforced on the client). */
+      { key: "liveUrl", kind: "text", max: 300 },
+      /** The blessings wall (the tier has it since the rebuild; the couple can switch it off). */
+      { key: "blessings", kind: "bool", default: true },
     ],
   },
   // ── Royal Wedding Invitation 👑 ($20 wedding tier) ── palace gates swing
