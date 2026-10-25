@@ -13,6 +13,7 @@ import { invalidateSeasonCache } from "./seasonSettings.service";
 import { quoteFor } from "./pricingQuote.service";
 import { localizePricing } from "../config/currency";
 import { getPublicSeason, adminUpdateSeason } from "../controllers/season.controller";
+import { WEDDING_SALE_SLUGS } from "../config/seasonSale";
 
 process.env.GEO_TRUSTED_HEADER = "x-test-country";
 process.env.GEO_TRUSTED_SECRET_HEADER = "x-test-secret";
@@ -128,6 +129,8 @@ test("GET /season returns the public shape with a PRIVATE 15 s cache header", as
         halloween: { enabled: true, percent: 30, slugs: ["happy-halloween"] },
         dandiya: { enabled: true, percent: 30, slugs: ["dandiya-partner"] },
         diwali: { enabled: true, percent: 30, slugs: ["happy-diwali"] },
+        // A row from before the wedding drop existed: the wedding defaults, sale off.
+        wedding: { enabled: false, percent: 20, slugs: [...WEDDING_SALE_SLUGS] },
       },
     },
   });
@@ -195,4 +198,31 @@ test("a stored round-1 `festive` row is served as diwali", async () => {
   assert.equal(data.mode, "diwali");
   assert.deepEqual(data.sale, { enabled: true, percent: 25, slugs: ["happy-diwali"] });
   assert.equal("festive" in data.drops, false);
+});
+
+test("wedding mode: the wedding drop is discounted on every read only once its sale is switched on", async () => {
+  ROWS.push({ slug: "royal-wedding-invitation", isFree: false, finalPricePaise: 179900, discountPercent: 0, pointsCost: 0, usdPriceCents: 2000 });
+  ROWS.push({ slug: "happy-diwali", isFree: false, finalPricePaise: 19900, discountPercent: 0, pointsCost: 0, usdPriceCents: null });
+  try {
+    // A stored row from before the wedding drop: mode wedding, no drops.wedding → defaults, sale OFF.
+    seasonRow = { mode: "wedding", drops: { diwali: { saleEnabled: true, salePercent: 30, saleSlugs: ["happy-diwali"] } } };
+    invalidateSeasonCache();
+    assert.equal((await getPricingFresh("royal-wedding-invitation", "india")).finalPricePaise, 179900);
+    assert.equal((await getPricingFresh("happy-diwali", "india")).finalPricePaise, 19900);
+
+    seasonRow = { mode: "wedding", drops: { wedding: { saleEnabled: true, salePercent: 20, saleSlugs: ["royal-wedding-invitation"] } } };
+    invalidateSeasonCache();
+    const map = await allPricing({ audience: "india" });
+    assert.equal(map["royal-wedding-invitation"].finalPricePaise, 143900);
+    assert.equal(map["royal-wedding-invitation"].mrpPaise, 179900);
+    assert.equal(map["royal-wedding-invitation"].discountPercent, 20);
+    assert.equal(map["happy-diwali"].finalPricePaise, 19900);
+    assert.equal(map["happy-halloween"].finalPricePaise, 19900);
+    assert.equal((await quoteFor(req("IN"), "royal-wedding-invitation", { fresh: true })).pricing.finalAmount, 143900);
+    // Abroad: the USD price scales the same way ($20 → $16).
+    assert.equal((await quoteFor(req("US"), "royal-wedding-invitation", { fresh: true })).pricing.finalAmount, 1600);
+  } finally {
+    ROWS.pop();
+    ROWS.pop();
+  }
 });

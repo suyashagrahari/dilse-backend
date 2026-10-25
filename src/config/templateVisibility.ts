@@ -43,10 +43,10 @@
 //                       may its builder open and may it be created/published?
 //
 // `activeDrop` is the active mode's drop slugs while the mode has a drop —
-// "halloween", "dandiya" or "diwali" (see
+// "halloween", "dandiya", "diwali" or "wedding" (see
 // `dropSlugs` in config/seasonSale.ts). That lets the owner hide a template
 // from the gallery in /admin/templates and still sell it through the drop on
-// /halloween-offer, /dandiya-offer or /diwali-offer: hidden from listing, open to anyone who follows the drop.
+// /halloween-offer, /dandiya-offer, /diwali-offer or /wedding-offer: hidden from listing, open to anyone who follows the drop.
 // When the mode is "valentine" or "off" there is no drop and reachable == live.
 //
 // Per-user early-access grants sit on top of `reachable`, in
@@ -120,6 +120,19 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "miss-you-premium",
   // I'm Sorry ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "sorry-premium",
+  // Digital Bouquet ✦ Premium ships hidden the same way; released (and priced) by the super admin.
+  "digital-bouquet",
+  // Wedding Invitation (Classic, $5) ships hidden the same way; released (and priced) by the super admin.
+  "wedding-invitation",
+  // Wedding Invitation ✦ Premium ships hidden the same way; released (and priced) by the super admin.
+  "wedding-invitation-premium",
+  // Royal Wedding Invitation 👑 ($20) ships hidden the same way; released (and priced) by the super admin.
+  "royal-wedding-invitation",
+  // The four wedding designs on Royal's limits ship hidden the same way (apex only); released (and priced) by the super admin.
+  "palace-door-wedding-invitation",
+  "garden-wedding-invitation",
+  "floral-wedding-invitation",
+  "lotus-wedding-invitation",
   // The Proposal ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "proposal-premium",
   // Happy Anniversary ships hidden the same way; released (and priced) by the super admin.
@@ -230,17 +243,48 @@ export async function isTemplateReachable(slug: string): Promise<boolean> {
  * already had, rather than an empty gallery.
  */
 export async function hiddenSlugs(): Promise<string[]> {
-  const map = await rows();
-  const hidden = new Set<string>();
+  return hiddenFrom(await rows(), isApexDeployment());
+}
 
-  // The code-level defaults first — and only where they apply, which is the
-  // public site. See `defaultLive`.
-  if (isApexDeployment()) for (const slug of DEFAULT_HIDDEN) hidden.add(slug);
-  // …then let admin rows overrule them in both directions.
+/**
+ * The code-level default that is IN FORCE on this deployment: `DEFAULT_HIDDEN`
+ * on the apex, nothing anywhere else. See `defaultLive`.
+ *
+ * The admin screen must read this, never `DEFAULT_HIDDEN` itself. It used to
+ * send the raw list, so on staging /admin/templates labelled thirty-odd
+ * templates "Hidden · default" while the public endpoint — and the site —
+ * had them live.
+ */
+export function effectiveDefaultHidden(apex: boolean = isApexDeployment()): string[] {
+  return apex ? [...DEFAULT_HIDDEN].sort() : [];
+}
+
+/**
+ * The pure rule behind `hiddenSlugs`: the effective defaults, then admin rows
+ * overruling them in both directions. Split out so the admin view can be
+ * tested against it without a database.
+ */
+export function hiddenFrom(map: ReadonlyMap<string, boolean>, apex: boolean): string[] {
+  const hidden = new Set<string>(effectiveDefaultHidden(apex));
   for (const [slug, live] of map) {
     if (live) hidden.delete(slug);
     else hidden.add(slug);
   }
-
   return [...hidden].sort();
+}
+
+/**
+ * Everything /admin/templates needs to show the SAME answer the public
+ * endpoint gives. A row's state is `row ? row.live : !defaultHidden.has(slug)`,
+ * and with `defaultHidden` the effective list that is exactly `hiddenFrom`.
+ * `apexDefaultHidden` is only for the screen's note on non-apex hosts
+ * ("on the live domain these start hidden until switched on").
+ */
+export function adminVisibilityView(map: ReadonlyMap<string, boolean>, apex: boolean) {
+  return {
+    defaultHidden: effectiveDefaultHidden(apex),
+    isApex: apex,
+    apexDefaultHidden: [...DEFAULT_HIDDEN].sort(),
+    hidden: hiddenFrom(map, apex),
+  };
 }

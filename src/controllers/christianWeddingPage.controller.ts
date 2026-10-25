@@ -5,90 +5,17 @@ import { env } from "../config/env";
 import { transformMediaPayload, uploadAudioDataUrl } from "../services/mediaProcessor.service";
 import { checkPublishAccess } from "../services/publishGate.service";
 import { applyPagePassword } from "../services/pagePassword";
+import { CW_EXTRA_KEYS, cleanChristianExtras, cleanGallery, normalizeChristianEvents } from "../config/christianWedding";
+import { cleanScrollExtras, mirrorScrollExtras } from "../services/christianScrollExtras";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-const DEFAULT_EVENTS = [
-  { name: "Rehearsal Dinner", hindi: "", icon: "🍽️", date: "", time: "6 PM", venue: "", details: "", accent: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30", disabled: false },
-  { name: "Ceremony", hindi: "", icon: "⛪", date: "", time: "4 PM", venue: "", details: "", accent: "from-amber-500/20 to-amber-500/5 border-amber-500/30", disabled: false },
-  { name: "Reception", hindi: "", icon: "🥂", date: "", time: "7 PM", venue: "", details: "", accent: "from-blue-500/20 to-blue-500/5 border-blue-500/30", disabled: false },
-  { name: "Brunch", hindi: "", icon: "☕", date: "", time: "10 AM", venue: "", details: "", accent: "from-violet-500/20 to-violet-600/5 border-violet-500/30", disabled: true },
-  { name: "Reserved", hindi: "", icon: "📌", date: "", time: "", venue: "", details: "", accent: "from-slate-500/15 to-slate-600/5 border-slate-500/20", disabled: true },
-  { name: "Reserved", hindi: "", icon: "📌", date: "", time: "", venue: "", details: "", accent: "from-slate-500/15 to-slate-600/5 border-slate-500/20", disabled: true },
-];
-
-const MONTH_MAP: Record<string, number> = {
-  jan: 0, january: 0,
-  feb: 1, february: 1,
-  mar: 2, march: 2,
-  apr: 3, april: 3,
-  may: 4,
-  jun: 5, june: 5,
-  jul: 6, july: 6,
-  aug: 7, august: 7,
-  sep: 8, sept: 8, september: 8,
-  oct: 9, october: 9,
-  nov: 10, november: 10,
-  dec: 11, december: 11,
-};
-
-const parseTimeToMinutes = (time: string): number => {
-  const cleaned = time.trim().toUpperCase();
-  const match = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/);
-  if (!match) return Number.MAX_SAFE_INTEGER;
-  const hourRaw = Number(match[1]);
-  const minutes = Number(match[2] || "0");
-  const ampm = match[3];
-  let hour = hourRaw % 12;
-  if (ampm === "PM") hour += 12;
-  return hour * 60 + minutes;
-};
-
-const parseDateAndTimeToEpoch = (date: string, time: string): number => {
-  const trimmedDate = date.trim();
-  if (!trimmedDate) return Number.MAX_SAFE_INTEGER;
-
-  const parts = trimmedDate.split(/\s+/);
-  if (parts.length < 2) return Number.MAX_SAFE_INTEGER;
-  const day = Number(parts[0]);
-  const monthKey = parts[1].toLowerCase();
-  const monthIdx = MONTH_MAP[monthKey];
-  if (!Number.isFinite(day) || monthIdx === undefined) return Number.MAX_SAFE_INTEGER;
-
-  const now = new Date();
-  const year = now.getFullYear();
-  const eventDate = new Date(year, monthIdx, day);
-  eventDate.setHours(0, 0, 0, 0);
-  eventDate.setMinutes(parseTimeToMinutes(time));
-  return eventDate.getTime();
-};
-
-const normalizeAndSortEvents = (eventsInput: unknown) => {
-  const incoming = Array.isArray(eventsInput) ? eventsInput : DEFAULT_EVENTS;
-  const normalized = incoming.map((event, idx) => {
-    const fallback = DEFAULT_EVENTS[idx] || DEFAULT_EVENTS[Math.min(idx, DEFAULT_EVENTS.length - 1)];
-    const src = (event || {}) as Record<string, unknown>;
-    return {
-      name: String(src.name || fallback.name),
-      hindi: String(src.hindi || fallback.hindi),
-      icon: String(src.icon || fallback.icon),
-      date: String(src.date || ""),
-      time: String(src.time || fallback.time),
-      venue: String(src.venue || ""),
-      details: String(src.details || ""),
-      accent: String(src.accent || fallback.accent),
-      disabled: Boolean(src.disabled),
-    };
-  });
-
-  return normalized.sort((a, b) => {
-    if (a.disabled !== b.disabled) return a.disabled ? 1 : -1;
-    const aEpoch = parseDateAndTimeToEpoch(a.date, a.time);
-    const bEpoch = parseDateAndTimeToEpoch(b.date, b.time);
-    if (aEpoch === bEpoch) return a.name.localeCompare(b.name);
-    return aEpoch - bEpoch;
-  });
-};
+/**
+ * The rebuild's fields, cleaned (config/christianWedding.ts). Only the keys the
+ * body actually carries: christian-wedding-2's older editor never sends them,
+ * so its saves leave them exactly as they were.
+ */
+const extrasFrom = (body: Record<string, unknown>) => cleanChristianExtras(body);
 
 export const createChristianWeddingPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -116,17 +43,27 @@ export const createChristianWeddingPage = async (req: Request, res: Response): P
         groomTags: groomTags || [],
         groomFamilyParents: groomFamilyParents || "",
         groomFamilyGrandparents: groomFamilyGrandparents || "",
-        events: normalizeAndSortEvents(events),
-        galleryImages: galleryImages || [],
+        events: normalizeChristianEvents(events),
+        galleryImages: cleanGallery(galleryImages),
+        ...extrasFrom(req.body as Record<string, unknown>),
         sharePhoto: sharePhoto || "",
         password: password || "",
       },
       { template: "christian-wedding", userId: req.userId }
     );
 
+    // Scroll edition (christian-wedding-2): its extras, photos uploaded, mirrored into the flat fields.
+    const scrollExtras = cleanScrollExtras(req.body.scrollExtras);
+    const extraFields: Record<string, unknown> = {};
+    if (scrollExtras) {
+      extraFields.scrollExtras = await transformMediaPayload(scrollExtras, { template: "christian-wedding", userId: req.userId });
+      mirrorScrollExtras(extraFields, extraFields.scrollExtras as Record<string, unknown>);
+    }
+
     const page = await ChristianWeddingPage.create({
       userId: req.userId,
       ...payload,
+      ...extraFields,
       templateVariant: templateVariant === "scroll" ? "scroll" : "tabs",
     });
 
@@ -168,6 +105,7 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
       "bridePhoto", "brideDescription", "brideTags", "brideFamilyParents", "brideFamilyGrandparents",
       "groomPhoto", "groomDescription", "groomTags", "groomFamilyParents", "groomFamilyGrandparents",
       "events", "galleryImages", "sharePhoto",  "templateVariant",
+      ...CW_EXTRA_KEYS,
     ];
 
     const page = await ChristianWeddingPage.findOne({ _id: req.params.id, userId: req.userId });
@@ -176,7 +114,10 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
       return;
     }
 
-    const updates = await transformMediaPayload(req.body as Record<string, unknown>, {
+    const body = req.body as Record<string, unknown>;
+    // The rebuild's extras are cleaned BEFORE the media pass (a data: photo
+    // survives cleaning and is then uploaded); the old fields go through as before.
+    const updates = await transformMediaPayload({ ...body, ...extrasFrom(body) } as Record<string, unknown>, {
       template: "christian-wedding",
       userId: req.userId,
     });
@@ -184,11 +125,26 @@ export const updateChristianWeddingPage = async (req: Request, res: Response): P
     for (const field of fields) {
       if (updates[field] !== undefined) {
         if (field === "events") {
-          (page as unknown as Record<string, unknown>)[field] = normalizeAndSortEvents(updates[field]);
+          (page as unknown as Record<string, unknown>)[field] = normalizeChristianEvents(updates[field]);
+          continue;
+        }
+        if (field === "galleryImages") {
+          (page as unknown as Record<string, unknown>)[field] = cleanGallery(updates[field]);
+          continue;
+        }
+        if (field === "templateVariant") {
+          if (updates[field] === "tabs" || updates[field] === "scroll") page.templateVariant = updates[field] as "tabs" | "scroll";
           continue;
         }
         (page as unknown as Record<string, unknown>)[field] = updates[field];
       }
+    }
+
+    // Scroll edition (christian-wedding-2): whitelisted extras + their photos mirrored into the flat fields.
+    const scrollExtras = cleanScrollExtras(updates.scrollExtras);
+    if (scrollExtras) {
+      page.scrollExtras = scrollExtras;
+      mirrorScrollExtras(page as unknown as Record<string, unknown>, scrollExtras);
     }
 
     // Never through the loop: an empty value there would silently remove

@@ -14,6 +14,52 @@ export interface IShaadiCardEvent {
   details: string;
   accent: string;
   disabled: boolean;
+  // ── 2026-10 rebuild (all optional; old events have none of them) ──
+  /** Stable id the RSVPs refer to ("e0" for events saved before ids existed). */
+  id?: string;
+  /** "2027-02-18" — the new editor's date; `date` keeps the "18 Feb" display form. */
+  isoDate?: string;
+  /** "19:30" — the new editor's time; `time` keeps "7:30 PM". */
+  startTime?: string;
+  endTime?: string;
+  address?: string;
+  mapUrl?: string;
+  dressCode?: string;
+  dressColor?: string;
+}
+
+export interface IShaadiCardGalleryImage {
+  src: string;
+  alt: string;
+  cropX?: number;
+  cropY?: number;
+  scale?: number;
+  span?: string;
+  w?: number;
+  h?: number;
+  caption?: string;
+}
+
+export interface IShaadiCardStory {
+  when: string;
+  title: string;
+  line: string;
+  photo: string;
+  cropX: number;
+  cropY: number;
+  scale: number;
+}
+
+export interface IShaadiCardContact {
+  name: string;
+  relation: string;
+  phone: string;
+}
+
+export interface IShaadiCardCrop {
+  x: number;
+  y: number;
+  scale: number;
 }
 
 export interface IShaadiCardBlessing {
@@ -47,11 +93,42 @@ export interface IShaadiCardPage extends Document {
   groomFamilyGrandparents: string;
   // Events
   events: IShaadiCardEvent[];
-  // Gallery (up to 6)
-  galleryImages: { src: string; alt: string }[];
+  // Gallery
+  galleryImages: IShaadiCardGalleryImage[];
   // Blessings wall (guests can add)
   blessings: IShaadiCardBlessing[];
   sharePhoto: string;
+  // ── 2026-10 rebuild: every field optional with a default (old pages read as before) ──
+  theme: string;
+  lang: string;
+  invitation: string;
+  hindiMessage: string;
+  muhurat: string;
+  blessingsOf: string;
+  nameOrder: string;
+  hashtag: string;
+  closingLine: string;
+  invocation: boolean;
+  videoUrl: string;
+  liveUrl: string;
+  upiId: string;
+  upiName: string;
+  gettingThere: string;
+  things: string[];
+  story: IShaadiCardStory[];
+  contacts: IShaadiCardContact[];
+  /** "" = a page saved before music was a choice: it plays the template's own track. */
+  musicMode: string;
+  musicYoutubeId: string;
+  musicStart: number;
+  rsvpOn: boolean;
+  rsvpBy: string;
+  rsvpMeal: boolean;
+  maxGuests: number;
+  couplePhoto: string;
+  brideCrop: IShaadiCardCrop;
+  groomCrop: IShaadiCardCrop;
+  coupleCrop: IShaadiCardCrop;
   // Security & meta
   password: string;
   passwordRaw: string;
@@ -73,6 +150,60 @@ const shaadiCardEventSchema = new Schema<IShaadiCardEvent>(
     details: { type: String, default: "", trim: true },
     accent: { type: String, default: "from-amber-500/20 to-amber-600/5 border-amber-500/30" },
     disabled: { type: Boolean, default: false },
+    id: { type: String, default: "" },
+    isoDate: { type: String, default: "" },
+    startTime: { type: String, default: "" },
+    endTime: { type: String, default: "" },
+    address: { type: String, default: "" },
+    mapUrl: { type: String, default: "" },
+    dressCode: { type: String, default: "" },
+    dressColor: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
+const shaadiCardGallerySchema = new Schema<IShaadiCardGalleryImage>(
+  {
+    src: String,
+    alt: String,
+    cropX: Number,
+    cropY: Number,
+    scale: Number,
+    span: String,
+    w: Number,
+    h: Number,
+    caption: String,
+  },
+  { _id: false }
+);
+
+const shaadiCardStorySchema = new Schema<IShaadiCardStory>(
+  {
+    when: { type: String, default: "" },
+    title: { type: String, default: "" },
+    line: { type: String, default: "" },
+    photo: { type: String, default: "" },
+    cropX: { type: Number, default: 50 },
+    cropY: { type: Number, default: 50 },
+    scale: { type: Number, default: 100 },
+  },
+  { _id: false }
+);
+
+const shaadiCardContactSchema = new Schema<IShaadiCardContact>(
+  {
+    name: { type: String, default: "" },
+    relation: { type: String, default: "" },
+    phone: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
+const cropSchema = new Schema<IShaadiCardCrop>(
+  {
+    x: { type: Number, default: 50 },
+    y: { type: Number, default: 40 },
+    scale: { type: Number, default: 100 },
   },
   { _id: false }
 );
@@ -129,7 +260,7 @@ const shaadiCardPageSchema = new Schema<IShaadiCardPage>(
     },
     // Gallery
     galleryImages: {
-      type: [{ src: String, alt: String }],
+      type: [shaadiCardGallerySchema],
       default: [],
     },
     // Blessings
@@ -139,6 +270,36 @@ const shaadiCardPageSchema = new Schema<IShaadiCardPage>(
     },
     // Security
     sharePhoto: { type: String, default: "" },
+    // ── 2026-10 rebuild (see config/shaadiCard.ts) ──
+    theme: { type: String, default: "" },
+    lang: { type: String, default: "" },
+    invitation: { type: String, default: "" },
+    hindiMessage: { type: String, default: "" },
+    muhurat: { type: String, default: "" },
+    blessingsOf: { type: String, default: "" },
+    nameOrder: { type: String, default: "bride" },
+    hashtag: { type: String, default: "" },
+    closingLine: { type: String, default: "" },
+    invocation: { type: Boolean, default: true },
+    videoUrl: { type: String, default: "" },
+    liveUrl: { type: String, default: "" },
+    upiId: { type: String, default: "" },
+    upiName: { type: String, default: "" },
+    gettingThere: { type: String, default: "" },
+    things: { type: [String], default: [] },
+    story: { type: [shaadiCardStorySchema], default: [] },
+    contacts: { type: [shaadiCardContactSchema], default: [] },
+    musicMode: { type: String, default: "" },
+    musicYoutubeId: { type: String, default: "" },
+    musicStart: { type: Number, default: 0 },
+    rsvpOn: { type: Boolean, default: true },
+    rsvpBy: { type: String, default: "" },
+    rsvpMeal: { type: Boolean, default: false },
+    maxGuests: { type: Number, default: 6 },
+    couplePhoto: { type: String, default: "" },
+    brideCrop: { type: cropSchema, default: () => ({}) },
+    groomCrop: { type: cropSchema, default: () => ({}) },
+    coupleCrop: { type: cropSchema, default: () => ({}) },
     password: { type: String, default: "" },
     passwordRaw: { type: String, default: "", select: false },
     viewCount: { type: Number, default: 0 },

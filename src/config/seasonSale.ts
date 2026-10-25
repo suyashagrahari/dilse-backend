@@ -8,7 +8,7 @@
 //
 // ── THE RULE ────────────────────────────────────────────────────────────────
 //
-//   drop = drops[mode] (mode is a drop season: halloween, dandiya, diwali)
+//   drop = drops[mode] (mode is a drop season: halloween, dandiya, diwali, wedding)
 //   drop.saleEnabled && slug ∈ drop.saleSlugs && template is paid
 //     → finalPricePaise = max(100, round(base × (100 − percent) / 100))
 //       usdPriceCents   = scaled the same way, never below MIN_USD_CENTS
@@ -42,6 +42,29 @@ export const DROP_DEFAULTS = {
   halloween: { saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween", "happy-halloween-premium"] },
   dandiya: { saleEnabled: true, salePercent: 30, saleSlugs: ["dandiya-partner"] },
   diwali: { saleEnabled: true, salePercent: 30, saleSlugs: ["happy-diwali"] },
+  // The wedding season (the Nov–Feb muhurat months): the main wedding
+  // invitations, in the hub's order. Ships with its sale OFF — a wedding drop
+  // is a real price cut on the site's most expensive templates, so the super
+  // admin switches it on deliberately in /admin/season. Rows stored before this
+  // drop existed have no `drops.wedding` and read as exactly this
+  // (`seasonFromRow`), so no migration is needed.
+  wedding: {
+    saleEnabled: false,
+    salePercent: 20,
+    saleSlugs: [
+      "wedding-invitation",
+      "wedding-invitation-premium",
+      "royal-wedding-invitation",
+      "palace-door-wedding-invitation",
+      "garden-wedding-invitation",
+      "floral-wedding-invitation",
+      "lotus-wedding-invitation",
+      "reception",
+      "christian-wedding",
+      "christian-wedding-2",
+      "shaadi-card",
+    ],
+  },
 } as const satisfies Record<string, { saleEnabled: boolean; salePercent: number; saleSlugs: readonly string[] }>;
 
 export type DropId = keyof typeof DROP_DEFAULTS;
@@ -52,6 +75,7 @@ export const SEASON_MODES: readonly SeasonMode[] = ["valentine", ...DROP_IDS, "o
 export const HALLOWEEN_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.halloween.saleSlugs;
 export const DANDIYA_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.dandiya.saleSlugs;
 export const DIWALI_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.diwali.saleSlugs;
+export const WEDDING_SALE_SLUGS: readonly string[] = DROP_DEFAULTS.wedding.saleSlugs;
 
 /**
  * Round 1 had ONE merged "festive" season (Navratri + Diwali). It was never on
@@ -257,7 +281,7 @@ export function salePercentFor(slug: string, season: SeasonView | null | undefin
 
 /**
  * The slugs in the ACTIVE drop: the active mode's `saleSlugs` while the mode
- * has a drop (halloween, dandiya, diwali), and nothing otherwise. With the
+ * has a drop (halloween, dandiya, diwali, wedding), and nothing otherwise. With the
  * India/abroad split on, the union of both sides' active drops — reachability
  * is the same for every visitor; only the discount is per side.
  *

@@ -35,6 +35,9 @@ export type AuditAction =
   | "template.clear_tier"
   | "template.set_order"
   | "template.clear_order"
+  // A curated place's template list (/admin/places), and its reset to automatic.
+  | "template.set_collection"
+  | "template.clear_collection"
   | "template.grant_access"
   | "template.revoke_access"
   | "feedback.reply_sent"

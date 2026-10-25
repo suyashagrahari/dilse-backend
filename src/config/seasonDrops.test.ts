@@ -78,7 +78,7 @@ test("a migrated row exposes only the new modes in both API shapes", () => {
   const v = seasonFromRow({ mode: "festive", drops: { festive: { salePercent: 22 } } });
   const pub = publicSeason(v);
   assert.equal(pub.mode, "diwali");
-  assert.deepEqual(Object.keys(pub.drops).sort(), ["dandiya", "diwali", "halloween"]);
+  assert.deepEqual(Object.keys(pub.drops).sort(), ["dandiya", "diwali", "halloween", "wedding"]);
   assert.deepEqual(pub.sale, { enabled: true, percent: 22, slugs: ["happy-diwali"] });
   assert.equal(adminSeason(v).mode, "diwali");
 });
@@ -204,7 +204,7 @@ test("public shape: `sale` is the active mode's drop; valentine/off keep showing
   assert.deepEqual(d.sale, { enabled: true, percent: 30, slugs: ["dandiya-partner"] });
   assert.deepEqual(publicSeason(at("diwali")).sale, { enabled: true, percent: 30, slugs: ["happy-diwali"] });
   assert.deepEqual(d.drops.halloween, { enabled: true, percent: 49, slugs: ["happy-halloween", "happy-halloween-premium"] });
-  assert.deepEqual(Object.keys(d.drops).sort(), ["dandiya", "diwali", "halloween"]);
+  assert.deepEqual(Object.keys(d.drops).sort(), ["dandiya", "diwali", "halloween", "wedding"]);
   assert.equal(publicSeason(at("off")).sale.percent, 49);
 });
 
@@ -216,4 +216,109 @@ test("admin shape: flat fields for the active drop, plus every drop", () => {
   assert.deepEqual(a.drops.dandiya.saleSlugs, ["dandiya-partner"]);
   assert.deepEqual(a.drops.halloween.saleSlugs, ["happy-halloween", "happy-halloween-premium"]);
   assert.equal(a.updatedAt, null);
+});
+
+// ── the wedding season ───────────────────────────────────────────────────────
+
+const WEDDING_DEFAULT_SLUGS = [
+  "wedding-invitation",
+  "wedding-invitation-premium",
+  "royal-wedding-invitation",
+  "palace-door-wedding-invitation",
+  "garden-wedding-invitation",
+  "floral-wedding-invitation",
+  "lotus-wedding-invitation",
+  "reception",
+  "christian-wedding",
+  "christian-wedding-2",
+  "shaadi-card",
+];
+
+test("wedding is a season mode and a drop; its defaults ship with the sale OFF", () => {
+  assert.equal(defaultSeason().drops.wedding.saleEnabled, false);
+  assert.equal(defaultSeason().drops.wedding.salePercent, 20);
+  assert.deepEqual(defaultSeason().drops.wedding.saleSlugs, WEDDING_DEFAULT_SLUGS);
+  assert.deepEqual(validateSeasonPatch({ mode: "wedding" }), { ok: true, value: { mode: "wedding" } });
+  assert.deepEqual(validateSeasonPatch({ modeIndia: "wedding", modeAbroad: "diwali", split: true }), {
+    ok: true,
+    value: { split: true, modeIndia: "wedding", modeAbroad: "diwali" },
+  });
+  assert.equal(validateSeasonPatch({ drops: { wedding: { salePercent: 91 } } }).ok, false);
+  assert.equal(validateSeasonPatch({ drops: { wedding: { saleSlugs: [] } } }).ok, false);
+});
+
+test("stored rows from before the wedding drop (no drops.wedding) read the wedding defaults — no migration", () => {
+  // The prod-shaped flat row, and a per-drop row with only the three older drops.
+  for (const row of [
+    { key: "global", mode: "diwali", saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween"] },
+    {
+      mode: "diwali",
+      split: true,
+      modeIndia: "diwali",
+      modeAbroad: "halloween",
+      drops: {
+        halloween: { saleEnabled: true, salePercent: 49, saleSlugs: ["happy-halloween"] },
+        dandiya: { saleEnabled: false, salePercent: 30, saleSlugs: ["dandiya-partner"] },
+        diwali: { saleEnabled: true, salePercent: 30, saleSlugs: ["happy-diwali"] },
+      },
+    },
+  ]) {
+    const v = seasonFromRow(row);
+    assert.deepEqual(v.drops.wedding, { saleEnabled: false, salePercent: 20, saleSlugs: WEDDING_DEFAULT_SLUGS });
+    assert.equal(v.mode, "diwali");
+    // The older drops are exactly as stored.
+    assert.equal(v.drops.diwali.salePercent, 30);
+    assert.equal(v.drops.halloween.salePercent, 49);
+  }
+  // And a stored wedding drop is read as stored.
+  const w = seasonFromRow({ mode: "wedding", drops: { wedding: { saleEnabled: true, salePercent: 35, saleSlugs: ["Reception", "shaadi-card"] } } });
+  assert.equal(w.mode, "wedding");
+  assert.deepEqual(w.drops.wedding, { saleEnabled: true, salePercent: 35, saleSlugs: ["reception", "shaadi-card"] });
+});
+
+test("wedding mode: its sale applies only to its slugs and only when switched on", () => {
+  const off = at("wedding");
+  assert.equal(salePercentFor("royal-wedding-invitation", off), 0);
+  assert.equal(applySeasonSale(priced("royal-wedding-invitation", 179900), off).finalPricePaise, 179900);
+  const on = applySeasonPatch(at("wedding"), { drops: { wedding: { saleEnabled: true, salePercent: 25 } } });
+  assert.equal(salePercentFor("royal-wedding-invitation", on), 25);
+  assert.equal(salePercentFor("shaadi-card", on), 25);
+  const p = applySeasonSale(priced("wedding-invitation", 49900), on);
+  assert.equal(p.finalPricePaise, 37400);
+  assert.equal(p.mrpPaise, 49900);
+  // Other seasons' templates stay full price in wedding mode…
+  assert.equal(salePercentFor("happy-diwali", on), 0);
+  assert.equal(salePercentFor("dandiya-partner", on), 0);
+  assert.equal(salePercentFor("happy-halloween", on), 0);
+  // …and the wedding templates stay full price in every other mode, even with the wedding sale on.
+  for (const m of ["halloween", "dandiya", "diwali", "valentine", "off"] as const) {
+    assert.equal(salePercentFor("royal-wedding-invitation", { ...on, mode: m }), 0, m);
+  }
+});
+
+test("wedding mode: a hidden wedding template in the drop is reachable; out of season it is not", () => {
+  assert.deepEqual(dropSlugs(at("wedding")), WEDDING_DEFAULT_SLUGS);
+  assert.equal(isInDrop("palace-door-wedding-invitation", at("wedding")), true);
+  assert.equal(reachableFrom("palace-door-wedding-invitation", false, at("wedding")), true);
+  assert.equal(reachableFrom("happy-diwali", false, at("wedding")), false);
+  for (const m of ["halloween", "dandiya", "diwali", "valentine", "off"] as const) {
+    assert.equal(reachableFrom("palace-door-wedding-invitation", false, at(m)), false, m);
+  }
+  // India/abroad split: either side wearing wedding opens the drop for both.
+  const split: SeasonView = { ...defaultSeason(), split: true, modeIndia: "diwali", modeAbroad: "wedding" };
+  assert.equal(reachableFrom("royal-wedding-invitation", false, split), true);
+  assert.equal(reachableFrom("happy-diwali", false, split), true);
+});
+
+test("wedding public/admin shapes: the drop is listed and `sale` follows the wedding drop in wedding mode", () => {
+  const pub = publicSeason(at("wedding"));
+  assert.equal(pub.mode, "wedding");
+  assert.deepEqual(pub.sale, { enabled: false, percent: 20, slugs: WEDDING_DEFAULT_SLUGS });
+  assert.deepEqual(pub.drops.wedding, { enabled: false, percent: 20, slugs: WEDDING_DEFAULT_SLUGS });
+  const a = adminSeason(at("wedding"));
+  assert.equal(a.saleEnabled, false);
+  assert.deepEqual(a.drops.wedding.saleSlugs, WEDDING_DEFAULT_SLUGS);
+  // Switching to diwali keeps the wedding drop's edits.
+  const edited = applySeasonPatch(at("wedding"), { drops: { wedding: { salePercent: 33 } } });
+  assert.equal(applySeasonPatch(edited, { mode: "diwali" }).drops.wedding.salePercent, 33);
 });

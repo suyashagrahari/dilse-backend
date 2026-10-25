@@ -64,7 +64,7 @@ export const adminGetSeason = async (_req: Request, res: Response): Promise<void
 };
 
 /**
- * PUT /admin/super/season — { mode?, split?, modeIndia?, modeAbroad?, drops?: { halloween?|dandiya?|diwali?: { saleEnabled?, salePercent?, saleSlugs? } },
+ * PUT /admin/super/season — { mode?, split?, modeIndia?, modeAbroad?, drops?: { halloween?|dandiya?|diwali?|wedding?: { saleEnabled?, salePercent?, saleSlugs? } },
  * saleEnabled?, salePercent?, saleSlugs? } (flat fields edit one drop; see applySeasonPatch).
  */
 export const adminUpdateSeason = async (req: Request, res: Response): Promise<void> => {

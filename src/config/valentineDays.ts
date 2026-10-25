@@ -26,6 +26,11 @@ import hugDayPremium from "./premiumDays/happy-hug-day-premium";
 import kissDayPremium from "./premiumDays/happy-kiss-day-premium";
 import valentinesDayPremium from "./premiumDays/happy-valentines-day-premium";
 import halloweenPremium from "./premiumDays/happy-halloween-premium";
+// The wedding designs on Royal's limits — one file each in ./weddingDays.
+import palaceDoorWeddingDay from "./weddingDays/palace-door-wedding-invitation";
+import gardenWeddingDay from "./weddingDays/garden-wedding-invitation";
+import floralWeddingDay from "./weddingDays/floral-wedding-invitation";
+import lotusWeddingDay from "./weddingDays/lotus-wedding-invitation";
 
 /** The nine $2 templates. */
 export const BASE_DAY_SLUGS = [
@@ -63,6 +68,19 @@ export const BASE_DAY_SLUGS = [
   "happy-anniversary",
   // Anniversary ✦ Premium ("The Book of Us") — the flagship anniversary page on the engine.
   "anniversary-premium",
+  // Digital Bouquet ✦ Premium — the sender arranges a bouquet stem by stem; it blooms for them.
+  "digital-bouquet",
+  // Wedding Invitation (Classic, $5) — a wax-sealed envelope that opens to an elegant one-page invite.
+  "wedding-invitation",
+  // Wedding Invitation ✦ Premium — a scroll-told wedding website (story, every function, gallery, RSVP per function).
+  "wedding-invitation-premium",
+  // Royal Wedding Invitation 👑 — the $20 wedding tier (palace gates, 8 functions, 40 photos, RSVPs, blessings).
+  "royal-wedding-invitation",
+  // Four more wedding designs on Royal's limits (palace door, Mughal garden, pampas & peony, lotus temple).
+  "palace-door-wedding-invitation",
+  "garden-wedding-invitation",
+  "floral-wedding-invitation",
+  "lotus-wedding-invitation",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -157,6 +175,12 @@ export const VW_LIMITS = {
 } as const;
 
 const RUNAWAY_LINES = 28;
+
+/** Digital Bouquet: the sixteen flowers on the studio shelf (client DB_FLOWERS ids). */
+export const BOUQUET_FLOWERS = [
+  "rose-red", "rose-pink", "rose-white", "tulip", "sunflower", "peony", "lily", "daisy",
+  "lavender", "carnation", "orchid", "babys-breath", "cherry-blossom", "lotus", "marigold", "hydrangea",
+] as const;
 
 export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
   // ── 7 Feb ── hold to bloom, pluck to love ──────────────────────────────────
@@ -861,6 +885,390 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "passHint", kind: "text", max: 50 },
     ],
   },
+  // ── Digital Bouquet ✦ Premium ── the sender ARRANGES a bouquet in a little
+  //    studio (each stem: which flower, where, tilt, size, layer), picks the
+  //    greenery, the wrapping paper, the ribbon and bow and a few charms, and
+  //    writes a card. The recipient gets a delivery at the door, pulls the
+  //    ribbon, watches it bloom stem by stem in exactly that arrangement, taps
+  //    each flower for its meaning (+ the sender's own line), waters it, finds
+  //    the photos tucked among the petals, opens the card and answers with a
+  //    reaction (every reaction is a yes; which one lands in reactions.count). ─
+  "digital-bouquet": {
+    title: "Digital Bouquet",
+    maxPhotos: 6,
+    letterMax: 1500,
+    asksQuestion: true,
+    /** Plays its own song (client DB_TRACK, Perfect) unless the sender picks another. */
+    musicTrack: true,
+    gifSlots: ["b1-delivery", "b2-bloom", "b3-water", "b4-photos", "b5-letter", "b6-yes"],
+    extras: [
+      { key: "palette", kind: "enum", options: ["blushGarden", "peachSorbet", "lilacDream", "sageMorning"], default: "blushGarden" },
+      { key: "tone", kind: "enum", options: ["romantic", "sweet", "playful"], default: "romantic" },
+      /**
+       * The arrangement, one row per stem, in the studio's own coordinates:
+       * x/y = the bloom's centre on a 1000×1000 bouquet canvas (the tie point
+       * is bottom-centre), rot = degrees, scale = percent, z = layer. No text
+       * leaf, so every row is kept (capped at 15).
+       */
+      {
+        key: "stems",
+        kind: "objlist",
+        maxItems: 15,
+        minItems: 3,
+        item: [
+          {
+            key: "flower",
+            kind: "enum",
+            options: BOUQUET_FLOWERS,
+            default: "rose-red",
+          },
+          { key: "x", kind: "number", min: 0, max: 1000, default: 500 },
+          { key: "y", kind: "number", min: 0, max: 1000, default: 400 },
+          { key: "rot", kind: "number", min: -60, max: 60, default: 0 },
+          { key: "scale", kind: "number", min: 60, max: 150, default: 100 },
+          { key: "z", kind: "number", min: 0, max: 99, default: 0 },
+        ],
+      },
+      { key: "greenery", kind: "enum", options: ["mixed", "eucalyptus", "fern", "leafy", "none"], default: "mixed" },
+      { key: "wrap", kind: "enum", options: ["tissue", "kraft", "newspaper", "pearl"], default: "tissue" },
+      { key: "ribbon", kind: "enum", options: ["rose", "blush", "red", "gold", "lilac", "sage", "ivory"], default: "rose" },
+      { key: "bow", kind: "enum", options: ["bow", "knot", "twine"], default: "bow" },
+      /** Little charms tied to the bouquet: "heart" · "teddy" · "butterfly" (the client ignores anything else). */
+      { key: "charms", kind: "list", maxItems: 3, itemMax: 12 },
+      /** Written on the little gift tag on the ribbon. */
+      { key: "giftTag", kind: "text", max: 40 },
+      /** The courier's note on the delivery box at the door. */
+      { key: "deliveryLine", kind: "text", max: 70 },
+      /** The sender's own line per flower kind, shown under its meaning when they tap it. */
+      {
+        key: "flowerNotes",
+        kind: "objlist",
+        maxItems: 16,
+        item: [
+          {
+            key: "flower",
+            kind: "enum",
+            options: BOUQUET_FLOWERS,
+            default: "rose-red",
+          },
+          { key: "note", kind: "text", max: 80 },
+        ],
+      },
+      /** The card's handwriting. */
+      { key: "cardHand", kind: "enum", options: ["script", "hand", "serif"], default: "hand" },
+      /** The card's text size (s/m/l); each handwriting is normalised to it. */
+      { key: "cardSize", kind: "enum", options: ["s", "m", "l"], default: "m" },
+      { key: "question", kind: "text", max: 60 },
+      { key: "yesLine", kind: "text", max: 80 },
+    ],
+  },
+  // ── Wedding Invitation (Classic) · the Gulabi Jharokha ── a carved jharokha
+  //    window at pink dawn opens onto a blush-and-ivory invitation: names in
+  //    rose-gold script, the date + countdown, the invitation in English and
+  //    Hindi (letter + hindiMessage), the families, the story, up to five
+  //    functions with maps / dress codes, twelve photos (one pool: the portrait
+  //    and story chapters point into it by 1-based index, the rest is the
+  //    gallery), guest info, contacts, livestream, shagun, RSVP per function and
+  //    a blessings wall (weddingGuest routes, WEDDING_TIER_LIMITS). recipientName
+  //    = the bride, senderName = the groom, endLine = the closing line.
+  //    DATA COMPATIBILITY: pages published before the rebuild store only theme
+  //    (dark ids included) … maxGuests; every key after them is additive and the
+  //    switches that would change an old page (rsvpMeal, blessings, invocation)
+  //    default to false. Client mirror: _valentine/days/wedding-invitation.ts. ─
+  "wedding-invitation": {
+    title: "Wedding Invitation",
+    maxPhotos: 12,
+    letterMax: 900,
+    asksQuestion: false,
+    gifSlots: [],
+    extras: [
+      /** Every id stays valid (old pages may store a dark one); the client renders them on a light palette. */
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "blush" },
+      { key: "namesOrder", kind: "enum", options: ["bride", "groom"], default: "bride" },
+      /** "YYYY-MM-DD" — the big day (countdown). */
+      { key: "date", kind: "text", max: 10 },
+      /** "HH:mm" — the muhurat / start time. */
+      { key: "time", kind: "text", max: 5 },
+      { key: "brideFamily", kind: "text", max: 120 },
+      { key: "groomFamily", kind: "text", max: 120 },
+      /** The functions (≤ 5); every leaf is text, `id` is the stable RSVP key. */
+      {
+        key: "events",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "id", kind: "text", max: 40 },
+          { key: "title", kind: "text", max: 40 },
+          { key: "date", kind: "text", max: 10 },
+          { key: "time", kind: "text", max: 5 },
+          { key: "endTime", kind: "text", max: 5 },
+          { key: "venue", kind: "text", max: 80 },
+          { key: "address", kind: "text", max: 140 },
+          { key: "mapUrl", kind: "text", max: 400 },
+          { key: "dressCode", kind: "text", max: 60 },
+          { key: "dressColor", kind: "text", max: 9 },
+          { key: "note", kind: "text", max: 200 },
+        ],
+      },
+      { key: "rsvp", kind: "bool", default: true },
+      { key: "rsvpBy", kind: "text", max: 10 },
+      { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+      // ── added in the jharokha rebuild ──
+      /** Which language the page opens in (guests can switch). */
+      { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
+      { key: "hindiMessage", kind: "longtext", max: 700 },
+      { key: "brideNote", kind: "text", max: 100 },
+      { key: "groomNote", kind: "text", max: 100 },
+      /** "With the blessings of" — grandparents. */
+      { key: "blessingsOf", kind: "text", max: 160 },
+      /** The couple's portrait (1-based index into photos; 0 = the illustrated couple). */
+      { key: "couplePhoto", kind: "number", min: 0, max: 12, default: 0 },
+      { key: "muhurat", kind: "text", max: 60 },
+      { key: "hashtag", kind: "text", max: 40 },
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 60 },
+          { key: "line", kind: "text", max: 240 },
+          { key: "photo", kind: "number", min: 0, max: 12, default: 0 },
+        ],
+      },
+      /** Good to know: "Heading: text" lines. */
+      { key: "things", kind: "list", maxItems: 3, itemMax: 180 },
+      { key: "gettingThere", kind: "longtext", max: 500 },
+      /** Family members guests can call: tap-to-call + WhatsApp (the client validates the phone). */
+      {
+        key: "contacts",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "name", kind: "text", max: 40 },
+          { key: "relation", kind: "text", max: 40 },
+          { key: "phone", kind: "text", max: 16 },
+        ],
+      },
+      /** Optional shagun by UPI (off when empty): a upi:// link + a copyable id; no payment is handled. */
+      { key: "upiId", kind: "text", max: 60 },
+      { key: "upiName", kind: "text", max: 60 },
+      /** Optional livestream (https only, checked by the client). */
+      { key: "liveUrl", kind: "text", max: 300 },
+      /** A YouTube link for the pre-wedding film (the client extracts the id). */
+      { key: "videoUrl", kind: "text", max: 200 },
+      /** Read by weddingGuest.controller: the RSVP accepts a meal choice only when true. */
+      { key: "rsvpMeal", kind: "bool", default: false },
+      { key: "blessings", kind: "bool", default: false },
+      /** The gold Shri Ganesh on the invitation. */
+      { key: "invocation", kind: "bool", default: false },
+    ],
+  },
+  // ── Wedding Invitation ✦ Premium ── "The Lake Terrace" (rebuilt 2026-10):
+  //    gold French doors swing inward onto a watercolour lake terrace, then
+  //    the couple, the invitation in English + Hindi, families, a flip
+  //    countdown, "our story" moments, up to five functions (dress code +
+  //    colour, map, timings), a 20-photo masonry, good-to-know notes, family
+  //    contacts, an RSVP where guests tick each function, a blessings wall,
+  //    optional shagun (UPI) and a livestream (the wedding kit's own routes:
+  //    config/weddingShared.ts). recipientName = the bride, senderName = the
+  //    groom, letter = the invitation, endLine = the closing thank-you.
+  //    photos[0] is the cover. No yes/no question.
+  //    Pages published before the rebuild keep every stored key below as it
+  //    was; the keys after `rsvpMeal` are new and optional. ─
+  "wedding-invitation-premium": {
+    title: "Wedding Invitation ✦ Premium",
+    maxPhotos: 20,
+    letterMax: 1200,
+    asksQuestion: false,
+    gifSlots: [],
+    extras: [
+      /** All six ids stay valid (old pages); the editor offers the three light ones and the page renders dark ids light. */
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "powder" },
+      /** Whose name is printed first. */
+      { key: "order", kind: "enum", options: ["bride", "groom"], default: "bride" },
+      /** The blessing ornament over the invitation (a Christian or court wedding picks rings or none). */
+      { key: "motif", kind: "enum", options: ["ganesha", "lotus", "rings", "none"], default: "ganesha" },
+      /** Offer the guests an EN / Hindi switch (false = an English-only invitation). */
+      { key: "hindi", kind: "bool", default: true },
+      /** The main day, "YYYY-MM-DD" + "HH:mm" (countdown + calendar). */
+      { key: "date", kind: "text", max: 10 },
+      { key: "time", kind: "text", max: 5 },
+      { key: "city", kind: "text", max: 40 },
+      { key: "hashtag", kind: "text", max: 40 },
+      { key: "brideParents", kind: "text", max: 90 },
+      { key: "brideNote", kind: "text", max: 90 },
+      { key: "groomParents", kind: "text", max: 90 },
+      { key: "groomNote", kind: "text", max: 90 },
+      {
+        key: "events",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "id", kind: "text", max: 40 },
+          { key: "title", kind: "text", max: 30 },
+          { key: "date", kind: "text", max: 10 },
+          { key: "time", kind: "text", max: 5 },
+          { key: "endTime", kind: "text", max: 5 },
+          { key: "venue", kind: "text", max: 80 },
+          { key: "address", kind: "text", max: 140 },
+          { key: "mapUrl", kind: "text", max: 300 },
+          { key: "dressCode", kind: "text", max: 50 },
+          { key: "dressColor", kind: "text", max: 7 },
+          { key: "note", kind: "text", max: 220 },
+        ],
+      },
+      /** "Our story": up to five moments; photo = 1-based index into photos (0 = none). */
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 5,
+        item: [
+          { key: "when", kind: "text", max: 30 },
+          { key: "title", kind: "text", max: 50 },
+          { key: "text", kind: "longtext", max: 320 },
+          { key: "photo", kind: "number", min: 0, max: 20, default: 0 },
+        ],
+      },
+      /** Good to know: dress code, parking, stay, contacts. */
+      {
+        key: "faqs",
+        kind: "objlist",
+        maxItems: 3,
+        item: [
+          { key: "title", kind: "text", max: 40 },
+          { key: "text", kind: "text", max: 220 },
+        ],
+      },
+      { key: "rsvpBy", kind: "text", max: 10 },
+      { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+      { key: "rsvpMeal", kind: "bool", default: false },
+      // ── Added in the rebuild: all optional ──
+      /** Which language the page opens in (guests can switch when `hindi` is on). */
+      { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
+      { key: "hindiMessage", kind: "longtext", max: 700 },
+      /** "With the blessings of" — grandparents. */
+      { key: "blessingsOf", kind: "text", max: 160 },
+      { key: "muhurat", kind: "text", max: 60 },
+      { key: "gettingThere", kind: "longtext", max: 500 },
+      /** A YouTube link for the pre-wedding film (the client extracts the id). */
+      { key: "videoUrl", kind: "text", max: 200 },
+      /** Family members guests can call or WhatsApp (the client renders only valid phone numbers). */
+      {
+        key: "contacts",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "name", kind: "text", max: 40 },
+          { key: "relation", kind: "text", max: 40 },
+          { key: "phone", kind: "text", max: 20 },
+        ],
+      },
+      /** Shagun by UPI, off unless the couple adds an id (the client validates the VPA shape). */
+      { key: "upiId", kind: "text", max: 60 },
+      { key: "upiName", kind: "text", max: 60 },
+      /** A YouTube / Zoom livestream link (https only, enforced on the client). */
+      { key: "liveUrl", kind: "text", max: 300 },
+      /** The blessings wall (the tier has it since the rebuild; the couple can switch it off). */
+      { key: "blessings", kind: "bool", default: true },
+    ],
+  },
+  // ── Royal Wedding Invitation 👑 ($20 wedding tier) ── palace gates swing
+  //    open (shehnai), the crest stamps in gold foil, then one royal scroll:
+  //    the invitation in English + Hindi, families, countdown, story chapters,
+  //    up to eight functions (dress-code swatch, map, calendar), a film, a
+  //    40-photo masonry, good to know, RSVP per function (config/weddingShared
+  //    + weddingGuest routes), a blessings wall and a diya-lantern finale.
+  //    recipientName = the bride, senderName = the groom, letter = the
+  //    English invitation, photos = one pool of 40 (story chapters and family
+  //    cards point into it by 1-based index). No question is asked. ─────────
+  "royal-wedding-invitation": {
+    title: "Royal Wedding Invitation",
+    maxPhotos: 40,
+    letterMax: 1500,
+    asksQuestion: false,
+    gifSlots: [],
+    extras: [
+      /** Light themes are offered; the dark ids stay valid for pages published before the 2026-10 redesign. */
+      { key: "theme", kind: "enum", options: ["blush", "champagne", "powder", "maroon", "noir", "emerald"], default: "champagne" },
+      /** Which language the page opens in (guests can switch). */
+      { key: "lang", kind: "enum", options: ["en", "hi"], default: "en" },
+      { key: "nameOrder", kind: "enum", options: ["bride", "groom"], default: "bride" },
+      { key: "hindiMessage", kind: "longtext", max: 700 },
+      { key: "brideFamily", kind: "text", max: 120 },
+      { key: "groomFamily", kind: "text", max: 120 },
+      { key: "brideNote", kind: "text", max: 100 },
+      { key: "groomNote", kind: "text", max: 100 },
+      /** "With the blessings of" — grandparents. */
+      { key: "blessingsOf", kind: "text", max: 160 },
+      /** 1-based index into photos; 0 = none. */
+      { key: "bridePhoto", kind: "number", min: 0, max: 40, default: 0 },
+      { key: "groomPhoto", kind: "number", min: 0, max: 40, default: 0 },
+      /** The couple's portrait in the courtyard (1-based index into photos; 0 = the illustrated couple). Added 2026-10. */
+      { key: "couplePhoto", kind: "number", min: 0, max: 40, default: 0 },
+      { key: "muhurat", kind: "text", max: 60 },
+      { key: "hashtag", kind: "text", max: 40 },
+      /** The functions; `id` is a short stable slug the guests' RSVPs refer to. All text. */
+      {
+        key: "events",
+        kind: "objlist",
+        maxItems: 8,
+        minItems: 1,
+        item: [
+          { key: "id", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 40 },
+          { key: "date", kind: "text", max: 10 },
+          { key: "time", kind: "text", max: 5 },
+          { key: "endTime", kind: "text", max: 5 },
+          { key: "venue", kind: "text", max: 80 },
+          { key: "address", kind: "text", max: 140 },
+          { key: "mapUrl", kind: "text", max: 400 },
+          { key: "dressCode", kind: "text", max: 60 },
+          { key: "dressColor", kind: "text", max: 7 },
+          { key: "note", kind: "text", max: 200 },
+        ],
+      },
+      {
+        key: "story",
+        kind: "objlist",
+        maxItems: 8,
+        item: [
+          { key: "when", kind: "text", max: 24 },
+          { key: "title", kind: "text", max: 60 },
+          { key: "line", kind: "text", max: 240 },
+          { key: "photo", kind: "number", min: 0, max: 40, default: 0 },
+        ],
+      },
+      /** Good to know: "Heading: text" lines. */
+      { key: "things", kind: "list", maxItems: 6, itemMax: 180 },
+      { key: "gettingThere", kind: "longtext", max: 500 },
+      /** Family members guests can call: tap-to-call + WhatsApp (the client validates the phone). Added 2026-10. */
+      {
+        key: "contacts",
+        kind: "objlist",
+        maxItems: 4,
+        item: [
+          { key: "name", kind: "text", max: 40 },
+          { key: "relation", kind: "text", max: 40 },
+          { key: "phone", kind: "text", max: 16 },
+        ],
+      },
+      /** Optional shagun by UPI (off when empty). Only shown as a upi:// link and a copyable id; no payment is handled. */
+      { key: "upiId", kind: "text", max: 60 },
+      { key: "upiName", kind: "text", max: 60 },
+      /** Optional livestream (https only, checked by the client). */
+      { key: "liveUrl", kind: "text", max: 300 },
+      /** A YouTube link for the pre-wedding film (the client extracts the id). */
+      { key: "videoUrl", kind: "text", max: 200 },
+      { key: "rsvpBy", kind: "text", max: 10 },
+      { key: "maxGuests", kind: "number", min: 1, max: 10, default: 4 },
+      /** Read by weddingGuest.controller: the RSVP accepts a meal choice only when true. */
+      { key: "rsvpMeal", kind: "bool", default: true },
+      { key: "blessings", kind: "bool", default: true },
+      /** Ganesha invocation before the gates open (false = the royal crest). */
+      { key: "invocation", kind: "bool", default: true },
+    ],
+  },
   // ── Diwali ── Happy Diwali: light the diya at their door, a row of wish
   //    diyas, a rangoli, a sparkler, lantern photos, fireworks + the letter,
   //    a mithai box and a Shubh Deepavali card. No question is asked. ───────
@@ -883,6 +1291,12 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
       { key: "blessing", kind: "text", max: 120 },
     ],
   },
+
+  // ── The wedding designs on Royal's limits — one file each in ./weddingDays ─
+  "palace-door-wedding-invitation": palaceDoorWeddingDay,
+  "garden-wedding-invitation": gardenWeddingDay,
+  "floral-wedding-invitation": floralWeddingDay,
+  "lotus-wedding-invitation": lotusWeddingDay,
 
   // ── The ultra-premium twins — one file each in ./premiumDays ──────────────
   "happy-rose-day-premium": roseDayPremium,

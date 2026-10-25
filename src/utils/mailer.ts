@@ -452,6 +452,8 @@ export async function sendDateRsvpEmail(opts: {
 }
 
 /** Happy Birthday's "when?" answers, in the order the page offers them (client HB_PLANS). */
+/** Digital Bouquet: the recipient's reaction (reactions.count 1–4), as the email quotes it. */
+const BOUQUET_REACTIONS = ["I love them 💗", "I'm crying happy tears 🥹", "Sending a kiss back 😘", "Come here, I need a hug 🤗"];
 const BIRTHDAY_PLANS = ["tonight 🌙", "this weekend 🗓️", "whenever you plan it — surprise them ✨"] as const;
 
 /**
@@ -509,6 +511,9 @@ export async function sendValentineAnswerEmail(opts: {
   const anniversary = opts.slug === "happy-anniversary";
   // The anniversary book: yes-only, answered by dragging a heart into the sender's.
   const anni = opts.slug === "anniversary-premium";
+  // The bouquet: every answer is a happy reaction; which one is reactions.count (1–4).
+  const bouquet = opts.slug === "digital-bouquet";
+  const bouquetReaction = bouquet ? BOUQUET_REACTIONS[(opts.count ?? 0) - 1] ?? BOUQUET_REACTIONS[0] : "";
   const dodges = anniversary || anni
     ? ""
     : missPrem
@@ -549,7 +554,9 @@ export async function sendValentineAnswerEmail(opts: {
       ? ` After chasing the "No" button ${times(opts.noDodges)} 😄`
       : " First try, no hesitation.";
   const no = opts.answer === "no";
-  const subject = anniversary
+  const subject = bouquet
+    ? `💐 ${who} opened your bouquet: “${bouquetReaction}”`
+    : anniversary
     ? `💗 ${who} said yes to another year of you two`
     : anni
     ? `💞 ${who} said yes — happy anniversary`
@@ -578,8 +585,10 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${who} answered your ${opts.dayName} page`
     : halloween ? `👻 ${who} said YES to being your boo` : dandiya ? `🪔 ${who} said YES to being your Dandiya partner` : `💍 ${who} said YES`;
-  const head = anniversary ? `${who} said yes to another year 💗` : anni ? `${who} said yes 💞` : missPrem ? (no ? `Later, but soon 🌙` : `${who} said yes 📞🩵`) : birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorryPremium ? (no ? `${who} needs a little time 🌦️` : `${who} forgave you 🌈`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
-  const body = anniversary
+  const head = bouquet ? `${who} loved your flowers 💐` : anniversary ? `${who} said yes to another year 💗` : anni ? `${who} said yes 💞` : missPrem ? (no ? `Later, but soon 🌙` : `${who} said yes 📞🩵`) : birthday ? `${who} said YES 🥳` : mine ? (no ? `${who} is thinking about it 🤍` : `${who} said YES 💍`) : missYou ? (no ? `Not tonight, but they miss you too 🌙` : `${who} said yes 📞💗`) : sorryPremium ? (no ? `${who} needs a little time 🌦️` : `${who} forgave you 🌈`) : sorry ? (no ? `${who} needs a little time 🤍` : `${who} forgave you 💗`) : no ? `${who} said no, kindly 💔` : halloween ? `${who} said YES 🎃` : dandiya ? `${who} said YES 💃` : `${who} said YES 💘`;
+  const body = bouquet
+    ? `${who} untied the ribbon, watched your bouquet bloom, read your card${question ? ` and answered “${question}”` : ""} with: ${bouquetReaction}`
+    : anniversary
     ? `${question ? `“${question}” — ` : ""}${who} walked through your whole little museum and said yes to another year. Happy anniversary, you two 🖼️💗`
     : anni
     ? `${question ? `“${question}” — ` : ""}${who} read your whole book — every chapter, every promise — and put their heart right next to yours. Happy anniversary 💗`
@@ -608,7 +617,7 @@ export async function sendValentineAnswerEmail(opts: {
     : no
     ? `${question ? `“${question}” — ` : ""}${who} opened your ${opts.dayName} page, saw everything you made, and chose “no” this time. It takes courage to ask, and your page was still a gift. 🪔`
     : `${question ? `“${question}” — ` : ""}${who} answered yes on your ${opts.dayName} page.${dodges}`;
-  const band = anniversary ? "linear-gradient(115deg,#ae3558,#d9577a,#f3d9a4)" : missPrem ? "linear-gradient(115deg,#7fa8f5,#ec5f9c,#ffd9ea)" : birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : garden ? "linear-gradient(115deg,#a63d58,#d45e78,#ffd3a6)" : mine ? "linear-gradient(115deg,#9a3150,#e0637f,#e2a98f)" : missYou ? "linear-gradient(115deg,#1a1f4b,#5b3fb0,#ff7eae)" : sorryPremium ? "linear-gradient(115deg,#b5365a,#f4a7bb,#9ccbf2)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
+  const band = bouquet ? "linear-gradient(115deg,#c2406b,#f29bb6,#ffe3c2)" : anniversary ? "linear-gradient(115deg,#ae3558,#d9577a,#f3d9a4)" : missPrem ? "linear-gradient(115deg,#7fa8f5,#ec5f9c,#ffd9ea)" : birthday ? "linear-gradient(115deg,#c93a63,#ee5583,#ffc94d)" : garden ? "linear-gradient(115deg,#a63d58,#d45e78,#ffd3a6)" : mine ? "linear-gradient(115deg,#9a3150,#e0637f,#e2a98f)" : missYou ? "linear-gradient(115deg,#1a1f4b,#5b3fb0,#ff7eae)" : sorryPremium ? "linear-gradient(115deg,#b5365a,#f4a7bb,#9ccbf2)" : sorry ? "linear-gradient(115deg,#d9466e,#ff8fab,#ffd3e2)" : halloween ? "linear-gradient(115deg,#3a2257,#b84e14,#ff8a3d)" : "linear-gradient(115deg,#7a1035,#d7263d,#e6c27a)";
   const pageBg = halloween ? "#17122b" : "#1e0f24";
   const cardBg = halloween ? "#251842" : "#2a1240";
   const button = halloween ? "#ff8a3d" : "#f6e3b4";
@@ -717,6 +726,195 @@ export async function sendValentineReplyEmail(opts: {
     });
   } catch (err) {
     console.error("[VALENTINE REPLY] Failed to send email:", err);
+  }
+}
+
+// ─── Wedding RSVPs (config/weddingShared, controllers/weddingGuest) ──────────
+//
+// One email per RSVP while a page is quiet; a digest once an hour when more
+// than RSVP_MAIL_BURST land in an hour (the controller decides — mailPlan).
+// Both carry the running totals. Everything a guest typed is HTML-escaped and
+// names reaching the subject lose control characters.
+
+interface WeddingRsvpMailRow {
+  guestName: string;
+  attending: "yes" | "no" | "maybe";
+  guests: number;
+  events: string[];
+  meal: string | null;
+  message: string;
+  phone?: string;
+}
+interface WeddingTotalsMail {
+  responses: number;
+  attending: number;
+  maybe: number;
+  declined: number;
+  heads: number;
+  perEvent: Record<string, number>;
+}
+
+const wOneLine = (s: string, max = 60) =>
+  (s || "").replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+const wEsc = (s: string) => escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const wCouple = (a: string, b: string) => [wOneLine(a), wOneLine(b)].filter(Boolean).join(" & ") || "your wedding";
+
+function weddingTotalsLines(t: WeddingTotalsMail, labels: Record<string, string>): string[] {
+  const lines = [
+    `${t.heads} guest${t.heads === 1 ? "" : "s"} coming · ${t.attending} yes · ${t.maybe} maybe · ${t.declined} can't make it (${t.responses} responses)`,
+  ];
+  for (const id of Object.keys(labels)) if (t.perEvent[id]) lines.push(`${labels[id]}: ${t.perEvent[id]}`);
+  return lines;
+}
+
+function weddingRsvpLine(r: WeddingRsvpMailRow, labels: Record<string, string>): string {
+  const who = wOneLine(r.guestName) || "A guest";
+  const party = Math.max(1, Number(r.guests) || 1);
+  const ev = r.events.map((e) => labels[e] || e).join(", ");
+  if (r.attending === "no") return `${who} can't make it`;
+  const verb = r.attending === "maybe" ? "might come" : "is coming";
+  return `${who} ${verb}${party > 1 ? ` (${party} guests)` : ""}${ev ? ` — ${ev}` : ""}${r.meal ? ` · ${r.meal}` : ""}`;
+}
+
+function weddingMailShell(o: { eyebrow: string; head: string; bodyHtml: string; link: string; button: string }): string {
+  return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#2a0d14;font-family:Georgia,'Times New Roman',serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#2a0d14;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#fffaf0;border-radius:18px;border:1px solid #d9b46a;overflow:hidden;max-width:520px;width:100%;">
+        <tr><td style="background:linear-gradient(115deg,#6e1423,#9b2335,#c9a24a);padding:28px 30px;text-align:center;">
+          <p style="margin:0;color:#f7e7c1;font-size:11px;letter-spacing:.28em;font-weight:700;text-transform:uppercase;font-family:'Segoe UI',Arial,sans-serif;">${wEsc(o.eyebrow)}</p>
+          <p style="margin:10px 0 0;color:#fff;font-size:26px;font-weight:600;">${wEsc(o.head)}</p>
+        </td></tr>
+        <tr><td style="padding:26px 30px 30px;color:#3a1a12;">
+          ${o.bodyHtml}
+          <p style="margin:24px 0 0;text-align:center;"><a href="${wEsc(o.link)}" style="display:inline-block;background:#6e1423;color:#f7e7c1;font-weight:700;font-size:15px;text-decoration:none;padding:13px 26px;border-radius:999px;font-family:'Segoe UI',Arial,sans-serif;">${wEsc(o.button)}</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+}
+
+const totalsHtml = (lines: string[]) =>
+  `<div style="margin:18px 0 0;padding:14px 16px;border-radius:12px;background:#f6ecd8;font-family:'Segoe UI',Arial,sans-serif;font-size:13.5px;line-height:1.7;color:#5a3d22;"><b style="letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#8a6420;">Running total</b><br />${lines
+    .map(wEsc)
+    .join("<br />")}</div>`;
+
+/** One guest's RSVP (or their edit of it). */
+export async function sendWeddingRsvpEmail(opts: {
+  to: string;
+  coupleA: string;
+  coupleB: string;
+  rsvp: WeddingRsvpMailRow;
+  updated?: boolean;
+  totals: WeddingTotalsMail;
+  eventLabels: Record<string, string>;
+  link: string;
+}): Promise<void> {
+  const couple = wCouple(opts.coupleA, opts.coupleB);
+  const r = opts.rsvp;
+  const who = wOneLine(r.guestName) || "A guest";
+  const line = weddingRsvpLine(r, opts.eventLabels);
+  const subject = `${r.attending === "yes" ? "💍 " : ""}${opts.updated ? `${who} changed their RSVP: ` : ""}${line}`.slice(0, 140);
+  const head = r.attending === "yes" ? `${who} will be there` : r.attending === "maybe" ? `${who} might come` : `${who} sends regrets`;
+  const message = (r.message || "").replace(/\r\n?/g, "\n").slice(0, 300);
+  const phone = wOneLine(r.phone || "", 20);
+  const totals = weddingTotalsLines(opts.totals, opts.eventLabels);
+  const bodyHtml = [
+    `<p style="margin:0;font-size:16px;line-height:1.7;text-align:center;">${wEsc(opts.updated ? `Updated: ${line}.` : `${line}.`)}</p>`,
+    phone ? `<p style="margin:10px 0 0;font-size:14px;color:#7a5a3a;text-align:center;font-family:'Segoe UI',Arial,sans-serif;">Phone: ${wEsc(phone)}</p>` : "",
+    message
+      ? `<p style="margin:16px 0 0;padding:16px 18px;border-radius:12px;background:#fbf3e3;font-size:16px;line-height:1.7;font-style:italic;word-break:break-word;">“${wEsc(message).replace(/\n/g, "<br />")}”</p>`
+      : "",
+    totalsHtml(totals),
+  ].join("");
+
+  if (!resend) {
+    console.log(`\n[WEDDING RSVP — no RESEND_API_KEY] To: ${opts.to} | ${subject} | ${totals.join(" / ")}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${head}\n\n${line}${phone ? `\nPhone: ${phone}` : ""}${message ? `\n\n“${message}”` : ""}\n\nRunning total\n${totals.join("\n")}\n\nSee every RSVP: ${opts.link}\n\n— SubhSandesh`,
+      html: weddingMailShell({ eyebrow: `RSVP · ${couple}`, head, bodyHtml, link: opts.link, button: "See every RSVP" }),
+    });
+  } catch (err) {
+    console.error("[WEDDING RSVP] Failed to send email:", err);
+  }
+}
+
+/** Several RSVPs at once — sent instead of single mails during a burst. */
+export async function sendWeddingRsvpDigestEmail(opts: {
+  to: string;
+  coupleA: string;
+  coupleB: string;
+  rsvps: WeddingRsvpMailRow[];
+  totals: WeddingTotalsMail;
+  eventLabels: Record<string, string>;
+  link: string;
+}): Promise<void> {
+  const couple = wCouple(opts.coupleA, opts.coupleB);
+  const n = opts.rsvps.length;
+  const subject = `💌 ${n} new RSVP${n === 1 ? "" : "s"} for ${couple} — ${opts.totals.heads} guests so far`;
+  const head = `${n} new RSVP${n === 1 ? "" : "s"}`;
+  const rows = opts.rsvps.slice(0, 60).map((r) => weddingRsvpLine(r, opts.eventLabels));
+  const more = n > rows.length ? `…and ${n - rows.length} more on your page.` : "";
+  const totals = weddingTotalsLines(opts.totals, opts.eventLabels);
+  const bodyHtml = [
+    `<p style="margin:0 0 10px;font-size:15px;line-height:1.6;text-align:center;">Guests are answering quickly — here they are together.</p>`,
+    `<ul style="margin:0;padding:0 0 0 18px;font-size:15px;line-height:1.75;">${rows.map((l) => `<li>${wEsc(l)}</li>`).join("")}</ul>`,
+    more ? `<p style="margin:8px 0 0;font-size:14px;color:#7a5a3a;">${wEsc(more)}</p>` : "",
+    totalsHtml(totals),
+  ].join("");
+
+  if (!resend) {
+    console.log(`\n[WEDDING RSVP DIGEST — no RESEND_API_KEY] To: ${opts.to} | ${subject}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${head}\n\n${rows.join("\n")}${more ? `\n${more}` : ""}\n\nRunning total\n${totals.join("\n")}\n\nSee every RSVP: ${opts.link}\n\n— SubhSandesh`,
+      html: weddingMailShell({ eyebrow: `RSVPs · ${couple}`, head, bodyHtml, link: opts.link, button: "See every RSVP" }),
+    });
+  } catch (err) {
+    console.error("[WEDDING RSVP DIGEST] Failed to send email:", err);
+  }
+}
+
+/** A guest's blessing from the wall (the Royal tier) — one mail each, so the couple keeps them all. */
+export async function sendWeddingBlessingEmail(opts: { to: string; coupleA: string; coupleB: string; name: string; message: string; link: string }): Promise<void> {
+  const couple = wCouple(opts.coupleA, opts.coupleB);
+  const who = wOneLine(opts.name) || "A guest";
+  const message = (opts.message || "").replace(/\r\n?/g, "\n").slice(0, 300);
+  const subject = `A blessing from ${who} 🙏`.slice(0, 140);
+  const head = `${who} left you a blessing`;
+  const bodyHtml = `<p style="margin:0;padding:16px 18px;border-radius:12px;background:#fbf3e3;font-size:17px;line-height:1.7;font-style:italic;word-break:break-word;text-align:center;">“${wEsc(message).replace(/\n/g, "<br />")}”</p>`;
+  if (!resend) {
+    console.log(`\n[WEDDING BLESSING — no RESEND_API_KEY] To: ${opts.to} | ${subject} | ${message}\n`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: "SubhSandesh <love@subhsandesh.in>",
+      to: [opts.to],
+      replyTo: "support@subhsandesh.in",
+      subject,
+      text: `${who} left a blessing for you: “${message}”\n\nSee every blessing: ${opts.link}\n\n— SubhSandesh`,
+      html: weddingMailShell({ eyebrow: `Blessings · ${couple}`, head, bodyHtml, link: opts.link, button: "See every blessing" }),
+    });
+  } catch (err) {
+    console.error("[WEDDING BLESSING] Failed to send email:", err);
   }
 }
 

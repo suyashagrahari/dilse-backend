@@ -9,6 +9,46 @@ export interface IReceptionBlessing {
   createdAt: Date;
 }
 
+// ── Added 2026-10 (light ballroom rebuild). Every one is optional with a default,
+// so a page saved before it still loads, renders and re-saves unchanged. ──────
+
+/** One part of the evening (reception, cocktail, after-party). `id` is stable: RSVPs refer to it. */
+export interface IReceptionEvent {
+  id: string;
+  title: string;
+  /** "2026-03-15" (local date at the venue). */
+  date: string;
+  /** "19:00" 24h; "" = to be announced. */
+  time: string;
+  endTime: string;
+  venue: string;
+  address: string;
+  mapUrl: string;
+  dressCode: string;
+  dressColor: string;
+  note: string;
+}
+
+export interface IReceptionChapter {
+  when: string;
+  title: string;
+  line: string;
+  photo: string;
+}
+
+export interface IReceptionContact {
+  name: string;
+  relation: string;
+  phone: string;
+}
+
+export interface IReceptionMusic {
+  /** "" = a page from before this field: the template's own reception track. */
+  mode: string;
+  youtubeId: string;
+  start: number;
+}
+
 export interface IReceptionPage extends Document {
   userId: mongoose.Types.ObjectId;
   shareId: string;
@@ -26,7 +66,10 @@ export interface IReceptionPage extends Document {
     role: string;
     description: string;
     photo: string;
-    tags: { emoji: string; label: string }[];
+      tags: { emoji: string; label: string }[];
+    cropX?: number;
+    cropY?: number;
+    scale?: number;
   };
   groom: {
     name: string;
@@ -34,9 +77,43 @@ export interface IReceptionPage extends Document {
     description: string;
     photo: string;
     tags: { emoji: string; label: string }[];
+    cropX?: number;
+    cropY?: number;
+    scale?: number;
   };
   families: { bride: string; groom: string };
-  galleryImages: { src: string; alt: string; span: string; category: string }[];
+  galleryImages: {
+    src: string;
+    alt: string;
+    span: string;
+    category: string;
+    caption?: string;
+    cropX?: number;
+    cropY?: number;
+    scale?: number;
+    w?: number;
+    h?: number;
+  }[];
+  events: IReceptionEvent[];
+  story: IReceptionChapter[];
+  contacts: IReceptionContact[];
+  things: { head: string; text: string }[];
+  music: IReceptionMusic;
+  theme: string;
+  lang: string;
+  invitation: string;
+  hindiMessage: string;
+  blessingsOf: string;
+  hashtag: string;
+  closingLine: string;
+  gettingThere: string;
+  videoUrl: string;
+  liveUrl: string;
+  upiId: string;
+  upiName: string;
+  rsvpBy: string;
+  maxGuests: number;
+  rsvpMeal: boolean;
   blessings: IReceptionBlessing[];
   sharePhoto: string;
   password: string;
@@ -55,7 +132,40 @@ const personInfoSchema = new Schema(
     description: { type: String, default: "", trim: true },
     photo: { type: String, default: "" },
     tags: { type: [{ emoji: String, label: String }], default: [] },
+    // Portrait framing (focal point % + zoom 100–300). Absent on older pages = centred.
+    cropX: { type: Number },
+    cropY: { type: Number },
+    scale: { type: Number },
   },
+  { _id: false }
+);
+
+const s = (max: number, def = "") => ({ type: String, default: def, trim: true, maxlength: max });
+
+const receptionEventSchema = new Schema<IReceptionEvent>(
+  {
+    id: s(40),
+    title: s(60),
+    date: s(10),
+    time: s(5),
+    endTime: s(5),
+    venue: s(120),
+    address: s(200),
+    mapUrl: s(500),
+    dressCode: s(80),
+    dressColor: s(7),
+    note: s(300),
+  },
+  { _id: false }
+);
+
+const receptionChapterSchema = new Schema<IReceptionChapter>(
+  { when: s(40), title: s(80), line: s(400), photo: { type: String, default: "" } },
+  { _id: false }
+);
+
+const receptionContactSchema = new Schema<IReceptionContact>(
+  { name: s(60), relation: s(60), phone: s(24) },
   { _id: false }
 );
 
@@ -94,9 +204,48 @@ const receptionPageSchema = new Schema<IReceptionPage>(
       default: { bride: "", groom: "" },
     },
     galleryImages: {
-      type: [{ src: String, alt: String, span: String, category: String }],
+      type: [
+        {
+          src: String,
+          alt: String,
+          span: String,
+          category: String,
+          caption: String,
+          cropX: Number,
+          cropY: Number,
+          scale: Number,
+          w: Number,
+          h: Number,
+        },
+      ],
       default: [],
     },
+    events: { type: [receptionEventSchema], default: [] },
+    story: { type: [receptionChapterSchema], default: [] },
+    contacts: { type: [receptionContactSchema], default: [] },
+    things: { type: [{ _id: false, head: s(60), text: s(300) }], default: [] },
+    music: {
+      type: new Schema<IReceptionMusic>(
+        { mode: s(10), youtubeId: s(11), start: { type: Number, default: 0, min: 0, max: 600 } },
+        { _id: false }
+      ),
+      default: () => ({ mode: "", youtubeId: "", start: 0 }),
+    },
+    theme: s(20),
+    lang: s(2, "en"),
+    invitation: s(1200),
+    hindiMessage: s(700),
+    blessingsOf: s(160),
+    hashtag: s(40),
+    closingLine: s(120),
+    gettingThere: s(600),
+    videoUrl: s(300),
+    liveUrl: s(500),
+    upiId: s(120),
+    upiName: s(60),
+    rsvpBy: s(10),
+    maxGuests: { type: Number, default: 6, min: 1, max: 10 },
+    rsvpMeal: { type: Boolean, default: false },
     blessings: {
       type: [receptionBlessingSchema],
       default: [],

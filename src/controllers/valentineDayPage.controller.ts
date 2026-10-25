@@ -64,6 +64,14 @@ const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "proposal-premium": "Proposal",
   "happy-anniversary": "Anniversary",
   "anniversary-premium": "Anniversary",
+  "digital-bouquet": "Digital Bouquet",
+  "wedding-invitation": "Wedding Invitation",
+  "wedding-invitation-premium": "Wedding Invitation",
+  "royal-wedding-invitation": "Royal Wedding Invitation",
+  "palace-door-wedding-invitation": "Palace Door Wedding Invitation",
+  "garden-wedding-invitation": "Mughal Garden Wedding Invitation",
+  "floral-wedding-invitation": "Pampas & Peony Wedding Invitation",
+  "lotus-wedding-invitation": "Lotus Temple Wedding Invitation",
 };
 
 /** A premium day's emails use its base day's plain name ("Rose Day"). */

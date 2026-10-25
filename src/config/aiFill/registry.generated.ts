@@ -73,6 +73,18 @@ import { willYouBeMine } from "./will-you-be-mine";
 import { proposalPremium } from "./proposal-premium";
 import { happyAnniversary } from "./happy-anniversary";
 import { anniversaryPremium } from "./anniversary-premium";
+import { digitalBouquet } from "./digital-bouquet";
+import { weddingInvitation } from "./wedding-invitation";
+import { weddingInvitationPremium } from "./wedding-invitation-premium";
+import { royalWeddingInvitation } from "./royal-wedding-invitation";
+import { palaceDoorWeddingInvitation } from "./palace-door-wedding-invitation";
+import { gardenWeddingInvitation } from "./garden-wedding-invitation";
+import { floralWeddingInvitation } from "./floral-wedding-invitation";
+import { lotusWeddingInvitation } from "./lotus-wedding-invitation";
+import { reception } from "./reception";
+import { christianWedding } from "./christian-wedding";
+import { christianWedding2 } from "./christian-wedding-2";
+import { shaadiCard } from "./shaadi-card";
 import { call } from "./call";
 import { challan } from "./challan";
 import { nutrition } from "./nutrition";
@@ -145,6 +157,18 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   proposalPremium,
   happyAnniversary,
   anniversaryPremium,
+  digitalBouquet,
+  weddingInvitation,
+  weddingInvitationPremium,
+  royalWeddingInvitation,
+  palaceDoorWeddingInvitation,
+  gardenWeddingInvitation,
+  floralWeddingInvitation,
+  lotusWeddingInvitation,
+  reception,
+  christianWedding,
+  christianWedding2,
+  shaadiCard,
   call,
   challan,
   nutrition,

@@ -16,6 +16,7 @@ import weddingPageRoutes from "./weddingPage.routes";
 import receptionPageRoutes from "./receptionPage.routes";
 import shaadiCardPageRoutes from "./shaadiCardPage.routes";
 import christianWeddingPageRoutes from "./christianWeddingPage.routes";
+import christianWedding2GuestRoutes from "./christianWedding2Guest.routes";
 import loveGfPageRoutes from "./loveGfPage.routes";
 import birthdayGfPageRoutes from "./birthdayGfPage.routes";
 import darlingPageRoutes from "./darlingPage.routes";
@@ -121,6 +122,7 @@ router.use("/wedding-pages", weddingPageRoutes);
 router.use("/reception-pages", receptionPageRoutes);
 router.use("/shaadi-card-pages", shaadiCardPageRoutes);
 router.use("/christian-wedding-pages", christianWeddingPageRoutes);
+router.use("/christian-wedding-2-pages", christianWedding2GuestRoutes); // scroll edition: RSVPs + guest list
 router.use("/love-gf-pages", loveGfPageRoutes);
 router.use("/birthday-gf-pages", birthdayGfPageRoutes);
 router.use("/darling-pages", darlingPageRoutes);
@@ -161,6 +163,19 @@ router.use("/miss-you-premium-pages", makeValentineDayRouter("miss-you-premium")
 // Will You Be Mine? (a proposal page) — the same engine.
 router.use("/will-you-be-mine-pages", makeValentineDayRouter("will-you-be-mine"));
 router.use("/sorry-premium-pages", makeValentineDayRouter("sorry-premium"));
+// Digital Bouquet ✦ Premium — arrange a bouquet, it blooms for them. Same engine.
+router.use("/digital-bouquet-pages", makeValentineDayRouter("digital-bouquet"));
+// Wedding Invitation (Classic, $5) — the wax-seal envelope invite. Same engine (+ wedding guest RSVPs).
+router.use("/wedding-invitation-pages", makeValentineDayRouter("wedding-invitation"));
+// Wedding Invitation ✦ Premium — story, every function, gallery, RSVP per function. Same engine + wedding kit routes.
+router.use("/wedding-invitation-premium-pages", makeValentineDayRouter("wedding-invitation-premium"));
+// Royal Wedding Invitation 👑 ($20 wedding tier) — same engine; guest RSVP + blessings routes mount with it.
+router.use("/royal-wedding-invitation-pages", makeValentineDayRouter("royal-wedding-invitation"));
+// The four wedding designs on Royal's limits — same engine; guest RSVP + blessings routes mount with each.
+router.use("/palace-door-wedding-invitation-pages", makeValentineDayRouter("palace-door-wedding-invitation"));
+router.use("/garden-wedding-invitation-pages", makeValentineDayRouter("garden-wedding-invitation"));
+router.use("/floral-wedding-invitation-pages", makeValentineDayRouter("floral-wedding-invitation"));
+router.use("/lotus-wedding-invitation-pages", makeValentineDayRouter("lotus-wedding-invitation"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.
