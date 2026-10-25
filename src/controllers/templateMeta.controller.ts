@@ -9,6 +9,8 @@
 //    The gallery orders by it and badges the top five.
 //  • ORDER — the slugs a super admin pulled to the front of the gallery, in
 //    their order (/admin/template-order). Empty = the code's PINNED_FIRST.
+//  • COLLECTIONS — curated places (/admin/places): `{ wedding: { items } | null }`.
+//    null = the place keeps its automatic, code-derived list.
 //
 // The public read is anonymous and edge-cached, like /template-visibility: it is
 // on the first page a stranger loads. Both halves fail soft — an error sends
@@ -20,6 +22,7 @@ import TemplateTier from "../models/TemplateTier";
 import TemplateOrder from "../models/TemplateOrder";
 import { TEMPLATE_LOOKUPS } from "./share.controller";
 import { audit } from "../services/adminAudit";
+import { emptyCollections, publicCollections } from "./templateCollection.controller";
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 
@@ -89,15 +92,16 @@ async function ranking(): Promise<{ slug: string; created: number }[]> {
   return rankInflight;
 }
 
-/** GET /api/template-meta — public. `{ tiers: {slug: premium}, ranking: [{slug, created}], order: [slug] }` */
+/** GET /api/template-meta — public. `{ tiers: {slug: premium}, ranking: [{slug, created}], order: [slug], collections: {wedding: {items} | null} }` */
 export const getTemplateMeta = async (_req: Request, res: Response): Promise<void> => {
-  const [tiers, rank, order] = await Promise.all([
+  const [tiers, rank, order, collections] = await Promise.all([
     tierOverrides().catch((e) => { console.error("[template-meta] tiers:", e); return {}; }),
     ranking().catch((e) => { console.error("[template-meta] ranking:", e); return []; }),
     galleryOrder().catch((e) => { console.error("[template-meta] order:", e); return [] as string[]; }),
+    publicCollections().catch((e) => { console.error("[template-meta] collections:", e); return emptyCollections(); }),
   ]);
   res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
-  res.json({ success: true, data: { tiers, ranking: rank, order } });
+  res.json({ success: true, data: { tiers, ranking: rank, order, collections } });
 };
 
 // ── Super-admin writes ───────────────────────────────────────────────────────
