@@ -14,7 +14,7 @@ import {
 /**
  * The one row of season settings, upserted on `{ key: "global" }`: which
  * seasonal campaign the site shows (Valentine wishlist, a drop season such as
- * Halloween, Navratri Dandiya or Diwali, or none) and, per drop season, its sale.
+ * Halloween, Navratri Dandiya, Diwali or the wedding season, or none) and, per drop season, its sale.
  *
  * `drops.<id>` holds each season's settings. The flat `saleEnabled /
  * salePercent / saleSlugs` fields predate it: they are the Halloween drop, read
