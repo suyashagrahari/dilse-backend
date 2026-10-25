@@ -69,6 +69,7 @@ import {
   setTemplateOrder,
   clearTemplateOrder,
 } from "../controllers/templateMeta.controller";
+import { mountTemplateCollections } from "../controllers/templateCollection.controller";
 import { getRecurringUsers } from "../controllers/adminRetention.controller";
 import {
   getAudience,
@@ -164,6 +165,10 @@ router.delete("/template-tiers/:slug", requireSuperAdmin, clearTemplateTier);
 router.get("/template-order", requireSuperAdmin, getAdminTemplateOrder);
 router.put("/template-order", requireSuperAdmin, setTemplateOrder);
 router.delete("/template-order", requireSuperAdmin, clearTemplateOrder);
+
+// Curated places (/admin/places): which templates the /wedding hub shows, in
+// order. Super-admin only, like the gallery order it sits next to.
+mountTemplateCollections(router, requireSuperAdmin);
 
 // ── Who gets a template before everybody else ──────────────────────────────
 //
