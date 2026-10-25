@@ -1,7 +1,8 @@
 // ─── Curated places: which templates a place shows, in order ─────────────────
 //
-// A super admin decides the templates of a curated place — today only the
-// /wedding hub — in /admin/places. See models/TemplateCollection.ts.
+// A super admin decides the templates of a curated place — the /wedding hub
+// ("wedding") and the main gallery's exclusions ("gallery-exclude") — in
+// /admin/places. See models/TemplateCollection.ts.
 //
 //   GET    /api/admin/template-collections/:key   the saved list (or null)
 //   PUT    /api/admin/template-collections/:key   { items: [{ slug, group? }] }
@@ -9,7 +10,8 @@
 //
 // The public side rides on GET /api/template-meta as `collections`, so the hub
 // needs no extra request: `collections.wedding` is `{ items }` once saved and
-// `null` while the place is automatic.
+// `null` while the place is automatic; `collections["gallery-exclude"]` is the
+// slugs kept off the main gallery (`null` = none).
 //
 // Premium and the seasonal drops are places too, but they already have their
 // own storage (TemplateTier, SeasonSettings.drops[id].saleSlugs); the admin
@@ -25,6 +27,12 @@ export const MAX_COLLECTION_ITEMS = 300;
 /** Every place stored here, and the groups its items may carry (empty = no groups). */
 export const COLLECTION_KEYS = {
   wedding: { groups: ["indian", "christian", "reception", "court", "rishta"] },
+  // The main gallery's EXCLUSIONS: live templates NOT listed on /templates
+  // (and its search / Premium room). Empty or absent = every live template is
+  // listed. Not a visibility switch — an excluded template still opens by
+  // link, sits in /wedding or a drop if it is in those lists, and stays in the
+  // sitemap. Order carries no meaning.
+  "gallery-exclude": { groups: [] },
 } as const satisfies Record<string, { groups: readonly string[] }>;
 
 export type CollectionKey = keyof typeof COLLECTION_KEYS;

@@ -6,8 +6,9 @@
 import { Request, Response } from "express";
 import User from "../models/User";
 import TemplateVisibility from "../models/TemplateVisibility";
+import { isApexDeployment } from "../config/env";
 import {
-  DEFAULT_HIDDEN,
+  adminVisibilityView,
   defaultLive,
   hiddenSlugs,
   invalidateVisibilityCache,
@@ -64,9 +65,13 @@ export const getAdminTemplateVisibility = async (
           updatedByEmail: d.updatedByEmail || "",
           updatedAt: d.updatedAt,
         })),
-        /** Slugs hidden by code when they have no row of their own. */
-        defaultHidden: [...DEFAULT_HIDDEN].sort(),
-        hidden: await hiddenSlugs(),
+        // `defaultHidden` is the default IN FORCE here (empty off the apex),
+        // so the screen's per-row state equals `hidden`. `isApex` and
+        // `apexDefaultHidden` let it say what the live domain would do.
+        ...adminVisibilityView(
+          new Map(docs.map((d) => [String(d.slug).toLowerCase(), Boolean(d.live)])),
+          isApexDeployment()
+        ),
       },
     });
   } catch (error) {
