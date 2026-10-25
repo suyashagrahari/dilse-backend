@@ -4,8 +4,11 @@
 // admin picks the templates in /admin/places. Each item may carry a `group` the
 // place uses for its own filter chips (the wedding hub: indian, christian, …).
 //
-// MEMBERSHIP, NOT MOVE: a template listed here still appears in the main
-// gallery. Hiding from the gallery is TemplateVisibility's job.
+// MEMBERSHIP, NOT MOVE: a template listed in "wedding" still appears in the
+// main gallery. The one exception is the "gallery-exclude" document, whose
+// items are the live templates kept OFF the main gallery (/templates, its
+// search and Premium room) — still openable by link and still in any other
+// place. Hiding a template everywhere is TemplateVisibility's job.
 //
 // No document means "automatic": the place keeps the list its code derives
 // (for the wedding hub, `isWeddingTemplate` + `filterOf`). Deleting the

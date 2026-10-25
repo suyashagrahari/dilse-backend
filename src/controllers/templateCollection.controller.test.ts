@@ -200,11 +200,50 @@ describe("template collection routes", () => {
 
   it("the public read follows writes immediately (cache invalidated)", async () => {
     const pub = () => publicCollections(mem.deps);
-    assert.deepEqual(await pub(), { wedding: null });
+    assert.deepEqual(await pub(), { wedding: null, "gallery-exclude": null });
     await call("PUT", "/wedding", { items: [{ slug: "x", group: "court" }] });
     // The route wrote through the same store; the cache was dropped by the write.
-    assert.deepEqual(await pub(), { wedding: { items: [{ slug: "x", group: "court" }] } });
+    assert.deepEqual(await pub(), { wedding: { items: [{ slug: "x", group: "court" }] }, "gallery-exclude": null });
     await call("DELETE", "/wedding");
-    assert.deepEqual(await pub(), { wedding: null });
+    assert.deepEqual(await pub(), { wedding: null, "gallery-exclude": null });
+  });
+
+  // ── gallery-exclude: the live templates kept off the main gallery ─────────
+
+  it("gallery-exclude: 403s for anyone but a super admin, on every verb", async () => {
+    for (const method of ["GET", "PUT", "DELETE"]) {
+      const r = await call(method, "/gallery-exclude", method === "PUT" ? { items: ["a"] } : undefined, "admin");
+      assert.equal(r.status, 403, method);
+    }
+    assert.equal(mem.store.size, 0);
+  });
+
+  it("gallery-exclude: lower-cases, de-dupes, takes no groups, and is public", async () => {
+    const put = await call("PUT", "/gallery-exclude", {
+      items: ["Palace-Door-Wedding-Invitation", { slug: "happy-birthday" }, { slug: "palace-door-wedding-invitation" }],
+    });
+    assert.equal(put.status, 200);
+    assert.deepEqual(put.json.data.groups, []);
+    assert.deepEqual(put.json.data.collection.items, [{ slug: "palace-door-wedding-invitation" }, { slug: "happy-birthday" }]);
+    const pub = await publicCollections(mem.deps);
+    assert.deepEqual(pub["gallery-exclude"], { items: [{ slug: "palace-door-wedding-invitation" }, { slug: "happy-birthday" }] });
+    // Independent of the wedding place.
+    assert.equal(pub.wedding, null);
+  });
+
+  it("gallery-exclude: rejects a group, a bad slug and more than the cap", async () => {
+    assert.equal((await call("PUT", "/gallery-exclude", { items: [{ slug: "a", group: "indian" }] })).status, 400);
+    assert.equal((await call("PUT", "/gallery-exclude", { items: [{ slug: "../etc" }] })).status, 400);
+    const tooMany = Array.from({ length: MAX_COLLECTION_ITEMS + 1 }, (_, i) => `t${i}`);
+    assert.equal((await call("PUT", "/gallery-exclude", { items: tooMany })).status, 400);
+    assert.equal(mem.store.size, 0);
+  });
+
+  it("gallery-exclude: an empty list is valid (everything listed) and DELETE clears it", async () => {
+    const put = await call("PUT", "/gallery-exclude", { items: [] });
+    assert.equal(put.status, 200);
+    assert.deepEqual(put.json.data.collection.items, []);
+    const del = await call("DELETE", "/gallery-exclude");
+    assert.equal(del.json.data.collection, null);
   });
 });
