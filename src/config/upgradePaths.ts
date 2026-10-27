@@ -49,6 +49,17 @@ export const UPGRADE_PATHS: Readonly<Record<string, UpgradePath>> = {
     title: "Birthday Surprise ✦ Premium",
     perks: BIRTHDAY_PREMIUM_PERKS,
   },
+  "apology-dashboard": {
+    from: "apology-dashboard",
+    to: "sorry-premium",
+    title: "I'm Sorry ✦ Premium",
+    perks: [
+      "A little bear knocks at their door with your apology",
+      "They water a wilted flower, heal a cracked heart, open fortune cookies",
+      "Your letter sails to them as a paper boat, your photos on a washing line",
+      "They sign your peace promises and keep a Peace Treaty",
+    ],
+  },
 };
 
 export const upgradePathFrom = (from: string): UpgradePath | null =>

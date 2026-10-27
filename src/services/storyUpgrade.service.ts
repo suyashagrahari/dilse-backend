@@ -131,9 +131,66 @@ export function happyBirthdayStory(raw: unknown): UpgradeStory {
   };
 }
 
+/** Apology Dashboard's sample content (client apology-dashboard/components/types.ts DEMO_DATA). */
+const APOLOGY_DEMO = new Set(
+  [
+    "I'm really, really sorry 🥺",
+    "I built this whole little world just to say it. Play, scratch, whack, forgive — take your time. I'll be right here.",
+    "I know I messed up, and I've been replaying it in my head all day. You mean more to me than being right ever could. I'm sorry for hurting you — you deserve nothing but gentleness from me. Give me the chance to make it up to you, every single day.",
+    "My favorite place in the whole world is right next to you. Even when I mess up — that never changes. 💗",
+    "1× premium massage night",
+    "Your favorite feast tonight (on me)",
+    "All the chores for 7 days",
+    "Unlimited tight, warm hugs",
+    "Movie night — your pick, no complaints",
+    "Morning coffee in bed all week",
+    "The day the universe was showing off, and it handed me you.",
+    "Half a dictionary only the two of us can read.",
+    "Roots, not just butterflies. And I'm not going anywhere.",
+  ].map((s) => s.toLowerCase()),
+);
+const isApologyDemo = (s: string) => APOLOGY_DEMO.has(s.trim().toLowerCase());
+
+/** Apology Dashboard payload → the story of what they wrote. */
+export function apologyStory(raw: unknown): UpgradeStory {
+  const d = obj(raw);
+  const to = str(d.recipientName, 30);
+  const from = str(d.senderName, 30);
+  const who = to || "them";
+  const rel = str(d.relationship, 20);
+  const lines: string[] = [`${from || "The sender"} is apologising to ${who}${rel ? `, their ${rel}` : ""}, after a fight or a hurt.`];
+  const own = (s: string) => s && !isApologyDemo(s);
+
+  const headline = str(d.headline, 120);
+  const sub = str(d.subMessage, 300);
+  if (own(headline) || own(sub)) lines.push(`How they open their apology:\n${[headline, sub].filter(own).join("\n")}`);
+  const letter = str(d.sorryLetter, 2000);
+  if (own(letter)) lines.push(`Their apology letter:\n${letter}`);
+  const secret = str(d.scratchSecret, 400);
+  if (own(secret)) lines.push(`A secret note they hid for ${who}:\n${secret}`);
+
+  const promises = arr(d.briberyItems).map((b) => str(obj(b).label, 120)).filter(own);
+  if (promises.length) lines.push(`What they promise to make it up to ${who}:\n${promises.map((p) => `- ${p}`).join("\n")}`);
+  const chapters = arr(d.timeline)
+    .map((t) => {
+      const o = obj(t);
+      const text = str(o.text, 200);
+      return own(text) ? `- ${str(o.title, 80)}: ${text}`.replace(/^- : /, "- ") : "";
+    })
+    .filter(Boolean);
+  if (chapters.length) lines.push(`Moments from their story together:\n${chapters.join("\n")}`);
+
+  return {
+    story: lines.join("\n\n").slice(0, MAX_STORY),
+    people: { userName: from || undefined, partnerName: to || undefined },
+    letter: own(letter) ? letter : "",
+  };
+}
+
 export const STORY_BUILDERS: Readonly<Record<string, (raw: unknown) => UpgradeStory>> = {
   "birthday-gf": birthdayGfStory,
   "happy-birthday": happyBirthdayStory,
+  "apology-dashboard": apologyStory,
 };
 
 export interface StoryUpgradeResult {
@@ -141,6 +198,8 @@ export interface StoryUpgradeResult {
   patch: Record<string, unknown>;
   source: "ai" | "carried";
 }
+
+const OCCASION: Record<string, string> = { "birthday-gf": "birthday", "happy-birthday": "birthday", "apology-dashboard": "apology" };
 
 /** Their words → a patch for the premium template. Falls back to their letter alone. */
 export async function upgradeViaStory(from: string, to: string, raw: unknown): Promise<StoryUpgradeResult> {
@@ -152,7 +211,7 @@ export async function upgradeViaStory(from: string, to: string, raw: unknown): P
   // Nothing of theirs beyond the names: the premium demo's own words stay.
   if (s.story.split("\n\n").length <= 1) return { patch: carried, source: "carried" };
   try {
-    const r = await fillFromStory({ schema, story: s.story, people: s.people, hints: { occasion: "birthday" } });
+    const r = await fillFromStory({ schema, story: s.story, people: s.people, hints: { occasion: OCCASION[from] } });
     // Their own letter beats a rewrite of it.
     return { patch: { ...r.patch, ...carried }, source: "ai" };
   } catch {

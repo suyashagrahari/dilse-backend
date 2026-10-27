@@ -49,3 +49,23 @@ test("happy-birthday: letter, pet name, their lines and photo notes; enum keys s
   assert.ok(!s.story.includes("base64"));
   assert.equal(s.letter, "Another year of you being the best thing that ever happened to me.");
 });
+
+test("apology-dashboard: their apology, promises and moments; the sample world dropped", async () => {
+  const { apologyStory } = await import("./storyUpgrade.service");
+  const s = apologyStory({
+    senderName: "Aarav",
+    recipientName: "Riya",
+    relationship: "girlfriend",
+    headline: "I'm really, really sorry 🥺",
+    sorryLetter: "I forgot our anniversary dinner and left you waiting at the cafe. That was careless and I hate that I made you feel unimportant.",
+    briberyItems: [{ icon: "🧹", label: "All the chores for 7 days" }, { icon: "🍕", label: "Dominos every Friday for a month" }],
+    timeline: [{ icon: "⭐", title: "Chapter I — The Spark", text: "The day the universe was showing off, and it handed me you." }, { icon: "☕", title: "Our cafe", text: "Where you laughed at my terrible jokes." }],
+  });
+  assert.ok(s.story.includes("forgot our anniversary dinner"));
+  assert.ok(s.story.includes("Dominos every Friday"));
+  assert.ok(s.story.includes("Our cafe: Where you laughed"));
+  assert.ok(!s.story.includes("really, really sorry"));
+  assert.ok(!s.story.includes("All the chores"));
+  assert.ok(!s.story.includes("universe was showing off"));
+  assert.ok(s.letter.startsWith("I forgot"));
+});

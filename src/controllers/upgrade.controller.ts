@@ -121,14 +121,17 @@ const PERIODS: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "365d":
 export const adminUpgradeStats = async (req: Request, res: Response): Promise<void> => {
   const days = PERIODS[String(req.query.period ?? "30d")] ?? 30;
   const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+  // ?from=<free slug> narrows the trend, the latest list and the people to one offer.
+  const only = upgradePathFrom(String(req.query.from ?? ""))?.from ?? null;
+  const scope = only ? { from: only } : {};
   try {
-    const [byEvent, daily, recent, settings] = await Promise.all([
+    const [byEvent, daily, recent, settings, people] = await Promise.all([
       UpgradeEvent.aggregate<{ _id: { from: string; event: string }; total: number; visitors: string[] }>([
         { $match: { createdAt: { $gte: since } } },
         { $group: { _id: { from: "$from", event: "$event" }, total: { $sum: 1 }, visitors: { $addToSet: "$visitorId" } } },
       ]),
       UpgradeEvent.aggregate<{ _id: { day: string; event: string }; visitors: string[] }>([
-        { $match: { createdAt: { $gte: since }, event: { $in: ["shown", "try_clicked", "premium_published", "free_published"] } } },
+        { $match: { createdAt: { $gte: since }, ...scope, event: { $in: ["shown", "try_clicked", "premium_published", "free_published"] } } },
         {
           $group: {
             _id: { day: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" } }, event: "$event" },
@@ -136,17 +139,29 @@ export const adminUpgradeStats = async (req: Request, res: Response): Promise<vo
           },
         },
       ]),
-      UpgradeEvent.find({ createdAt: { $gte: since }, event: { $in: ["try_clicked", "premium_published", "free_chosen", "back_to_free"] } })
+      UpgradeEvent.find({ createdAt: { $gte: since }, ...scope, event: { $in: ["try_clicked", "premium_published", "free_chosen", "back_to_free"] } })
         .sort({ createdAt: -1 })
         .limit(40)
         .select("from to event userId createdAt")
         .lean(),
       UpgradeSetting.find({}).lean(),
+      // One row per signed-in person per offer: every step they reached.
+      UpgradeEvent.aggregate<{ _id: { userId: mongoose.Types.ObjectId; from: string }; to: string; steps: string[]; firstAt: Date; lastAt: Date; total: number }>([
+        { $match: { createdAt: { $gte: since }, userId: { $ne: null }, ...scope } },
+        { $group: { _id: { userId: "$userId", from: "$from" }, to: { $first: "$to" }, steps: { $addToSet: "$event" }, firstAt: { $min: "$createdAt" }, lastAt: { $max: "$createdAt" }, total: { $sum: 1 } } },
+        { $sort: { lastAt: -1 } },
+        { $limit: 200 },
+      ]),
     ]);
 
-    const userIds = [...new Set(recent.map((r) => (r.userId ? String(r.userId) : "")).filter(Boolean))];
-    const users = userIds.length ? await User.find({ _id: { $in: userIds } }).select("name email").lean() : [];
-    const who = new Map(users.map((u) => [String(u._id), { name: String((u as { name?: string }).name ?? ""), email: String((u as { email?: string }).email ?? "") }]));
+    const userIds = [...new Set([...recent.map((r) => (r.userId ? String(r.userId) : "")), ...people.map((p) => String(p._id.userId))].filter(Boolean))];
+    const users = userIds.length ? await User.find({ _id: { $in: userIds } }).select("name email avatar").lean() : [];
+    const who = new Map(
+      users.map((u) => {
+        const x = u as { _id: unknown; name?: string; email?: string; avatar?: string };
+        return [String(x._id), { userId: String(x._id), name: String(x.name ?? ""), email: String(x.email ?? ""), avatar: String(x.avatar ?? "") }];
+      }),
+    );
     const enabled = new Map(settings.map((s) => [s.from, s.enabled]));
 
     const offers = Object.values(UPGRADE_PATHS).map((p) => {
@@ -169,6 +184,16 @@ export const adminUpgradeStats = async (req: Request, res: Response): Promise<vo
         period: `${days}d`,
         offers,
         daily: Object.entries(series).map(([day, v]) => ({ day, ...v })),
+        people: people.map((p) => ({
+          user: who.get(String(p._id.userId)) ?? { userId: String(p._id.userId), name: "", email: "", avatar: "" },
+          from: p._id.from,
+          to: p.to,
+          steps: p.steps,
+          outcome: outcomeOf(p.steps),
+          firstAt: p.firstAt,
+          lastAt: p.lastAt,
+          total: p.total,
+        })),
         recent: recent.map((r) => ({
           from: r.from,
           to: r.to,
@@ -180,6 +205,56 @@ export const adminUpgradeStats = async (req: Request, res: Response): Promise<vo
     });
   } catch {
     res.status(500).json({ success: false, error: "Could not load upgrade analytics." });
+  }
+};
+
+/** Where one person's journey through an offer ended, best step first. */
+function outcomeOf(steps: string[]): "premium" | "free" | "tried" | "previewed_left" | "chose_free" | "dismissed" | "saw" {
+  const has = (e: string) => steps.includes(e);
+  if (has("premium_published")) return "premium";
+  if (has("free_published")) return "free";
+  if (has("free_chosen") || has("back_to_free")) return "chose_free";
+  if (has("preview_ready")) return "previewed_left";
+  if (has("try_clicked")) return "tried";
+  if (has("dismissed")) return "dismissed";
+  return "saw";
+}
+
+/** GET /admin/super/upgrades/users/:userId — every step one person took, per offer. */
+export const adminUserUpgrades = async (req: Request, res: Response): Promise<void> => {
+  const userId = String(req.params.userId);
+  if (!mongoose.isValidObjectId(userId)) {
+    res.status(400).json({ success: false, error: "Bad user id." });
+    return;
+  }
+  try {
+    const events = await UpgradeEvent.find({ userId }).sort({ createdAt: -1 }).limit(500).select("from to event pageId createdAt").lean();
+    const byFrom = new Map<string, typeof events>();
+    for (const e of events) byFrom.set(e.from, [...(byFrom.get(e.from) ?? []), e]);
+    const offers = [...byFrom.entries()].map(([from, list]) => {
+      const steps = [...new Set(list.map((e) => e.event))];
+      const counts: Record<string, number> = {};
+      for (const e of list) counts[e.event] = (counts[e.event] ?? 0) + 1;
+      return {
+        from,
+        to: list[0].to,
+        title: upgradePathFrom(from)?.title ?? list[0].to,
+        steps,
+        counts,
+        outcome: outcomeOf(steps),
+        firstAt: list[list.length - 1].createdAt,
+        lastAt: list[0].createdAt,
+      };
+    });
+    res.json({
+      success: true,
+      data: {
+        offers,
+        events: events.map((e) => ({ from: e.from, to: e.to, event: e.event, pageId: e.pageId || null, at: e.createdAt })),
+      },
+    });
+  } catch {
+    res.status(500).json({ success: false, error: "Could not load this user's upgrade journey." });
   }
 };
 
