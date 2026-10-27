@@ -90,13 +90,13 @@ export function birthdayGfStory(raw: unknown): UpgradeStory {
   };
 }
 
-/** Happy Birthday ($2, the Valentine's engine) payload → the story of what they wrote. */
-export function happyBirthdayStory(raw: unknown): UpgradeStory {
+/** A $2 day on the Valentine's engine (Happy Birthday, Miss You…) → the story of what they wrote. */
+function engineStory(raw: unknown, opening: (who: string, from: string) => string): UpgradeStory {
   const d = obj(raw);
   const to = str(d.recipientName, 30);
   const from = str(d.senderName, 30);
   const who = to || "them";
-  const lines: string[] = [`It is ${who}'s birthday${from ? ` and ${from} is making them a birthday surprise` : ""}.`];
+  const lines: string[] = [opening(who, from)];
   const pet = str(d.petName, 24);
   if (pet) lines.push(`${from || "The sender"} calls ${who} "${pet}".`);
   const letter = str(d.letter, 2000);
@@ -128,6 +128,117 @@ export function happyBirthdayStory(raw: unknown): UpgradeStory {
     story: lines.join("\n\n").slice(0, MAX_STORY),
     people: { userName: from || undefined, partnerName: to || undefined },
     letter,
+  };
+}
+
+export const happyBirthdayStory = (raw: unknown) =>
+  engineStory(raw, (who, from) => `It is ${who}'s birthday${from ? ` and ${from} is making them a birthday surprise` : ""}.`);
+
+export const missYouStory = (raw: unknown) =>
+  engineStory(raw, (who, from) => `${from || "The sender"} misses ${who}: they are apart right now, and ${from || "the sender"} is making them something to feel close.`);
+
+export const willYouBeMineStory = (raw: unknown) =>
+  engineStory(raw, (who, from) => `${from || "The sender"} is asking ${who} to be theirs.`);
+
+export const happyAnniversaryStory = (raw: unknown) =>
+  engineStory(raw, (who, from) => `It is ${from ? `${from} and ${who}` : `${who}'s`}'s anniversary, and ${from || "the sender"} is celebrating their years together.`.replace("'s's", "'s"));
+
+export const happyHalloweenStory = (raw: unknown) =>
+  engineStory(raw, (who, from) => `${from || "The sender"} made ${who} a cute, never-scary Halloween surprise.`);
+
+/**
+ * Will You Marry Me? (the free `proposal` template). The browser sends only
+ * what the sender changed: its own sample wording (per perspective) and sample
+ * captions are blanked before they leave (proposal/hooks/useProposalEditor).
+ */
+export function proposalStory(raw: unknown): UpgradeStory {
+  const d = obj(raw);
+  const to = str(d.recipientName, 30);
+  const from = str(d.senderName, 30);
+  const who = to || "them";
+  const marriage = d.perspective !== "relationship";
+  const lines: string[] = [`${from || "The sender"} is ${marriage ? `asking ${who} to marry them` : `asking ${who} to be their partner`}.`];
+  const met = str(d.metDate, 40);
+  if (met && Number.isFinite(Date.parse(met))) lines.push(`They met on ${new Date(met).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}.`);
+  const words = (["gateTitle", "memoryLaneTitle", "askHeadline", "yesLabel", "celebrationTitle"] as const).map((k) => str(d[k], 160)).filter(Boolean);
+  if (words.length) lines.push(`Lines they wrote for the page:\n${words.map((w) => `- ${w}`).join("\n")}`);
+  const secret = str(d.secretNote, 800);
+  if (secret) lines.push(`Their secret note to ${who}:\n${secret}`);
+  const captions = arr(d.memories).map((m) => str(obj(m).caption, 140)).filter(Boolean);
+  if (captions.length) lines.push(`Their memories together, from the first one to today:\n${captions.map((c) => `- ${c}`).join("\n")}`);
+  return { story: lines.join("\n\n").slice(0, MAX_STORY), people: { userName: from || undefined, partnerName: to || undefined }, letter: "" };
+}
+
+/** Miss You GF's sample content (client missyou-gf/components/types.ts DEMO_DATA). */
+const MISSYOU_DEMO = new Set(
+  [
+    "my moon", "A letter for you", "Always yours,", "Mumbai", "London",
+    "It's late here and the city has gone quiet, which is usually when I miss you the most. I keep reaching for my phone to tell you the smallest things — that the chai tasted like the one from that little stall, that a song came on and I was back on that rooftop with you. Being apart is hard, but it never once made me doubt us. Every day is one day closer to holding you again. Until then, this little world is me, thinking about you.",
+    "our first rainy walk 🌧️", "the rooftop, 2am ✨", "you, laughing at nothing", "that tiny cafe we love ☕", "dancing in the kitchen 🎶", "just us, doing nothing 🤍",
+    "I didn't say it out loud, but I've already picked the song for our first dance when I'm home. 💍",
+    "open when you miss me", "open when you can't sleep", "open when you need a laugh", "open when we're finally together",
+    "Close your eyes. I'm holding you right now — the exact way you like. I'm counting the days too. 🤍",
+    "Put this on speaker and pretend it's me humming. Breathe in for four, out for four. I've got you, always.",
+    "Remember when you snorted so hard the whole cafe turned around? I still laugh about it. You're my favourite disaster. 😂",
+    "If you're reading this, the waiting is over. Don't let go for a very long time. This one's real. 🥹",
+    "where was our first date?", "the tiny corner cafe", "you ordered the wrong coffee and drank it anyway just to keep talking.",
+    "what song is 'ours'?", "the one from the car ride home", "we replayed it four times and didn't say a word.",
+    "what do I love most about you?", "your laugh", "it's the sound I chase on my worst days.",
+  ].map((x) => x.toLowerCase()),
+);
+const isMissYouDemo = (x: string) => MISSYOU_DEMO.has(x.trim().toLowerCase());
+
+/** Miss You GF payload → the story of what they wrote. */
+export function missYouGfStory(raw: unknown): UpgradeStory {
+  const d = obj(raw);
+  const to = str(d.recipientName, 30);
+  const from = str(d.senderName, 30);
+  const who = to || "them";
+  const own = (x: string) => !!x && !isMissYouDemo(x);
+  const lines: string[] = [`${from || "The sender"} misses ${who}: they are apart right now, and ${from || "the sender"} is making them something to feel close.`];
+
+  const pet = str(d.petName, 24);
+  if (own(pet)) lines.push(`${from || "The sender"} calls ${who} "${pet}".`);
+  const mine = str(d.yourCity, 40);
+  const theirs = str(d.theirCity, 40);
+  if (own(mine) || own(theirs)) {
+    lines.push(`Where they are: ${from || "the sender"} is in ${own(mine) ? mine : "(not said)"}, ${who} is in ${own(theirs) ? theirs : "(not said)"}.`);
+  }
+  const reunion = str(d.reunionDate, 40);
+  if (reunion && Number.isFinite(Date.parse(reunion))) {
+    lines.push(`They will see each other again on ${new Date(reunion).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}.`);
+  }
+  const letter = str(d.letterBody, 2000);
+  if (own(letter)) lines.push(`The letter ${from || "the sender"} wrote:\n${letter}`);
+
+  const captions = arr(d.memories).map((m) => str(obj(m).caption, 120)).filter(own);
+  if (captions.length) lines.push(`Their memories together (photo captions):\n${captions.map((c) => `- ${c}`).join("\n")}`);
+  const secret = str(d.secret, 400);
+  if (own(secret)) lines.push(`A secret they wanted ${who} to find:\n${secret}`);
+  const notes = arr(d.openWhen)
+    .map((n) => {
+      const o = obj(n);
+      const label = str(o.label, 60);
+      const text = str(o.text, 300);
+      return own(text) ? `- ${own(label) ? label : "open when"}: ${text}` : "";
+    })
+    .filter(Boolean);
+  if (notes.length) lines.push(`"Open when" notes they wrote:\n${notes.join("\n")}`);
+  const quiz = arr(d.quiz)
+    .map((q) => {
+      const o = obj(q);
+      const qq = str(o.question, 120);
+      const a = str(o.answer, 120);
+      const m = str(o.memory, 200);
+      return own(qq) || own(a) || own(m) ? `- ${qq} → ${a}${m ? ` (${m})` : ""}` : "";
+    })
+    .filter(Boolean);
+  if (quiz.length) lines.push(`Things only they know (questions they wrote, with the answers):\n${quiz.join("\n")}`);
+
+  return {
+    story: lines.join("\n\n").slice(0, MAX_STORY),
+    people: { userName: from || undefined, partnerName: to || undefined },
+    letter: own(letter) ? letter : "",
   };
 }
 
@@ -191,6 +302,12 @@ export const STORY_BUILDERS: Readonly<Record<string, (raw: unknown) => UpgradeSt
   "birthday-gf": birthdayGfStory,
   "happy-birthday": happyBirthdayStory,
   "apology-dashboard": apologyStory,
+  "missyou-gf": missYouGfStory,
+  "miss-you": missYouStory,
+  proposal: proposalStory,
+  "will-you-be-mine": willYouBeMineStory,
+  "happy-anniversary": happyAnniversaryStory,
+  "happy-halloween": happyHalloweenStory,
 };
 
 export interface StoryUpgradeResult {
@@ -199,7 +316,17 @@ export interface StoryUpgradeResult {
   source: "ai" | "carried";
 }
 
-const OCCASION: Record<string, string> = { "birthday-gf": "birthday", "happy-birthday": "birthday", "apology-dashboard": "apology" };
+const OCCASION: Record<string, string> = {
+  "birthday-gf": "birthday",
+  "happy-birthday": "birthday",
+  "apology-dashboard": "apology",
+  "missyou-gf": "missing them while apart",
+  "miss-you": "missing them while apart",
+  proposal: "a proposal",
+  "will-you-be-mine": "a proposal",
+  "happy-anniversary": "anniversary",
+  "happy-halloween": "Halloween",
+};
 
 /** Their words → a patch for the premium template. Falls back to their letter alone. */
 export async function upgradeViaStory(from: string, to: string, raw: unknown): Promise<StoryUpgradeResult> {

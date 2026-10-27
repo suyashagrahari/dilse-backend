@@ -25,6 +25,20 @@ const BIRTHDAY_PREMIUM_PERKS = [
   "Your photos in a photo-booth strip, and a keepsake to download",
 ];
 
+const MISS_YOU_PREMIUM_PERKS = [
+  "A little plane writes their name in the sky over your two cities",
+  "A radio of your voice notes, a picnic for two, a message in a bottle",
+  "Your letter, your photos and a countdown to the day you meet",
+  "They answer “Video call tonight?”, and you get to see it",
+];
+
+const PROPOSAL_PREMIUM_PERKS = [
+  "A wax-sealed invitation and fairy lights that spell out your words",
+  "A carousel of your story, a love lock counting your days together",
+  "A flower that always ends on 'loves me', your letter on a ribbon",
+  "A ring box rises with your promise, then the big question",
+];
+
 export const UPGRADE_PATHS: Readonly<Record<string, UpgradePath>> = {
   "bouquet-gf": {
     from: "bouquet-gf",
@@ -48,6 +62,52 @@ export const UPGRADE_PATHS: Readonly<Record<string, UpgradePath>> = {
     to: "birthday-premium",
     title: "Birthday Surprise ✦ Premium",
     perks: BIRTHDAY_PREMIUM_PERKS,
+  },
+  "missyou-gf": {
+    from: "missyou-gf",
+    to: "miss-you-premium",
+    title: "Miss You ✦ Premium",
+    perks: MISS_YOU_PREMIUM_PERKS,
+  },
+  "miss-you": {
+    from: "miss-you",
+    to: "miss-you-premium",
+    title: "Miss You ✦ Premium",
+    perks: MISS_YOU_PREMIUM_PERKS,
+  },
+  proposal: {
+    from: "proposal",
+    to: "proposal-premium",
+    title: "The Proposal ✦ Premium",
+    perks: PROPOSAL_PREMIUM_PERKS,
+  },
+  "will-you-be-mine": {
+    from: "will-you-be-mine",
+    to: "proposal-premium",
+    title: "The Proposal ✦ Premium",
+    perks: PROPOSAL_PREMIUM_PERKS,
+  },
+  "happy-anniversary": {
+    from: "happy-anniversary",
+    to: "anniversary-premium",
+    title: "Anniversary ✦ Premium: The Book of Us",
+    perks: [
+      "Film-style opening titles with your two names",
+      "A time machine through your years, your firsts on a record player",
+      "A quilt of your photos and reasons, your letter bound as a little book",
+      "Lanterns of promises for next year, and your year in numbers",
+    ],
+  },
+  "happy-halloween": {
+    from: "happy-halloween",
+    to: "happy-halloween-premium",
+    title: "Halloween ✦ Premium: Boo-tiful Night",
+    perks: [
+      "A ghost pops out of a haunted mailbox with your letter",
+      "Catch candies of treats and cute dares, carve a pumpkin together",
+      "Ghosts hide your photos, a love potion casts one spell",
+      "'Will you be my boo?' and a Boo License keepsake",
+    ],
   },
   "apology-dashboard": {
     from: "apology-dashboard",
