@@ -18,6 +18,13 @@ export interface UpgradePath {
   perks: string[];
 }
 
+const BIRTHDAY_PREMIUM_PERKS = [
+  "A pop-up birthday storybook with their name on the cover",
+  "Wishes, your story's milestones and the reasons you love them",
+  "They bake a cake, scratch a golden ticket and open your letter",
+  "Your photos in a photo-booth strip, and a keepsake to download",
+];
+
 export const UPGRADE_PATHS: Readonly<Record<string, UpgradePath>> = {
   "bouquet-gf": {
     from: "bouquet-gf",
@@ -29,6 +36,18 @@ export const UPGRADE_PATHS: Readonly<Record<string, UpgradePath>> = {
       "A real love letter card, a song and a keepsake to download",
       "They react back, and you get to see it",
     ],
+  },
+  "birthday-gf": {
+    from: "birthday-gf",
+    to: "birthday-premium",
+    title: "Birthday Surprise ✦ Premium",
+    perks: BIRTHDAY_PREMIUM_PERKS,
+  },
+  "happy-birthday": {
+    from: "happy-birthday",
+    to: "birthday-premium",
+    title: "Birthday Surprise ✦ Premium",
+    perks: BIRTHDAY_PREMIUM_PERKS,
   },
 };
 

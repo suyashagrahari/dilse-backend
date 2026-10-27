@@ -16,6 +16,7 @@ import { UPGRADE_EVENTS, UPGRADE_PATHS, isUpgradeEvent, upgradePathFrom } from "
 import { isTemplateLive } from "../config/templateVisibility";
 import { quoteFor } from "../services/pricingQuote.service";
 import { upgradeBouquet } from "../services/bouquetUpgrade.service";
+import { STORY_BUILDERS, upgradeViaStory } from "../services/storyUpgrade.service";
 import UpgradeEvent from "../models/UpgradeEvent";
 import UpgradeSetting from "../models/UpgradeSetting";
 import User from "../models/User";
@@ -77,15 +78,20 @@ export const getUpgradeOffer = async (req: Request, res: Response): Promise<void
 
 export const convertToPremium = async (req: Request, res: Response): Promise<void> => {
   const path = upgradePathFrom(String(req.params.from));
-  if (!path || path.from !== "bouquet-gf") {
+  if (!path || (path.from !== "bouquet-gf" && !STORY_BUILDERS[path.from])) {
     res.status(404).json({ success: false, error: "No premium version for this template." });
     return;
   }
   const body = (req.body ?? {}) as { data?: unknown; visitorId?: unknown; pageId?: unknown };
   try {
-    const result = await upgradeBouquet(body.data);
+    // The bouquet maps field by field into a whole draft; the birthday pages
+    // come back as a patch over the premium demo (see storyUpgrade.service).
+    const data =
+      path.from === "bouquet-gf"
+        ? await upgradeBouquet(body.data).then((r) => ({ to: path.to, draft: r.draft, source: r.source }))
+        : await upgradeViaStory(path.from, path.to, body.data).then((r) => ({ to: path.to, patch: r.patch, source: r.source }));
     void record(path.from, "preview_ready", req, body).catch(() => {});
-    res.json({ success: true, data: { to: path.to, draft: result.draft, source: result.source } });
+    res.json({ success: true, data });
   } catch {
     void record(path.from, "preview_failed", req, body).catch(() => {});
     res.status(500).json({ success: false, error: "Could not prepare the premium version. Please try again." });
