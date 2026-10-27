@@ -46,6 +46,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Only copy what's needed for runtime
 COPY --from=prod-deps --chown=expressjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=expressjs:nodejs /app/dist ./dist
+# Fonts, logo and the animated cards the billing statement email and PDF use.
+COPY --from=builder --chown=expressjs:nodejs /app/assets ./assets
 COPY --chown=expressjs:nodejs package.json ./
 # Writable home for the IP→country database the server downloads at boot
 # (services/geo.service.ts). Not baked in: a Docker build step is cached and

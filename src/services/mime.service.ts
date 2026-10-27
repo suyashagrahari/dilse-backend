@@ -9,7 +9,9 @@
 //       ├── text/html              the same paragraphs, <img src="cid:…">
 //       └── image/png  (inline)    Content-ID: <…>, Content-Disposition: inline
 //
-// which is what Gmail itself sends when a person pastes a screenshot. Built
+// which is what Gmail itself sends when a person pastes a screenshot. With
+// file `attachments` (a billing statement PDF) the whole thing is wrapped in a
+// multipart/mixed next to them. Built
 // with nodemailer's MailComposer (already a dependency); pure — no network.
 // From / To / Subject / Reply-To and the threading headers (In-Reply-To,
 // References) go into the message itself; the configuration set stays on the
@@ -26,6 +28,8 @@ export interface RawMimeInput {
   html: string;
   headers?: { Name: string; Value: string }[];
   inlineImages: { cid: string; filename: string; contentType: string; content: Buffer }[];
+  /** Ordinary attachments (Content-Disposition: attachment), e.g. a PDF. */
+  attachments?: { filename: string; contentType: string; content: Buffer }[];
 }
 
 export async function buildRawMime(m: RawMimeInput): Promise<Buffer> {
@@ -39,13 +43,21 @@ export async function buildRawMime(m: RawMimeInput): Promise<Buffer> {
     text: m.text,
     html: m.html,
     headers,
-    attachments: m.inlineImages.map((i) => ({
-      filename: i.filename,
-      content: i.content,
-      contentType: i.contentType,
-      cid: i.cid,
-      contentDisposition: "inline" as const,
-    })),
+    attachments: [
+      ...m.inlineImages.map((i) => ({
+        filename: i.filename,
+        content: i.content,
+        contentType: i.contentType,
+        cid: i.cid,
+        contentDisposition: "inline" as const,
+      })),
+      ...(m.attachments || []).map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+        contentDisposition: "attachment" as const,
+      })),
+    ],
     // Plain 8bit/quoted-printable text; no X-Mailer advertising nodemailer.
     xMailer: false,
   });

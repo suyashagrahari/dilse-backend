@@ -3,7 +3,8 @@ import { audit } from "../services/adminAudit";
 import { loadTarget } from "./superAdmin.controller";
 import { RangeInputError } from "../services/revenueMath";
 import { revenueCustomers, revenueOrders, revenueSummary, userBilling } from "../services/revenue.service";
-import { previewStatement, sendStatement, StatementError } from "../services/billingStatement.service";
+import { composeThanks, previewStatement, sendStatement, StatementError, withDataUrls } from "../services/billingStatement.service";
+import { BillingAiRefusedError, BillingAiUnavailableError } from "../services/billingThanksAi.service";
 import { sendSesEmail, sesConfigured } from "../services/ses.service";
 import {
   checkClosureRequest,
@@ -119,8 +120,12 @@ export const previewBillingStatement = async (req: Request, res: Response): Prom
       success: true,
       data: {
         subject: p.subject,
-        html: p.html,
+        // The animated cards travel as cid: parts; a browser needs data: URLs.
+        html: withDataUrls(p.html),
         text: p.text,
+        message: p.message,
+        pdfBase64: p.pdf.toString("base64"),
+        pdfFileName: p.pdfFileName,
         orderCount: p.orderCount,
         totalInrPaise: p.totalInrPaise,
         to: p.to,
@@ -137,6 +142,32 @@ export const previewBillingStatement = async (req: Request, res: Response): Prom
     if (badInput(res, error)) return;
     console.error("Billing preview error:", error);
     res.status(500).json({ success: false, error: "Failed to build the statement" });
+  }
+};
+
+/**
+ * POST /users/:userId/billing/compose — an AI-written subject and thank-you
+ * message for the selected orders (body: the preview body, plus `previous` on
+ * Regenerate). Sends and saves nothing; the admin edits it, then previews.
+ */
+export const composeBillingThanks = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await loadTarget(req, res, { mutating: false });
+    if (!user) return;
+    const draft = await composeThanks({ _id: user._id, name: user.name, email: user.email, status: user.status }, req.body);
+    res.json({ success: true, data: draft });
+  } catch (error) {
+    if (badInput(res, error)) return;
+    if (error instanceof BillingAiRefusedError) {
+      res.status(422).json({ success: false, error: error.message });
+      return;
+    }
+    if (error instanceof BillingAiUnavailableError) {
+      res.status(503).json({ success: false, error: error.message });
+      return;
+    }
+    console.error("Billing compose error:", error);
+    res.status(500).json({ success: false, error: "Failed to write the message" });
   }
 };
 

@@ -31,6 +31,6 @@ test("statement requests need a range or orders, with valid ids and dates", () =
   assert.throws(() => parseStatementRequest({ orderIds: ["nope"] }), StatementError);
   assert.throws(() => parseStatementRequest({ from: "12/10/2026", to: "2026-10-12" }), StatementError);
   const r = parseStatementRequest({ orderIds: ["64f0c0ffee64f0c0ffee64f0", "64f0c0ffee64f0c0ffee64f0"], note: " thanks " });
-  assert.deepEqual(r, { from: null, to: null, orderIds: ["64f0c0ffee64f0c0ffee64f0"], note: "thanks" });
+  assert.deepEqual(r, { from: null, to: null, orderIds: ["64f0c0ffee64f0c0ffee64f0"], note: "thanks", message: "", subject: "" });
   assert.deepEqual(parseStatementRequest({ from: "2026-10-12", to: "2026-10-12" }).orderIds, []);
 });

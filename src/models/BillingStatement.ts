@@ -27,6 +27,8 @@ export interface IBillingStatement extends Document {
   totalInrPaise: number;
   subject: string;
   note?: string;
+  /** The thank-you message the email opened with, as sent. */
+  message?: string;
   messageId?: string | null;
   status: BillingStatementStatus;
   error?: string | null;
@@ -50,6 +52,7 @@ const billingStatementSchema = new Schema<IBillingStatement>(
     totalInrPaise: { type: Number, required: true },
     subject: { type: String, required: true },
     note: { type: String, maxlength: 1000 },
+    message: { type: String, maxlength: 1500 },
     messageId: { type: String, default: null },
     status: { type: String, enum: ["sent", "skipped", "failed"], required: true },
     error: { type: String, default: null },

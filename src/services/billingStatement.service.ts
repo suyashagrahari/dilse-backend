@@ -17,19 +17,32 @@
 // To the account's own email address, always. There is deliberately no way to
 // pass a recipient: a billing endpoint that mails an arbitrary address is a
 // way to send anyone's payment history to anyone.
+//
+// ── WHAT GOES OUT ───────────────────────────────────────────────────────────
+//
+// The email (billingEmail.ts) opens with a thank-you message — the default one,
+// or one the super admin wrote or had AI write (composeThanks below) — and
+// carries the two animated cards as inline parts and the full statement as a
+// PDF attachment (billingPdf.ts). The preview returns the same email with the
+// cards as data: URLs and the PDF as base64, so the admin sees all of it.
 
+import fs from "node:fs";
+import path from "node:path";
 import mongoose from "mongoose";
 import PaymentOrder from "../models/PaymentOrder";
 import BillingStatement from "../models/BillingStatement";
 import { nextSequence } from "../models/Counter";
 import { env } from "../config/env";
-import { buildStatementEmail, type BuiltStatement, type StatementLine } from "./billingEmail";
+import { EMAIL_GIFS, MESSAGE_MAX, SUBJECT_MAX, buildStatementEmail, type BuiltStatement, type StatementLine } from "./billingEmail";
+import { BILLING_ASSETS, buildStatementPdf, statementFileName } from "./billingPdf";
+import { draftThanks, type ThanksDraft } from "./billingThanksAi.service";
 import { shareUrl, settledBetween, toLedgerItems, type LedgerItem } from "./revenue.service";
 import {
   MAX_CUSTOM_DAYS,
   daysInclusive,
   dayRange,
   formatInvoiceNumber,
+  formatPeriod,
   isYmd,
   istDate,
   orderSetKey,
@@ -54,6 +67,9 @@ export interface StatementRequest {
   to: string | null;
   orderIds: string[];
   note: string;
+  /** The thank-you message; empty means the default one. */
+  message: string;
+  subject: string;
 }
 
 /** Validates the preview/send body. Pure. */
@@ -79,7 +95,11 @@ export function parseStatementRequest(body: unknown): StatementRequest {
   }
   const note = typeof b.note === "string" ? b.note.trim() : "";
   if (note.length > MAX_NOTE) throw new StatementError(`The note can be at most ${MAX_NOTE} characters.`);
-  return { from: from as string | null, to: to as string | null, orderIds, note };
+  const message = typeof b.message === "string" ? b.message.replace(/\r\n/g, "\n").trim() : "";
+  if (message.length > MESSAGE_MAX) throw new StatementError(`The thank-you message can be at most ${MESSAGE_MAX} characters.`);
+  const subject = typeof b.subject === "string" ? b.subject.replace(/[\r\n]+/g, " ").trim() : "";
+  if (subject.length > SUBJECT_MAX) throw new StatementError(`The subject can be at most ${SUBJECT_MAX} characters.`);
+  return { from: from as string | null, to: to as string | null, orderIds, note, message, subject };
 }
 
 interface TargetUser {
@@ -176,20 +196,48 @@ export interface PreviewResult extends BuiltStatement {
   to: string;
   period: { from: string; to: string };
   orderIds: string[];
+  /** The thank-you message the email opens with (the default one when none was given). */
+  message: string;
+  pdf: Buffer;
+  pdfFileName: string;
+}
+
+/** The two animated cards, read once. */
+let gifCache: { cid: string; filename: string; contentType: string; content: Buffer }[] | null = null;
+export function emailGifs() {
+  gifCache ??= EMAIL_GIFS.map((g) => ({ cid: g.cid, filename: g.filename, contentType: "image/gif", content: fs.readFileSync(path.join(BILLING_ASSETS, g.filename)) }));
+  return gifCache;
+}
+
+/** The email as a browser can show it: each cid: image as a data: URL. */
+export function withDataUrls(html: string): string {
+  return emailGifs().reduce((h, g) => h.split(`cid:${g.cid}`).join(`data:${g.contentType};base64,${g.content.toString("base64")}`), html);
 }
 
 async function build(user: TargetUser, req: StatementRequest, sel: Selection, preview: boolean): Promise<PreviewResult> {
   const items = await toLedgerItems(sel.orders);
   // The ledger item names the user from a lookup; the statement is addressed
   // to the account itself, so take it from the loaded user.
-  const built = buildStatementEmail({
+  const input = {
     billedTo: { name: user.name, email: user.email },
     period: sel.period,
     lines: toLines(items),
     note: req.note,
+    message: req.message,
+    subject: req.subject,
     preview,
-  });
-  return { ...built, to: user.email, period: sel.period, orderIds: sel.orders.map((o) => String(o._id)) };
+  };
+  const built = buildStatementEmail(input);
+  const pdf = await buildStatementPdf(input);
+  return {
+    ...built,
+    to: user.email,
+    period: sel.period,
+    orderIds: sel.orders.map((o) => String(o._id)),
+    message: built.message,
+    pdf,
+    pdfFileName: statementFileName(sel.period),
+  };
 }
 
 function refuseClosed(user: TargetUser) {
@@ -201,6 +249,24 @@ function refuseClosed(user: TargetUser) {
 export async function previewStatement(user: TargetUser, body: unknown): Promise<PreviewResult> {
   const req = parseStatementRequest(body);
   return build(user, req, await selectOrders(user, req), true);
+}
+
+/**
+ * An AI-written subject and thank-you message for the selected orders
+ * ("Write with AI" / "Regenerate"). Same selection rules as the preview; sends
+ * and saves nothing. `previous` in the body is the message being replaced.
+ */
+export async function composeThanks(user: TargetUser, body: unknown): Promise<ThanksDraft> {
+  const req = parseStatementRequest(body);
+  const sel = await selectOrders(user, req);
+  const items = await toLedgerItems(sel.orders);
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  return draftThanks({
+    name: user.name,
+    templates: items.map((i) => i.templateLabel),
+    period: formatPeriod(sel.period.from, sel.period.to),
+    previous: typeof b.previous === "string" ? b.previous.slice(0, MESSAGE_MAX) : undefined,
+  });
 }
 
 // One send at a time per (user, order set) in this process — the database guard
@@ -236,7 +302,17 @@ export async function sendStatement(
   body: unknown,
   actor: { id: string; email: string },
   deps: {
-    send: (e: { to: string; subject: string; text: string; html: string; from: string; fromName: string; replyTo: string }) => Promise<{ outcome: "sent" | "skipped"; messageId?: string }>;
+    send: (e: {
+      to: string;
+      subject: string;
+      text: string;
+      html: string;
+      from: string;
+      fromName: string;
+      replyTo: string;
+      inlineImages: { cid: string; filename: string; contentType: string; content: Buffer }[];
+      attachments: { filename: string; contentType: string; content: Buffer }[];
+    }) => Promise<{ outcome: "sent" | "skipped"; messageId?: string }>;
     configured: () => boolean;
   }
 ): Promise<SendResult> {
@@ -284,6 +360,8 @@ export async function sendStatement(
         from: env.BILLING_FROM_EMAIL,
         fromName: BILLING_FROM_NAME,
         replyTo: env.BILLING_REPLY_TO_EMAIL,
+        inlineImages: emailGifs(),
+        attachments: [{ filename: email.pdfFileName, contentType: "application/pdf", content: email.pdf }],
       });
       status = r.outcome;
       messageId = r.messageId ?? null;
@@ -304,6 +382,7 @@ export async function sendStatement(
       totalInrPaise: email.totalInrPaise,
       subject: email.subject,
       note: req.note || undefined,
+      message: email.message,
       messageId,
       status,
       error,

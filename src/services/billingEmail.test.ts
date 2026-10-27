@@ -85,3 +85,18 @@ test("IST date-times and per-currency grouping", () => {
   assert.equal(formatIstDateTime(new Date("2026-10-11T18:30:00Z")), "12 Oct 2026, 12:00 AM IST");
   assert.deepEqual(currencyTotalsOf([line({ status: "points_used" })]), []);
 });
+
+test("the email opens with the thank-you message and both animated cards, and names the PDF", () => {
+  const out = buildStatementEmail({ ...base, lines: [line({})], message: "Dear Asha,\n\nThank you <3 for choosing us." });
+  assert.ok(out.html.indexOf("cid:ss-thanks") < out.html.indexOf("Thank you &lt;3 for choosing us."), "thank-you card first");
+  assert.ok(out.html.includes("cid:ss-seeyou"));
+  assert.ok(out.html.includes("attached as a PDF"));
+  assert.ok(out.text.startsWith("Dear Asha,\n\nThank you <3 for choosing us."));
+  assert.equal(out.message, "Dear Asha,\n\nThank you <3 for choosing us.");
+});
+
+test("no message: the default thank-you greets them by first name; a custom subject wins", () => {
+  const out = buildStatementEmail({ ...base, billedTo: { name: "Asha Rao", email: "a@b.co" }, lines: [line({})], subject: "Thank you, Asha 💛" });
+  assert.ok(out.message.startsWith("Dear Asha,"));
+  assert.equal(out.subject, "Thank you, Asha 💛");
+});

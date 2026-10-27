@@ -210,6 +210,8 @@ export interface SesEmail {
    * multipart/related html + images) — see mime.service.ts. Requires `html`.
    */
   inlineImages?: { cid: string; filename: string; contentType: string; content: Buffer }[];
+  /** Files attached to the email (a billing statement PDF). Sent as Content.Raw, like inline images. */
+  attachments?: { filename: string; contentType: string; content: Buffer }[];
 }
 
 /**
@@ -355,8 +357,8 @@ export async function buildSendCommand(
   const { to, subject, fromEmail, fromName, configurationSet, messageHeaders } = o;
   const fromHeader = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
   const replyTo = replyToHeader(email.replyTo, fromEmail);
-  if (email.inlineImages?.length) {
-    if (!email.html) throw new SesSendError("An email with inline images needs an HTML part.");
+  if (email.inlineImages?.length || email.attachments?.length) {
+    if (!email.html) throw new SesSendError("An email with inline images or attachments needs an HTML part.");
     const raw = await buildRawMime({
       from: fromHeader,
       to,
@@ -365,7 +367,8 @@ export async function buildSendCommand(
       text: email.text,
       html: email.html,
       headers: messageHeaders,
-      inlineImages: email.inlineImages,
+      inlineImages: email.inlineImages || [],
+      ...(email.attachments?.length ? { attachments: email.attachments } : {}),
     });
     return new SendEmailCommand({
       FromEmailAddress: fromHeader,

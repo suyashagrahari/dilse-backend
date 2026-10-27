@@ -5,12 +5,22 @@
 // super admin previews is byte-for-byte what is sent (apart from invoice
 // numbers, which a preview shows as "pending" because it must not burn any).
 //
+// ── WHAT THE EMAIL SAYS ─────────────────────────────────────────────────────
+//
+// Thank you first: an animated "Thank you!" card, then the thank-you message
+// (written by AI or by the super admin, see billingThanksAi.service.ts), then a
+// short summary of the statement, a line saying the full statement is attached
+// as a PDF (billingPdf.ts builds it from the same lines), any note, and an
+// animated "See you next time" card before the business footer.
+//
 // ── WHY TABLES AND INLINE STYLES ────────────────────────────────────────────
 //
 // Gmail strips <style> blocks in many contexts and Outlook renders with Word's
 // engine, which ignores flexbox, grid and most of CSS. Nested tables with
-// inline styles and explicit widths are the only layout both get right. No
-// web fonts, no images (nothing to block, nothing to track).
+// inline styles and explicit widths are the only layout both get right. No web
+// fonts. The two GIFs travel INSIDE the email as inline parts (cid:), so no
+// image is fetched from a server: nothing to block, nothing to track. The
+// preview swaps cid: for data: URLs so the browser can show them.
 //
 // ── ESCAPING ────────────────────────────────────────────────────────────────
 //
@@ -47,6 +57,10 @@ export interface StatementInput {
   period: { from: string; to: string };
   lines: StatementLine[];
   note?: string | null;
+  /** The thank-you message (plain text, blank lines between paragraphs). Empty: the default one. */
+  message?: string | null;
+  /** A subject the super admin wrote. Empty: the default one. */
+  subject?: string | null;
   /** True for the preview: missing invoice numbers read "pending", not "—". */
   preview?: boolean;
 }
@@ -69,6 +83,8 @@ export interface BuiltStatement {
   currencyTotals: CurrencyTotal[];
   pointsUnlocks: number;
   pointsSpent: number;
+  /** The thank-you message used. */
+  message: string;
 }
 
 const C = {
@@ -81,6 +97,25 @@ const C = {
   gold: "#c9a84c",
   border: "#ecdcd0",
 };
+
+/** The animated cards, sent as inline parts of the email (files in assets/billing/). */
+export const EMAIL_GIFS = [
+  { cid: "ss-thanks", filename: "thanks.gif", alt: "Thank you for choosing SubhSandesh" },
+  { cid: "ss-seeyou", filename: "seeyou.gif", alt: "See you next time" },
+] as const;
+
+export const MESSAGE_MAX = 1500;
+export const SUBJECT_MAX = 120;
+
+/** The thank-you message when nobody wrote one. */
+export function defaultThankYou(name: string): string {
+  const first = flat(name).split(/\s+/)[0] || "";
+  return [
+    `Dear ${first || "friend"},`,
+    `Thank you so much for choosing ${BUSINESS.name} to be a part of your celebration. It means the world to our small team that you trusted us with a moment that matters to you.`,
+    "We hope your page brought big smiles to everyone who opened it. Whenever the next occasion comes around, we will be right here, ready to help you make it special.",
+  ].join("\n\n");
+}
 
 const FONT = "Georgia, 'Times New Roman', serif";
 const SANS = "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
@@ -138,68 +173,43 @@ export function buildStatementEmail(input: StatementInput): BuiltStatement {
   const invoiceText = (l: StatementLine) =>
     l.invoiceNumber ?? (l.status === "points_used" ? "—" : input.preview ? "pending" : "—");
 
-  const subject = `Your ${BUSINESS.name} payment statement — ${periodText}`;
+  const subject = flat(input.subject).slice(0, SUBJECT_MAX) || `Your ${BUSINESS.name} payment statement — ${periodText}`;
+  const message = String(input.message ?? "").replace(/\r\n/g, "\n").trim().slice(0, MESSAGE_MAX) || defaultThankYou(name);
 
   // ── HTML ──────────────────────────────────────────────────────────────────
-  const th = (label: string, align: "left" | "right" = "left") =>
-    `<th align="${align}" style="padding:8px 6px;border-bottom:2px solid ${C.gold};font:600 11px ${SANS};color:${C.muted};text-transform:uppercase;letter-spacing:.04em;text-align:${align};">${label}</th>`;
-  const td = (html: string, align: "left" | "right" = "left", extra = "") =>
-    `<td align="${align}" valign="top" style="padding:10px 6px;border-bottom:1px solid ${C.border};font:13px ${SANS};color:${C.text};text-align:${align};${extra}">${html}</td>`;
+  const row = (label: string, value: string, strong = false) =>
+    `<tr><td style="padding:5px 0;font:${strong ? "700 15px" : "13px"} ${SANS};color:${strong ? C.maroon : C.muted};">${label}</td>` +
+    `<td align="right" style="padding:5px 0;font:${strong ? "700 15px" : "13px"} ${SANS};color:${strong ? C.maroon : C.text};text-align:right;">${value}</td></tr>`;
 
-  const rows = lines
+  const items = lines
     .map((l) => {
-      const template = l.pageUrl
-        ? `${esc(l.templateLabel)}<br><a href="${esc(l.pageUrl)}" style="color:${C.maroon};font-size:12px;word-break:break-all;">${esc(l.pageUrl)}</a>`
-        : esc(l.templateLabel);
-      const discount =
-        l.discountLabel !== "—" && l.discountAmount > 0
-          ? `${esc(l.discountLabel)}<br><span style="color:${C.muted};font-size:12px;">−${esc(formatMinor(l.discountAmount, l.currency))}</span>`
-          : "—";
-      const paid =
-        l.status === "points_used"
-          ? `<span style="color:${C.muted};">Unlocked with points</span>`
-          : `<strong>${esc(formatMinor(l.amount, l.currency))}</strong>`;
+      const paid = l.status === "points_used" ? `${esc(l.pointsUsed.toLocaleString("en-IN"))} points` : esc(formatMinor(l.amount, l.currency));
+      const link = l.pageUrl ? ` · <a href="${esc(l.pageUrl)}" style="color:${C.maroon};">open page</a>` : "";
       return (
-        "<tr>" +
-        td(esc(formatIstDateTime(l.paidAt)), "left", "white-space:nowrap;") +
-        td(esc(invoiceText(l)), "left", "white-space:nowrap;") +
-        td(template) +
-        td(esc(formatMinor(l.listAmount, l.currency)), "right", "white-space:nowrap;") +
-        td(discount, "right") +
-        td(l.pointsUsed > 0 ? esc(l.pointsUsed.toLocaleString("en-IN")) : "—", "right") +
-        td(paid, "right", "white-space:nowrap;") +
-        td(l.razorpayPaymentId ? esc(l.razorpayPaymentId) : "—", "left", `font-family:Menlo,Consolas,monospace;font-size:11px;color:${C.muted};word-break:break-all;`) +
-        "</tr>"
+        `<tr><td style="padding:9px 0;border-bottom:1px solid ${C.border};font:13px/1.45 ${SANS};color:${C.text};"><strong>${esc(l.templateLabel)}</strong>` +
+        `<br><span style="font-size:12px;color:${C.muted};">${esc(formatIstDateTime(l.paidAt))}${link}</span></td>` +
+        `<td align="right" valign="top" style="padding:9px 0;border-bottom:1px solid ${C.border};font:600 13px ${SANS};color:${C.text};text-align:right;white-space:nowrap;">${paid}</td></tr>`
       );
     })
     .join("");
 
-  const totalRow = (label: string, value: string, strong = false) =>
-    `<tr><td style="padding:4px 0;font:${strong ? "700 15px" : "13px"} ${SANS};color:${strong ? C.maroon : C.muted};">${label}</td>` +
-    `<td align="right" style="padding:4px 0;font:${strong ? "700 15px" : "13px"} ${SANS};color:${strong ? C.maroon : C.text};text-align:right;">${value}</td></tr>`;
+  const totalsHtml =
+    totals.map((t) => row(mixed ? `${esc(t.currency)} total paid` : "Total paid", esc(formatMinor(t.paid, t.currency)), true)).join("") +
+    (mixed ? row("All currencies, in INR (at the rate on each payment date)", esc(formatMinor(totalInrPaise, "INR")), true) : "") +
+    (pointsLines.length ? row(`Unlocked with points (${pointsLines.length} page${pointsLines.length > 1 ? "s" : ""})`, `${esc(pointsSpent.toLocaleString("en-IN"))} points`) : "") +
+    (totals.some((t) => t.discount > 0) ? row("You saved", totals.filter((t) => t.discount > 0).map((t) => esc(formatMinor(t.discount, t.currency))).join(" + ")) : "");
 
-  const totalsHtml = totals
-    .map(
-      (t) =>
-        (mixed ? `<tr><td colspan="2" style="padding:10px 0 2px;font:600 12px ${SANS};color:${C.text};">${esc(t.currency)}</td></tr>` : "") +
-        totalRow("Subtotal", esc(formatMinor(t.subtotal, t.currency))) +
-        totalRow("Total discount", t.discount > 0 ? `−${esc(formatMinor(t.discount, t.currency))}` : esc(formatMinor(0, t.currency))) +
-        totalRow("Total paid", esc(formatMinor(t.paid, t.currency)), true)
-    )
+  const messageHtml = message
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 14px;font:15px/1.7 ${SANS};color:${C.text};">${esc(p).replace(/\n/g, "<br>")}</p>`)
     .join("");
-  const inrEquivHtml = mixed
-    ? totalRow("All currencies, in INR (at the rate on each payment date)", esc(formatMinor(totalInrPaise, "INR")), true)
-    : "";
-  const pointsHtml = pointsLines.length
-    ? totalRow(
-        `Unlocked with points (${pointsLines.length} page${pointsLines.length > 1 ? "s" : ""})`,
-        `${esc(pointsSpent.toLocaleString("en-IN"))} points`
-      )
-    : "";
 
   const noteHtml = note
-    ? `<tr><td style="padding:0 32px 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};border-left:3px solid ${C.gold};"><tr><td style="padding:12px 16px;font:13px/1.6 ${SANS};color:${C.text};white-space:pre-wrap;">${esc(note)}</td></tr></table></td></tr>`
+    ? `<tr><td style="padding:0 32px 22px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};border-left:3px solid ${C.gold};"><tr><td style="padding:12px 16px;font:13px/1.6 ${SANS};color:${C.text};white-space:pre-wrap;">${esc(note)}</td></tr></table></td></tr>`
     : "";
+
+  const gif = (g: (typeof EMAIL_GIFS)[number]) =>
+    `<img src="cid:${g.cid}" width="560" alt="${esc(g.alt)}" style="display:block;width:100%;max-width:560px;height:auto;border:0;margin:0 auto;">`;
 
   const footerAddress = BUSINESS.addressLines.map(esc).join("<br>");
 
@@ -207,39 +217,33 @@ export function buildStatementEmail(input: StatementInput): BuiltStatement {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head>
 <body style="margin:0;padding:0;background:${C.page};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page};"><tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" width="760" cellpadding="0" cellspacing="0" style="width:100%;max-width:760px;background:${C.card};border:1px solid ${C.border};border-radius:12px;">
-<tr><td style="padding:28px 32px 20px;border-bottom:3px solid ${C.gold};background:${C.maroon};border-radius:12px 12px 0 0;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${C.card};border:1px solid ${C.border};border-radius:16px;">
+<tr><td style="padding:22px 32px 16px;border-bottom:3px solid ${C.gold};background:${C.maroon};border-radius:16px 16px 0 0;" align="center">
   <div style="font:700 24px ${FONT};color:#fffdfb;letter-spacing:.02em;">${esc(BUSINESS.name)}</div>
-  <div style="font:13px ${SANS};color:${C.gold};margin-top:4px;text-transform:uppercase;letter-spacing:.12em;">Payment statement</div>
+  <div style="font:12px ${SANS};color:${C.gold};margin-top:4px;text-transform:uppercase;letter-spacing:.16em;">With gratitude</div>
 </td></tr>
-<tr><td style="padding:24px 32px 8px;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-    <td valign="top" style="font:13px/1.6 ${SANS};color:${C.text};">
-      <div style="font:600 11px ${SANS};color:${C.muted};text-transform:uppercase;letter-spacing:.06em;">Billed to</div>
-      <div style="font-weight:600;">${esc(name)}</div>
-      <div>${esc(email)}</div>
-    </td>
-    <td valign="top" align="right" style="font:13px/1.6 ${SANS};color:${C.text};text-align:right;">
-      <div style="font:600 11px ${SANS};color:${C.muted};text-transform:uppercase;letter-spacing:.06em;">Statement period</div>
-      <div style="font-weight:600;">${esc(periodText)}</div>
-      <div>${lines.length} order${lines.length === 1 ? "" : "s"}</div>
-    </td>
+<tr><td align="center" style="padding:8px 20px 0;background:#fdf6ef;">${gif(EMAIL_GIFS[0])}</td></tr>
+<tr><td style="padding:26px 32px 8px;">${messageHtml}</td></tr>
+<tr><td style="padding:0 32px 22px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};border:1px solid ${C.border};border-radius:12px;">
+    <tr><td style="padding:16px 20px 6px;">
+      <div style="font:600 11px ${SANS};color:${C.muted};text-transform:uppercase;letter-spacing:.1em;">Your statement · ${esc(periodText)}</div>
+      <div style="font:13px ${SANS};color:${C.text};margin-top:3px;">Billed to ${esc(name)} · ${esc(email)}</div>
+    </td></tr>
+    <tr><td style="padding:4px 20px 4px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${items}</table></td></tr>
+    <tr><td style="padding:6px 20px 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${totalsHtml}</table></td></tr>
+  </table>
+</td></tr>
+<tr><td style="padding:0 32px 22px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px dashed ${C.gold};border-radius:12px;"><tr>
+    <td width="44" valign="middle" style="padding:14px 0 14px 16px;font:26px ${SANS};">📎</td>
+    <td valign="middle" style="padding:14px 16px 14px 8px;font:13px/1.6 ${SANS};color:${C.text};"><strong>Your full statement is attached as a PDF</strong><br><span style="color:${C.muted};">Every order with its date and time, invoice number, list price, discount, amount paid and transaction id, ready to download or print.</span></td>
   </tr></table>
 </td></tr>
-<tr><td style="padding:16px 32px 8px;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-    <tr>${th("Date &amp; time")}${th("Invoice no.")}${th("Template")}${th("List price", "right")}${th("Discount", "right")}${th("Points", "right")}${th("Amount paid", "right")}${th("Transaction ID")}</tr>
-    ${rows}
-  </table>
-</td></tr>
-<tr><td style="padding:8px 32px 24px;">
-  <table role="presentation" width="320" align="right" cellpadding="0" cellspacing="0" style="width:320px;max-width:100%;">
-    ${totalsHtml}${inrEquivHtml}${pointsHtml}
-  </table>
-</td></tr>
 ${noteHtml}
-<tr><td style="padding:20px 32px 28px;border-top:1px solid ${C.border};background:${C.cream};border-radius:0 0 12px 12px;font:12px/1.6 ${SANS};color:${C.muted};">
-  <p style="margin:0 0 10px;color:${C.text};">This is a payment statement for payments already received. Questions? Reply to this email or write to <a href="mailto:${esc(BUSINESS.email)}" style="color:${C.maroon};">${esc(BUSINESS.email)}</a>.</p>
+<tr><td align="center" style="padding:0 20px 8px;background:#fdf6ef;">${gif(EMAIL_GIFS[1])}</td></tr>
+<tr><td style="padding:20px 32px 28px;border-top:1px solid ${C.border};background:${C.cream};border-radius:0 0 16px 16px;font:12px/1.6 ${SANS};color:${C.muted};">
+  <p style="margin:0 0 10px;color:${C.text};">This is a statement of payments already received. Questions? Reply to this email or write to <a href="mailto:${esc(BUSINESS.email)}" style="color:${C.maroon};">${esc(BUSINESS.email)}</a>.</p>
   <p style="margin:0;"><strong style="color:${C.text};">${esc(BUSINESS.name)}</strong> · ${esc(BUSINESS.type)} (Proprietor: ${esc(BUSINESS.proprietor)})<br>${footerAddress}<br>${esc(BUSINESS.phoneDisplay)} · <a href="mailto:${esc(BUSINESS.email)}" style="color:${C.maroon};">${esc(BUSINESS.email)}</a> · <a href="${esc(BUSINESS.website)}" style="color:${C.maroon};">subhsandesh.in</a></p>
 </td></tr>
 </table>
@@ -248,7 +252,7 @@ ${noteHtml}
 
   // ── Plain text ────────────────────────────────────────────────────────────
   const t: string[] = [];
-  t.push(`${BUSINESS.name} — Payment statement`, "");
+  t.push(message, "", `${BUSINESS.name} — Payment statement (the full statement is attached as a PDF)`, "");
   t.push(`Billed to: ${name} <${email}>`);
   t.push(`Statement period: ${periodText}`, "");
   lines.forEach((l, i) => {
@@ -279,6 +283,8 @@ ${noteHtml}
   if (note) t.push("", "Note:", note);
   t.push(
     "",
+    "See you next time!",
+    "",
     `This is a payment statement for payments already received. Questions? Reply to this email or write to ${BUSINESS.email}.`,
     "",
     `${BUSINESS.name} · ${BUSINESS.type} (Proprietor: ${BUSINESS.proprietor})`,
@@ -295,5 +301,6 @@ ${noteHtml}
     currencyTotals: totals,
     pointsUnlocks: pointsLines.length,
     pointsSpent,
+    message,
   };
 }

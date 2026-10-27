@@ -5,6 +5,7 @@ import {
   getRevenueOrders,
   getUserBilling,
   previewBillingStatement,
+  composeBillingThanks,
   sendBillingStatement,
   getClosePreview,
   closeUserAccount,
@@ -23,6 +24,7 @@ import {
 export const userRevenueRouter = Router();
 userRevenueRouter.get("/users/:userId/billing", getUserBilling);
 userRevenueRouter.post("/users/:userId/billing/preview", previewBillingStatement);
+userRevenueRouter.post("/users/:userId/billing/compose", composeBillingThanks);
 userRevenueRouter.post("/users/:userId/billing/send", sendBillingStatement);
 userRevenueRouter.get("/users/:userId/close/preview", getClosePreview);
 userRevenueRouter.post("/users/:userId/close", closeUserAccount);
