@@ -33,6 +33,7 @@ import { adminGetSeason, adminPreviewSeason, adminUpdateSeason } from "../contro
 import { getMyPays, setMyPays, setFreeAccess } from "../controllers/freeAccess.controller";
 import revenueRoutes, { userRevenueRouter } from "./superAdminRevenue.routes";
 import { getCreations } from "../controllers/superAdminCreations.controller";
+import { adminSetUpgradeEnabled, adminUpgradeStats } from "../controllers/upgrade.controller";
 import {
   draftInfluencerMailHandler,
   getInfluencerMail,
@@ -183,6 +184,10 @@ router.use("/revenue", revenueRoutes);
 
 // Pages created in a range, by whom, of which template.
 router.get("/creations", getCreations);
+
+// Free → premium upgrade offers: the funnel, and the on/off switch.
+router.get("/upgrades", adminUpgradeStats);
+router.put("/upgrades/:from", adminSetUpgradeEnabled);
 router.use(userRevenueRouter);
 
 export default router;

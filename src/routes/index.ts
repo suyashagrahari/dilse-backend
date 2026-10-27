@@ -55,6 +55,7 @@ import referralRoutes from "./referral.routes";
 import influencerRoutes from "./influencer.routes";
 import prospectPublicRoutes from "./prospectPublic.routes";
 import paymentRoutes from "./payment.routes";
+import upgradeRoutes from "./upgrade.routes";
 import adminRoutes from "./admin.routes";
 import superAdminRoutes from "./superAdmin.routes";
 import productPageRoutes from "./productPage.routes";
@@ -250,6 +251,8 @@ router.use("/influencer", influencerRoutes);
 // Unsubscribe link in prospect outreach emails. Public; token-gated.
 router.use("/public/prospects", prospectPublicRoutes);
 router.use("/payment", paymentRoutes);
+// Free → premium offers (Build a Bouquet → Digital Bouquet). Works signed out.
+router.use("/upgrade", upgradeRoutes);
 // Super-admin surfaces sit ABOVE the /admin mount so the more specific prefix
 // matches first, and behind their own gate rather than widening `requireAdmin`.
 router.use("/admin/super", protect, requireSuperAdmin, superAdminRoutes);

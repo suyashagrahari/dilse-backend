@@ -35,6 +35,8 @@ export type AuditAction =
   | "template.clear_tier"
   | "template.set_order"
   | "template.clear_order"
+  // A free template's premium upgrade offer switched on/off (/admin/upgrades).
+  | "template.set_upgrade_offer"
   // A curated place's template list (/admin/places), and its reset to automatic.
   | "template.set_collection"
   | "template.clear_collection"
