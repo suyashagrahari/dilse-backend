@@ -31,6 +31,10 @@ import palaceDoorWeddingDay from "./weddingDays/palace-door-wedding-invitation";
 import gardenWeddingDay from "./weddingDays/garden-wedding-invitation";
 import floralWeddingDay from "./weddingDays/floral-wedding-invitation";
 import lotusWeddingDay from "./weddingDays/lotus-wedding-invitation";
+// The faith weddings (Anand Karaj, Nikah, Holy Matrimony) — the same kit with a scripture verse and their own languages.
+import sikhWeddingDay from "./weddingDays/sikh-wedding-invitation";
+import muslimWeddingDay from "./weddingDays/muslim-wedding-invitation";
+import christianWeddingDay from "./weddingDays/christian-wedding-invitation";
 
 /** The nine $2 templates. */
 export const BASE_DAY_SLUGS = [
@@ -81,6 +85,10 @@ export const BASE_DAY_SLUGS = [
   "garden-wedding-invitation",
   "floral-wedding-invitation",
   "lotus-wedding-invitation",
+  // The faith weddings on Royal's limits (Anand Karaj, Nikah, Holy Matrimony).
+  "sikh-wedding-invitation",
+  "muslim-wedding-invitation",
+  "christian-wedding-invitation",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -1297,6 +1305,9 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
   "garden-wedding-invitation": gardenWeddingDay,
   "floral-wedding-invitation": floralWeddingDay,
   "lotus-wedding-invitation": lotusWeddingDay,
+  "sikh-wedding-invitation": sikhWeddingDay,
+  "muslim-wedding-invitation": muslimWeddingDay,
+  "christian-wedding-invitation": christianWeddingDay,
 
   // ── The ultra-premium twins — one file each in ./premiumDays ──────────────
   "happy-rose-day-premium": roseDayPremium,

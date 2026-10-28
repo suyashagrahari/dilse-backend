@@ -72,6 +72,9 @@ const BASE_DAY_NAMES: Record<BaseDaySlug, string> = {
   "garden-wedding-invitation": "Mughal Garden Wedding Invitation",
   "floral-wedding-invitation": "Pampas & Peony Wedding Invitation",
   "lotus-wedding-invitation": "Lotus Temple Wedding Invitation",
+  "sikh-wedding-invitation": "Anand Karaj Wedding Invitation",
+  "muslim-wedding-invitation": "Nikah Wedding Invitation",
+  "christian-wedding-invitation": "Holy Matrimony Wedding Invitation",
 };
 
 /** A premium day's emails use its base day's plain name ("Rose Day"). */

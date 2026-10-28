@@ -81,6 +81,9 @@ import { palaceDoorWeddingInvitation } from "./palace-door-wedding-invitation";
 import { gardenWeddingInvitation } from "./garden-wedding-invitation";
 import { floralWeddingInvitation } from "./floral-wedding-invitation";
 import { lotusWeddingInvitation } from "./lotus-wedding-invitation";
+import { sikhWeddingInvitation } from "./sikh-wedding-invitation";
+import { muslimWeddingInvitation } from "./muslim-wedding-invitation";
+import { christianWeddingInvitation } from "./christian-wedding-invitation";
 import { reception } from "./reception";
 import { christianWedding } from "./christian-wedding";
 import { christianWedding2 } from "./christian-wedding-2";
@@ -165,6 +168,9 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   gardenWeddingInvitation,
   floralWeddingInvitation,
   lotusWeddingInvitation,
+  sikhWeddingInvitation,
+  muslimWeddingInvitation,
+  christianWeddingInvitation,
   reception,
   christianWedding,
   christianWedding2,

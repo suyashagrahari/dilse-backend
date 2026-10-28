@@ -31,6 +31,10 @@ export const WEDDING_TIER_LIMITS = {
   "garden-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   "floral-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   "lotus-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  // The faith weddings on Royal's limits (Anand Karaj, Nikah, Holy Matrimony).
+  "sikh-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "muslim-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "christian-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   // Reception Night (standalone /reception-pages): RSVPs per part of the evening; it keeps its own blessings wall.
   reception: { events: 4, photos: 24, story: 4, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false },
   "christian-wedding": { events: 8, photos: 40, story: 6, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false }, // standalone; its blessings wall (with voice notes) is its own

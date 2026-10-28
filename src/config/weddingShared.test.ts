@@ -84,7 +84,7 @@ describe("wedding kit: events per tier", () => {
     assert.deepEqual(eventIdsOf(extras, "wedding-invitation"), ["haldi", "wedding"]);
     assert.deepEqual(eventIdsOf(extras, "wedding-invitation-premium"), ["haldi", "wedding"]);
     assert.ok(isWeddingSlug("royal-wedding-invitation") && !isWeddingSlug("happy-rose-day"));
-    for (const slug of ["palace-door-wedding-invitation", "garden-wedding-invitation", "floral-wedding-invitation", "lotus-wedding-invitation"]) {
+    for (const slug of ["palace-door-wedding-invitation", "garden-wedding-invitation", "floral-wedding-invitation", "lotus-wedding-invitation", "sikh-wedding-invitation", "muslim-wedding-invitation", "christian-wedding-invitation"]) {
       assert.ok(isWeddingSlug(slug), slug);
       assert.deepEqual(eventIdsOf(extras, slug), ["haldi", "wedding"]);
     }

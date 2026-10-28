@@ -133,6 +133,10 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "garden-wedding-invitation",
   "floral-wedding-invitation",
   "lotus-wedding-invitation",
+  // The three faith weddings (Anand Karaj, Nikah, Holy Matrimony) ship hidden the same way (apex only); released (and priced) by the super admin.
+  "sikh-wedding-invitation",
+  "muslim-wedding-invitation",
+  "christian-wedding-invitation",
   // The Proposal ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "proposal-premium",
   // Happy Anniversary ships hidden the same way; released (and priced) by the super admin.

@@ -177,6 +177,10 @@ router.use("/palace-door-wedding-invitation-pages", makeValentineDayRouter("pala
 router.use("/garden-wedding-invitation-pages", makeValentineDayRouter("garden-wedding-invitation"));
 router.use("/floral-wedding-invitation-pages", makeValentineDayRouter("floral-wedding-invitation"));
 router.use("/lotus-wedding-invitation-pages", makeValentineDayRouter("lotus-wedding-invitation"));
+// The faith weddings (Anand Karaj, Nikah, Holy Matrimony) — same engine; guest RSVP + blessings routes mount with each.
+router.use("/sikh-wedding-invitation-pages", makeValentineDayRouter("sikh-wedding-invitation"));
+router.use("/muslim-wedding-invitation-pages", makeValentineDayRouter("muslim-wedding-invitation"));
+router.use("/christian-wedding-invitation-pages", makeValentineDayRouter("christian-wedding-invitation"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.

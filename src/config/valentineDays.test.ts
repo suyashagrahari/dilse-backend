@@ -14,6 +14,9 @@ import { palaceDoorWeddingInvitation } from "./aiFill/palace-door-wedding-invita
 import { gardenWeddingInvitation } from "./aiFill/garden-wedding-invitation";
 import { floralWeddingInvitation } from "./aiFill/floral-wedding-invitation";
 import { lotusWeddingInvitation } from "./aiFill/lotus-wedding-invitation";
+import { sikhWeddingInvitation } from "./aiFill/sikh-wedding-invitation";
+import { muslimWeddingInvitation } from "./aiFill/muslim-wedding-invitation";
+import { christianWeddingInvitation } from "./aiFill/christian-wedding-invitation";
 import { isWeddingSlug, WEDDING_TIER_LIMITS, eventIdsOf } from "./weddingShared";
 import {
   BASE_DAY_SLUGS,
@@ -139,6 +142,10 @@ const PINNED_KEYS: Record<string, string[]> = {
   "garden-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
   "floral-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
   "lotus-wedding-invitation": ["theme", "lang", "nameOrder", "hindiMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "contacts", "upiId", "upiName", "liveUrl"],
+  // The faith weddings: localMessage (Punjabi / Urdu) in hindiMessage's place, verse + verseRef after invocation; Holy Matrimony is English only.
+  "sikh-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "muslim-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "christian-wedding-invitation": ["theme", "lang", "nameOrder", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "cardSize", "question", "yesLine"],
   // Classic: the ten keys published pages already store, then the jharokha rebuild's additive ones.
   "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests", "lang", "hindiMessage", "brideNote", "groomNote", "blessingsOf", "couplePhoto", "muhurat", "hashtag", "story", "things", "gettingThere", "contacts", "upiId", "upiName", "liveUrl", "videoUrl", "rsvpMeal", "blessings", "invocation"],
@@ -1038,12 +1045,15 @@ describe("Royal Wedding Invitation 👑 extras", () => {
   });
 });
 
-describe("The wedding designs on Royal's limits (palace door, garden, floral, lotus)", () => {
+describe("The wedding designs on Royal's limits (palace door, garden, floral, lotus, Anand Karaj, Nikah, Holy Matrimony)", () => {
   const DESIGNS = [
     { slug: "palace-door-wedding-invitation" as const, schema: palaceDoorWeddingInvitation, theme: "champagne" },
     { slug: "garden-wedding-invitation" as const, schema: gardenWeddingInvitation, theme: "blush" },
     { slug: "floral-wedding-invitation" as const, schema: floralWeddingInvitation, theme: "champagne" },
     { slug: "lotus-wedding-invitation" as const, schema: lotusWeddingInvitation, theme: "champagne" },
+    { slug: "sikh-wedding-invitation" as const, schema: sikhWeddingInvitation, theme: "champagne" },
+    { slug: "muslim-wedding-invitation" as const, schema: muslimWeddingInvitation, theme: "champagne" },
+    { slug: "christian-wedding-invitation" as const, schema: christianWeddingInvitation, theme: "champagne" },
   ];
   for (const { slug, schema, theme } of DESIGNS) {
     it(`${slug}: Royal's limits, light themes only, a valid AI schema that writes only declared extras`, () => {
