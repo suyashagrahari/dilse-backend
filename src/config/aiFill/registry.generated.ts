@@ -84,6 +84,11 @@ import { lotusWeddingInvitation } from "./lotus-wedding-invitation";
 import { sikhWeddingInvitation } from "./sikh-wedding-invitation";
 import { muslimWeddingInvitation } from "./muslim-wedding-invitation";
 import { christianWeddingInvitation } from "./christian-wedding-invitation";
+import { tamilWeddingInvitation } from "./tamil-wedding-invitation";
+import { teluguWeddingInvitation } from "./telugu-wedding-invitation";
+import { kannadaWeddingInvitation } from "./kannada-wedding-invitation";
+import { malayalamWeddingInvitation } from "./malayalam-wedding-invitation";
+import { marathiWeddingInvitation } from "./marathi-wedding-invitation";
 import { reception } from "./reception";
 import { christianWedding } from "./christian-wedding";
 import { christianWedding2 } from "./christian-wedding-2";
@@ -171,6 +176,11 @@ export const SCHEMAS: AiFillTemplateSchema[] = [
   sikhWeddingInvitation,
   muslimWeddingInvitation,
   christianWeddingInvitation,
+  tamilWeddingInvitation,
+  teluguWeddingInvitation,
+  kannadaWeddingInvitation,
+  malayalamWeddingInvitation,
+  marathiWeddingInvitation,
   reception,
   christianWedding,
   christianWedding2,

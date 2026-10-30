@@ -35,6 +35,11 @@ export const WEDDING_TIER_LIMITS = {
   "sikh-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   "muslim-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   "christian-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "tamil-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "telugu-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "kannada-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "malayalam-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
+  "marathi-wedding-invitation": { events: 8, photos: 40, story: 8, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: true },
   // Reception Night (standalone /reception-pages): RSVPs per part of the evening; it keeps its own blessings wall.
   reception: { events: 4, photos: 24, story: 4, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false },
   "christian-wedding": { events: 8, photos: 40, story: 6, faq: 6, icsAllEvents: true, rsvpPerEvent: true, blessings: false }, // standalone; its blessings wall (with voice notes) is its own

@@ -181,6 +181,11 @@ router.use("/lotus-wedding-invitation-pages", makeValentineDayRouter("lotus-wedd
 router.use("/sikh-wedding-invitation-pages", makeValentineDayRouter("sikh-wedding-invitation"));
 router.use("/muslim-wedding-invitation-pages", makeValentineDayRouter("muslim-wedding-invitation"));
 router.use("/christian-wedding-invitation-pages", makeValentineDayRouter("christian-wedding-invitation"));
+router.use("/tamil-wedding-invitation-pages", makeValentineDayRouter("tamil-wedding-invitation"));
+router.use("/telugu-wedding-invitation-pages", makeValentineDayRouter("telugu-wedding-invitation"));
+router.use("/kannada-wedding-invitation-pages", makeValentineDayRouter("kannada-wedding-invitation"));
+router.use("/malayalam-wedding-invitation-pages", makeValentineDayRouter("malayalam-wedding-invitation"));
+router.use("/marathi-wedding-invitation-pages", makeValentineDayRouter("marathi-wedding-invitation"));
 // The Proposal ✦ Premium (the proposal's premium edition) — the same engine.
 router.use("/proposal-premium-pages", makeValentineDayRouter("proposal-premium"));
 // Happy Anniversary ("Our Little Love Museum") — the same engine.

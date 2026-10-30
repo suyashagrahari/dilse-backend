@@ -137,6 +137,12 @@ export const DEFAULT_HIDDEN: ReadonlySet<string> = new Set([
   "sikh-wedding-invitation",
   "muslim-wedding-invitation",
   "christian-wedding-invitation",
+  // The five regional weddings (Tamil, Telugu, Kannada, Kerala, Marathi) ship hidden the same way (apex only); released (and priced) by the super admin.
+  "tamil-wedding-invitation",
+  "telugu-wedding-invitation",
+  "kannada-wedding-invitation",
+  "malayalam-wedding-invitation",
+  "marathi-wedding-invitation",
   // The Proposal ✦ Premium ships hidden the same way; released (and priced) by the super admin.
   "proposal-premium",
   // Happy Anniversary ships hidden the same way; released (and priced) by the super admin.

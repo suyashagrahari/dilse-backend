@@ -17,6 +17,11 @@ import { lotusWeddingInvitation } from "./aiFill/lotus-wedding-invitation";
 import { sikhWeddingInvitation } from "./aiFill/sikh-wedding-invitation";
 import { muslimWeddingInvitation } from "./aiFill/muslim-wedding-invitation";
 import { christianWeddingInvitation } from "./aiFill/christian-wedding-invitation";
+import { tamilWeddingInvitation } from "./aiFill/tamil-wedding-invitation";
+import { teluguWeddingInvitation } from "./aiFill/telugu-wedding-invitation";
+import { kannadaWeddingInvitation } from "./aiFill/kannada-wedding-invitation";
+import { malayalamWeddingInvitation } from "./aiFill/malayalam-wedding-invitation";
+import { marathiWeddingInvitation } from "./aiFill/marathi-wedding-invitation";
 import { isWeddingSlug, WEDDING_TIER_LIMITS, eventIdsOf } from "./weddingShared";
 import {
   BASE_DAY_SLUGS,
@@ -146,6 +151,11 @@ const PINNED_KEYS: Record<string, string[]> = {
   "sikh-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
   "muslim-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
   "christian-wedding-invitation": ["theme", "lang", "nameOrder", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "tamil-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "telugu-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "kannada-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "malayalam-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
+  "marathi-wedding-invitation": ["theme", "lang", "nameOrder", "localMessage", "brideFamily", "groomFamily", "brideNote", "groomNote", "blessingsOf", "bridePhoto", "groomPhoto", "couplePhoto", "muhurat", "hashtag", "events", "story", "things", "gettingThere", "videoUrl", "rsvpBy", "maxGuests", "rsvpMeal", "blessings", "invocation", "verse", "verseRef", "contacts", "upiId", "upiName", "liveUrl"],
   "digital-bouquet": ["palette", "tone", "stems", "greenery", "wrap", "ribbon", "bow", "charms", "giftTag", "deliveryLine", "flowerNotes", "cardHand", "cardSize", "question", "yesLine"],
   // Classic: the ten keys published pages already store, then the jharokha rebuild's additive ones.
   "wedding-invitation": ["theme", "namesOrder", "date", "time", "brideFamily", "groomFamily", "events", "rsvp", "rsvpBy", "maxGuests", "lang", "hindiMessage", "brideNote", "groomNote", "blessingsOf", "couplePhoto", "muhurat", "hashtag", "story", "things", "gettingThere", "contacts", "upiId", "upiName", "liveUrl", "videoUrl", "rsvpMeal", "blessings", "invocation"],
@@ -1045,7 +1055,7 @@ describe("Royal Wedding Invitation 👑 extras", () => {
   });
 });
 
-describe("The wedding designs on Royal's limits (palace door, garden, floral, lotus, Anand Karaj, Nikah, Holy Matrimony)", () => {
+describe("The wedding designs on Royal's limits (palace door, garden, floral, lotus, Anand Karaj, Nikah, Holy Matrimony, Tamil, Telugu, Kannada, Kerala, Marathi)", () => {
   const DESIGNS = [
     { slug: "palace-door-wedding-invitation" as const, schema: palaceDoorWeddingInvitation, theme: "champagne" },
     { slug: "garden-wedding-invitation" as const, schema: gardenWeddingInvitation, theme: "blush" },
@@ -1054,6 +1064,11 @@ describe("The wedding designs on Royal's limits (palace door, garden, floral, lo
     { slug: "sikh-wedding-invitation" as const, schema: sikhWeddingInvitation, theme: "champagne" },
     { slug: "muslim-wedding-invitation" as const, schema: muslimWeddingInvitation, theme: "champagne" },
     { slug: "christian-wedding-invitation" as const, schema: christianWeddingInvitation, theme: "champagne" },
+    { slug: "tamil-wedding-invitation" as const, schema: tamilWeddingInvitation, theme: "champagne" },
+    { slug: "telugu-wedding-invitation" as const, schema: teluguWeddingInvitation, theme: "champagne" },
+    { slug: "kannada-wedding-invitation" as const, schema: kannadaWeddingInvitation, theme: "champagne" },
+    { slug: "malayalam-wedding-invitation" as const, schema: malayalamWeddingInvitation, theme: "champagne" },
+    { slug: "marathi-wedding-invitation" as const, schema: marathiWeddingInvitation, theme: "champagne" },
   ];
   for (const { slug, schema, theme } of DESIGNS) {
     it(`${slug}: Royal's limits, light themes only, a valid AI schema that writes only declared extras`, () => {

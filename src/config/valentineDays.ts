@@ -35,6 +35,11 @@ import lotusWeddingDay from "./weddingDays/lotus-wedding-invitation";
 import sikhWeddingDay from "./weddingDays/sikh-wedding-invitation";
 import muslimWeddingDay from "./weddingDays/muslim-wedding-invitation";
 import christianWeddingDay from "./weddingDays/christian-wedding-invitation";
+import tamilWeddingDay from "./weddingDays/tamil-wedding-invitation";
+import teluguWeddingDay from "./weddingDays/telugu-wedding-invitation";
+import kannadaWeddingDay from "./weddingDays/kannada-wedding-invitation";
+import malayalamWeddingDay from "./weddingDays/malayalam-wedding-invitation";
+import marathiWeddingDay from "./weddingDays/marathi-wedding-invitation";
 
 /** The nine $2 templates. */
 export const BASE_DAY_SLUGS = [
@@ -89,6 +94,11 @@ export const BASE_DAY_SLUGS = [
   "sikh-wedding-invitation",
   "muslim-wedding-invitation",
   "christian-wedding-invitation",
+  "tamil-wedding-invitation",
+  "telugu-wedding-invitation",
+  "kannada-wedding-invitation",
+  "malayalam-wedding-invitation",
+  "marathi-wedding-invitation",
 ] as const;
 
 export type BaseDaySlug = (typeof BASE_DAY_SLUGS)[number];
@@ -1308,6 +1318,11 @@ export const VALENTINE_DAYS: Record<ValentineDaySlug, ValentineDayConfig> = {
   "sikh-wedding-invitation": sikhWeddingDay,
   "muslim-wedding-invitation": muslimWeddingDay,
   "christian-wedding-invitation": christianWeddingDay,
+  "tamil-wedding-invitation": tamilWeddingDay,
+  "telugu-wedding-invitation": teluguWeddingDay,
+  "kannada-wedding-invitation": kannadaWeddingDay,
+  "malayalam-wedding-invitation": malayalamWeddingDay,
+  "marathi-wedding-invitation": marathiWeddingDay,
 
   // ── The ultra-premium twins — one file each in ./premiumDays ──────────────
   "happy-rose-day-premium": roseDayPremium,
